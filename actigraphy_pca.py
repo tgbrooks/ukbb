@@ -15,10 +15,16 @@ valid = ~zscore_summary.isna().any(axis=1)
 pca = PCA(n_components=2)
 coords = pca.fit_transform(zscore_summary[valid])
 
+def on_pick(event):
+    ind = event.ind
+    print(f"EID: {summary.index[ind]}")
+
 for var in summary.columns:
     fig = pylab.figure()
     ax = fig.add_subplot(111)
-    ax.scatter(*(coords.T), c=summary[valid][var])
+    ax.scatter(*(coords.T), c=summary[valid][var], picker=True)
+
+    fig.canvas.mpl_connect("pick_event", on_pick)
     pylab.title(f"Colored by {var}")
 
     pylab.show()
