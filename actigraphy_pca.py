@@ -2,8 +2,9 @@
 import pandas
 import numpy
 from sklearn.decomposition import PCA
-
 import pylab
+
+import visualize
 
 summary = pandas.read_csv("results/actigraphy_summary.txt", sep="\t", index_col=0)
 
@@ -17,7 +18,9 @@ coords = pca.fit_transform(zscore_summary[valid])
 
 def on_pick(event):
     ind = event.ind
-    print(f"EID: {summary.index[ind]}")
+    eid = summary.index[ind[0]]
+    print(f"EID: {eid}")
+    visualize.visualize(f"data/actigraphy/{eid}_f90004_0_0.csv")
 
 for var in summary.columns:
     fig = pylab.figure()
