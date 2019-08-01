@@ -103,10 +103,10 @@ for file in files:
 
     # Minimum activity over any 5 hour period, taken from averaging over all days
     L5_time = numpy.argmin(cumulative[5:] - cumulative[:-5])
-    L5 = numpy.min(cumulative[5:] - cumulative[:-5])
+    L5 = numpy.min(cumulative[5:] - cumulative[:-5]) / 5
     # Maximum activity over any 10 hour period, taken from averaging over all days
     M10_time = numpy.argmax(cumulative[10:] - cumulative[:-10])
-    M10 = numpy.max(cumulative[10:] - cumulative[:-10])
+    M10 = numpy.max(cumulative[10:] - cumulative[:-10]) / 10
 
     # convert to hour of the day, taking the midpoint
     L5_time = (L5_time + 2.5) % 24
