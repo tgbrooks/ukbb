@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import pandas
 import numpy
 
@@ -15,7 +16,7 @@ subject_ids = None if args.subject_ids is None else [ID.strip() for ID in open(a
 
 subject_dir = pathlib.Path(args.subject_directory)
 
-PERIODS = ["1Min", "10Min", "20Min", "30Min", "40Min", "50Min", "60Min", "120Min"]
+PERIODS = ["1Min", "10Min", "30Min", "60Min", "120Min"]
 
 if subject_ids is None:
     files = subject_dir.glob("*_90004_0_0.csv")
@@ -28,7 +29,10 @@ else:
 
     files = [id for id, file in zip(files, subject_ids) if files.exists()]
 
-output = pandas.DataFrame([], columns=["L5", "M10", "RA", "L5_time", "M10_time"] + [f"IS_{period}" for period in PERIODS] + [f"IV_{period}" for period in PERIODS])
+output = pandas.DataFrame([], columns=["L5", "M10", "RA", "L5_time", "M10_time"]
+                                    + [f"IS_{period}" for period in PERIODS]
+                                    + [f"IV_{period}" for period in PERIODS]
+                                    + ["hours_of_data", "largest_contiguous_stretch", "percent_valid_best_72hrs"])
 for file in files:
     subject_id = file.name.split("_")[0]
 
@@ -44,12 +48,14 @@ for file in files:
 
     data = data.set_index(index)
     data.columns = ["acceleration", "imputed"]
+    data.imputed = data.imputed.astype('bool')
 
     data_H = data.resample("1H").mean()
     data_H["time"] = [t.hour for t in data_H.index.time]
 
     #mask = util.mask_inactivity(data_H)
-    mask = numpy.array([True for i in range(len(data_H.index))]) # For now, nothing is masked. Assumed everyone wears it all the time (!)
+    #mask = numpy.array([True for i in range(len(data_H.index))]) # For now, nothing is masked. Assumed everyone wears it all the time (!)
+    mask = ~(data_H["imputed"] == 1.0)
     movement = data_H['acceleration']
 
     mean = movement[mask].mean()
@@ -108,7 +114,33 @@ for file in files:
 
     RA = (M10 - L5)/(M10 + L5)
 
-    results.update( {"L5": L5, "M10": M10, "RA": RA, "L5_time": L5_time, "M10_time": M10_time} )
+    ## Assess the data quality
+    hours_of_data = numpy.sum(~data.imputed) * 5 / 60 / 60
+
+    if len(data.index) > 1:
+        padded = numpy.concatenate([[False], data.imputed, [False]])
+        diff = numpy.diff(padded.astype('int'))
+        starts, = numpy.where(diff == 1)
+        ends, = numpy.where(diff == -1)
+        if len(starts) > 0:
+            largest_contiguous_stretch = numpy.max(ends - starts) * 5 / 60 / 60
+        else:
+            largest_contiguous_stretch = 0
+    else:
+        largest_contiugous_stretch = 0
+
+    three_days = 72 * 60*60 // 5 # Number of readings in this time
+    if len(data.index) > three_days:
+        # Find the 72hrs with the most data availability
+        cumulative_good = numpy.concatenate([[0],numpy.cumsum(~data.imputed)])
+        percent_valid_best_72hrs = numpy.max(cumulative_good[three_days:] - cumulative_good[:-three_days]) / three_days
+    else:
+        percent_valid_best_72hrs = hours_of_data / 72 # Don't actually have 72 hours of data
+
+    results.update( {"L5": L5, "M10": M10, "RA": RA, "L5_time": L5_time, "M10_time": M10_time,
+                    "hours_of_data": hours_of_data,
+                    "largest_contiguous_stretch": largest_contiguous_stretch,
+                    "percent_valid_best_72hrs": percent_valid_best_72hrs} )
     output.loc[subject_id] = results
 
 output.to_csv(args.output_path, sep="\t")
