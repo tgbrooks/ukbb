@@ -6,7 +6,14 @@ import pylab
 
 import visualize
 
-summary = pandas.read_csv("results/actigraphy_summary.txt", sep="\t", index_col=0)
+summary = pandas.read_csv("processed/actigraphy_summary.txt", sep="\t", index_col=0)
+
+mood = pandas.read_csv("processed/small_table.txt", sep="\t", index_col=0)
+mood = mood.loc[summary.index]
+
+# Many encode -818 for not applicable... we'll treat it as NA for better or worse
+mood = mood.replace(-818, float("NaN"))
+mood = mood.replace(-121, float("NaN")) # -121 for Do Not Know
 
 # Expect L5 times to be around midnight, so convert them to be in "time since noon" not "time since midnight"
 summary.L5_time = (summary.L5_time - 12) % 24
