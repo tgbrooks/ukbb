@@ -34,7 +34,7 @@ rule process_accelerometery:
         working_path = (pathlib.Path.cwd() / "../biobankAccelerometerAnalysis/").resolve()
         input_path = (pathlib.Path.cwd() / input[0]).resolve()
         output_path = (pathlib.Path.cwd() / output[0]).parent.resolve()
-        command = f"python accProcess.py {input_path} --outputFolder {output_path}/ --timeSeriesDateColumn True"
+        command = f"python accProcess.py {input_path} --outputFolder {output_path}/ --timeSeriesDateColumn True --modifyForDaylightSavings False"
         log_file = open(log[0], "w")
         log_file.write(f"Running:\n{command}\n")
         subprocess.run(command, stdout=log_file, stderr=log_file, shell=True, cwd=working_path, check=True)
