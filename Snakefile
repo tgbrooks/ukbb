@@ -14,6 +14,8 @@ rule ukbfetch_download_raw:
         "../data/raw_actigraphy/{id}_90001_0_0.cwa"
     log:
         "log/{id}.ukbfetch.log"
+    resources:
+        download=1
     run:
         working_path = (pathlib.Path.cwd() / "../data/raw_actigraphy/").resolve()
         ukbfetch_path = (pathlib.Path.cwd() / "../biobank_utils/ukbfetch").resolve()
