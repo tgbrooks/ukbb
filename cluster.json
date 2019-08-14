@@ -1,0 +1,7 @@
+{
+    "__default__": {
+        name: "JOB.{rule}.{wildcards}.job",
+        output: "log/cluster/{rule}.{wildcards}.out" ,
+        error: "log/cluster/{rule}.{wildcards}.err",
+    },
+}
