@@ -1,7 +1,7 @@
 import subprocess
 import pathlib
 
-target_eids = [line.strip()  for line in open("../target_eids.txt").readlines()]
+target_eids = [line.strip()  for line in open("../all_eids_with_actigraphy.txt").readlines()]
 
 rule all:
     input:
