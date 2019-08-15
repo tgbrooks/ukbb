@@ -1,0 +1,25 @@
+import argparse
+import pathlib
+import json
+
+import pandas
+
+parser = argparse.ArgumentParser(description="Aggregate the summary output of each participant into a tab-separated spreadsheet")
+parser.add_argument("input_dir", help="path to input directory of participant accelerometer analyses")
+parser.add_argument("output_path", help="path to the target tab-separated output spreadsheet of aggregated summary data.")
+
+args = parser.parse_args()
+
+# Gather all the summary json file data
+data = {}
+for input_path in pathlib.Path(args.input_dir).glob("*_90001_0_0-summary.json"):
+    ID = input_path.name.split("_")[0]
+    with open(input_path) as input_file:
+        data[ID] = json.load(input_file)
+
+# Aggregate the data from many dicts into one dataframe
+# filling in NaNs for any values that are in one dict and not another
+aggregate = pandas.DataFrame.from_dict(data, orient="index")
+
+# Output the aggregated data
+aggregate.to_csv(args.output_path, sep="\t")
