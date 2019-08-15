@@ -1,14 +1,13 @@
 import argparse
-import pathlib
-import json
-
-import pandas
-
 parser = argparse.ArgumentParser(description="Aggregate the summary output of each participant into a tab-separated spreadsheet")
 parser.add_argument("input_dir", help="path to input directory of participant accelerometer analyses")
 parser.add_argument("output_path", help="path to the target tab-separated output spreadsheet of aggregated summary data.")
 
 args = parser.parse_args()
+
+import pandas
+import pathlib
+import json
 
 # Gather all the summary json file data
 data = {}
