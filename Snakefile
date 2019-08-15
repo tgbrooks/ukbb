@@ -2,12 +2,11 @@ import subprocess
 import pathlib
 
 target_eids = [line.strip()  for line in open("../all_eids_with_actigraphy.txt").readlines()]
+#target_eids = [line.strip()  for line in open("../target_eids.txt").readlines()]
 
-rule all:
+rule all_done:
     input:
-        expand("../processed/acc_analysis/{id}_90001_0_0-{files}",
-                    id=target_eids,
-                    files=["nonWearBouts.csv.gz", "timeSeries.csv.gz", "summary.json"]),
+        "done.txt"
 
 rule ukbfetch_download_raw:
     output:
@@ -27,7 +26,7 @@ rule ukbfetch_download_raw:
 
 rule process_accelerometery:
     input:
-        "../data/raw_actigraphy/{id}_90001_0_0.cwa"
+        rules.ukbfetch_download_raw.output
     output:
         expand("../processed/acc_analysis/{{id}}_90001_0_0-{files}", files=["nonWearBouts.csv.gz", "timeSeries.csv.gz", "summary.json"])
     log:
@@ -40,3 +39,14 @@ rule process_accelerometery:
         log_file = open(log[0], "w")
         log_file.write(f"Running:\n{command}\n")
         subprocess.run(command, stdout=log_file, stderr=log_file, shell=True, cwd=working_path, check=True)
+
+
+rule all:
+    input:
+        expand(rules.process_accelerometery.output,
+                    id=target_eids,
+                    files=["timeSeries.csv.gz"])
+    output:
+        "done.txt"
+    shell:
+        "touch done.txt"
