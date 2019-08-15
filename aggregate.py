@@ -20,5 +20,8 @@ for input_path in pathlib.Path(args.input_dir).glob("*_90001_0_0-summary.json"):
 # filling in NaNs for any values that are in one dict and not another
 aggregate = pandas.DataFrame.from_dict(data, orient="index")
 
+# Replace dashes with underscores for python convenience
+aggregate.rename(columns=lambda s: s.replace('-', '_'))
+
 # Output the aggregated data
 aggregate.to_csv(args.output_path, sep="\t")
