@@ -2,7 +2,7 @@
 LOGFILE=snakemake.log
 ERRFILE=snakemake.err
 PROJECT=UKBB_FITZGERALD
-MAXJOBS=80
+MAXJOBS=150
 
 # Can never download more than 10 at a time from UKBB, we'll use less than that to be safe
 MAXDOWNLOADS=9
