@@ -21,6 +21,7 @@ def hours_since_noon(timeseries):
     
     NOTE: if a clock change happens due to daylight savings change
     then this will still give the total number of hours since noon.'''
+    timeseries = pandas.to_datetime(timeseries)
     noon_same_day = timeseries.dt.round("1D") + pandas.to_timedelta("0.5D")
     difference = (timeseries - noon_same_day).dt.total_seconds() / 60 / 60
 
@@ -37,6 +38,10 @@ def extract_main_sleep_period(sleep):
     onset_times, = numpy.where(diff > 0)
     offset_times, = numpy.where(diff < 0)
 
+    if len(onset_times) == 0:
+        # Never slept at all
+        return pandas.to_datetime("NaT"), pandas.to_datetime("NaT"), float("NaN"), float("NaN"), float("NaN")
+
     # Time between consecutive periods
     gap_lengths = onset_times[1:] - offset_times[:-1]
 
@@ -48,16 +53,30 @@ def extract_main_sleep_period(sleep):
     period_lengths = joined_offset_times - joined_onset_times
     best_period = numpy.argmax(period_lengths)
 
-    onset, offset, length = joined_onset_times[best_period], joined_offset_times[best_period], period_lengths[best_period]
-    return onset / HOURS_TO_COUNTS, offset / HOURS_TO_COUNTS
+    onset = sleep.index[0] + pandas.to_timedelta( str(joined_onset_times[best_period] / HOURS_TO_COUNTS) + "H")
+    offset = sleep.index[0] + pandas.to_timedelta( str(joined_offset_times[best_period] / HOURS_TO_COUNTS) + "H")
 
-def main_sleep_onset(sleep):
-    onset, offset = extract_main_sleep_period(sleep)
-    print(onset)
+    num_wakings = numpy.sum(numpy.diff(numpy.concatenate([[0], sleep[onset:offset] > SLEEP_THRESHOLD, [0]])) < 0)
+    WASO = numpy.sum(1 - sleep[onset:offset]) / HOURS_TO_COUNTS
+    other_duration = (numpy.sum(sleep) - numpy.sum(sleep[onset:offset])) / HOURS_TO_COUNTS
+
+    return onset, offset, num_wakings, WASO, other_duration
+
+def get_main_sleep_onset(sleep):
+    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
     return onset
-def main_sleep_offset(sleep):
-    onset, offset = extract_main_sleep_period(sleep)
+def get_main_sleep_offset(sleep):
+    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
     return offset
+def get_main_sleep_wakings(sleep):
+    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
+    return num_wakings
+def get_main_sleep_WASO(sleep):
+    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
+    return WASO
+def get_other_sleep_duration(sleep):
+    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
+    return other_duration
 
 # Load data
 data = pandas.read_csv(args.input, parse_dates=[0])
@@ -70,6 +89,11 @@ data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/Lond
 data = data.rename(columns={data.columns[1]: "acceleration"})
 stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
 
+# Remove data when imputed. We don't like that very much
+data[data.imputed == 1] = float("NaN")
+
+# dictionary of result summary values
+
 ### Sleep Features
 
 # Sleep onset
@@ -80,11 +104,48 @@ sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
 sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
 sleep_peak_data_available = stretches.resample("1D", base=0.5).sleep.count() > (COUNTS_PER_DAY * GOOD_COUNT_THRESHOLD)
 
-# hours past 0:00 AM (usually of the day prior to the peak sleep)
-average_sleep_peak_time = hours_since_noon(sleep_peak_time).mean() + 12
-
 # Define the MAIN SLEEP PERIOD to be the period of time such that
 # there are no periods > 1 HR of time without sleep
 # and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
-main_sleep_onset = stretches.resample("1D", base=0.5).apply(main_sleep_onset)
-main_sleep_offset = stretches.resample("1D", base=0.5).apply(main_sleep_offset)
+main_sleep_onset = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_onset)
+main_sleep_offset = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_offset)
+main_sleep_wakings = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_wakings)
+main_sleep_WASO = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_WASO)
+main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/60/60
+main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
+other_sleep_duration = data.sleep.resample("1D", base=0.5).apply(get_other_sleep_duration)
+
+results = dict(
+    # hours past 0:00 AM (usually of the day prior to the peak sleep)
+    sleep_peak_time_avg = hours_since_noon(sleep_peak_time).mean() + 12,
+    sleep_peak_time_std = hours_since_noon(sleep_peak_time).std(),
+
+    # Onset/offset times, from 0:00AM morning of the first day
+    onset_time_avg = hours_since_noon(main_sleep_onset).mean() + 12,
+    onset_time_std = hours_since_noon(main_sleep_onset).std(),
+    offset_time_avg = hours_since_noon(main_sleep_offset).mean() + 12,
+    offset_time_std = hours_since_noon(main_sleep_offset).std(),
+
+    # Duration of main period of sleep NOT the total amount of time they slept - may have many waking periods
+    main_sleep_duration_avg = main_sleep_duration.mean(),
+    main_sleep_duration_std = main_sleep_duration.std(),
+
+    # Number of times waking up during main sleep period
+    main_sleep_wakings_avg = main_sleep_wakings.mean(),
+    main_sleep_wakings_std = main_sleep_wakings.std(),
+
+    # Total time in hours spent not sleeping during main sleep period
+    main_sleep_WASO_avg = main_sleep_WASO.mean(),
+    main_sleep_WASO_std = main_sleep_WASO.std(),
+
+    # Sleep ratio: fraction of main sleep period spent sleeping
+    main_sleep_ratio_avg = main_sleep_ratio.mean(),
+    main_sleep_ratio_std = main_sleep_ratio.std(),
+
+    # Time spent sleeping NOT in main sleep period
+    other_sleep_duration_avg = other_sleep_duration.mean(),
+    other_sleep_duration_std = other_sleep_duration.std(),
+)
+
+import json
+json.dump(results, open(args.input, 'w'))
