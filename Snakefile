@@ -10,11 +10,13 @@ rule all_done:
 
 rule ukbfetch_download_raw:
     output:
-        "../data/raw_actigraphy/{id}_90001_0_0.cwa"
+        temp("../data/raw_actigraphy/{id}_90001_0_0.cwa")
     log:
         "log/{id}.ukbfetch.log"
     resources:
         download=1
+    priority:
+        10 # Downloads tend to be the bottleneck, so let's make sure we do them
     run:
         working_path = (pathlib.Path.cwd() / "../data/raw_actigraphy/").resolve()
         ukbfetch_path = (pathlib.Path.cwd() / "../biobank_utils/ukbfetch").resolve()
