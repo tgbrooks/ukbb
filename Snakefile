@@ -1,16 +1,17 @@
 import subprocess
 import pathlib
+import sys
 
-target_eids = [line.strip()  for line in open("../all_eids_with_actigraphy.txt").readlines()]
+print("Starting pipeline")
+target_eids = [line.strip()  for line in open("../eids_ordered_for_batching.txt").readlines()]
+#target_eids = [line.strip()  for line in open("../all_eids_with_actigraphy.txt").readlines()]
 #target_eids = [line.strip()  for line in open("../target_eids.txt").readlines()]
 
-unprocessed_eids = [eid for eid in target_eids if not pathlib.Path(f"../processed/acc_analysis/{eid}_90001_0_0-timeSeries.csv.gz").exists()]
-set_unprocessed_eids = set(unprocessed_eids)
-for_batching = unprocessed_eids + [eid for eid in target_eids if eid not in set_unprocessed_eids]
-
 BATCH_SIZE = 20
-batched_eids = [for_batching[i:i+BATCH_SIZE] for i in range(0, len(for_batching), BATCH_SIZE)]
+batched_eids = [target_eids[i:i+BATCH_SIZE] for i in range(0, len(target_eids), BATCH_SIZE)]
 eids_to_batches = {eid: batch_num for batch_num, batch in enumerate(batched_eids) for eid in batch}
+
+print(f"Found {len(batched_eids)} batches to consider")
 
 rule all_done:
     input:
@@ -26,17 +27,17 @@ rule ukbfetch_download_raw:
     priority:
         10 # Downloads tend to be the bottleneck, so let's make sure we do them
     run:
-        working_path = pathlib.Path("../data/raw_actigraphy/batch{batch_num}/").resolve()
+        working_path = pathlib.Path(f"../data/raw_actigraphy/batch{wildcards.batch_num}/").resolve()
         working_path.mkdir(exist_ok=True)
         batch_file = working_path / "batch_list.txt"
-        batch_file.write_text('\n'.join(batched_eids[int(wildcards.batch_num)])) # Output list of eids we want to download
+        batch_file.write_text('\n'.join(eid + " 90001_0_0" for eid in batched_eids[int(wildcards.batch_num)])) # Output list of eids we want to download
 
         ukbfetch_path = pathlib.Path("../biobank_utils/ukbfetch").resolve()
         key_path = pathlib.Path("../k50398.key").resolve()
-        command = f"{ukbfetch_path} -b{batch_file} -d90001_0_0 -a{key_path}"
+        command = f"{ukbfetch_path} -bbatch_list.txt -a{key_path}"
 
         log_file = open(log[0], "w")
-        log_file.write(f"Running:\n{command}\n")
+        print(f"Running:\n{command}\n")
         subprocess.run(command, stdout=log_file, stderr=log_file, shell=True, cwd=working_path, check=True)
 
 rule process_accelerometery:
@@ -47,12 +48,12 @@ rule process_accelerometery:
     log:
         "log/{id}.accelerometer.analysis.log"
     run:
-        working_path = (pathlib.Path.cwd() / "../biobankAccelerometerAnalysis/").resolve()
-        input_path = (pathlib.Path.cwd() / input[0]).resolve()
+        working_path = pathlib.Path("../biobankAccelerometerAnalysis/").resolve()
+        input_path = (pathlib.Path(input[0]) / f"{wildcards.id}_90001_0_0.cwa").resolve()
         output_path = (pathlib.Path.cwd() / output[0]).parent.resolve()
         command = f"python accProcess.py {input_path} --outputFolder {output_path}/ --timeSeriesDateColumn True --modifyForDaylightSavings False"
+        print(f"Running:\n{command}\n")
         log_file = open(log[0], "w")
-        log_file.write(f"Running:\n{command}\n")
         subprocess.run(command, stdout=log_file, stderr=log_file, shell=True, cwd=working_path, check=True)
 
 
