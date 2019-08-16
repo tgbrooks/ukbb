@@ -2,10 +2,10 @@
 LOGFILE=snakemake.log
 ERRFILE=snakemake.err
 PROJECT=UKBB_FITZGERALD
-MAXJOBS=50
+MAXJOBS=80
 
 # Can never download more than 10 at a time from UKBB, we'll use less than that to be safe
-MAXDOWNLOADS=5
+MAXDOWNLOADS=9
 
 source venv/bin/activate
 module load java/openjdk-1.8.0
