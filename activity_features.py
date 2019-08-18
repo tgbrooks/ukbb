@@ -78,6 +78,23 @@ def get_other_sleep_duration(sleep):
     onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
     return other_duration
 
+def RA(activity, time):
+    ''' Compute Relative Amplitude of any activity feature
+
+    (M10 - L5) / (M10 + L5)
+    where M10 = average activity in highest 10 hours of day
+    L5 = average activity in lowest 5 hours of day
+    '''
+
+    # Average over all days of the activity at a specific time-of-day
+    average = activity.groupby(time.dt.time).mean()
+
+    M10 = average.rolling(10 * HOURS_TO_COUNTS).mean().max()
+    L5 = average.rolling(5* HOURS_TO_COUNTS).mean().min()
+
+    return (M10 - L5) / (M10 + L5)
+
+
 # Load data
 data = pandas.read_csv(args.input, parse_dates=[0])
 
