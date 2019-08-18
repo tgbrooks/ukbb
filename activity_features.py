@@ -165,4 +165,4 @@ results = dict(
 )
 
 import json
-json.dump(results, open(args.input, 'w'))
+json.dump(results, open(args.output, 'w'))
