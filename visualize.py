@@ -69,7 +69,6 @@ def visualize(filename):
         ax.set_ylim(0,data['acceleration'].max())
         ax.set_xticks([0,6,12,18,24,30,36,42,48])
 
-    print(shading_rects)
     fig.legend(shading_rects, activities)
 
     # 24Hour compressed data
