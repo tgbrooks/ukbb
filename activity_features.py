@@ -163,6 +163,13 @@ main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/
 main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
 other_sleep_duration = data.sleep.resample("1D", base=0.5).apply(get_other_sleep_duration)
 
+# Throw out days without nearly all of the hours
+# eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
+# should have 2880 for a complete day
+days_invalid = (data.sleep.resample("1D", base=0.5).count() < 2500)
+for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, other_sleep_duration]:
+    measure[days_invalid] = float("NaN")
+
 results = dict(
     # hours past 0:00 AM (usually of the day prior to the peak sleep)
     sleep_peak_time_avg = hours_since_noon(sleep_peak_time).mean() + 12,
@@ -193,7 +200,6 @@ results = dict(
     # Time spent sleeping NOT in main sleep period
     other_sleep_duration_avg = other_sleep_duration.mean(),
     other_sleep_duration_std = other_sleep_duration.std(),
-
 )
 
 # Add RA/IS/IV values for each measure
