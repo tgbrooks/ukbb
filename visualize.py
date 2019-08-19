@@ -11,14 +11,12 @@ def visualize(filename):
     if filename.endswith("csv"):
         data = util.read_actigraphy(filename)
     else:
-        data = pandas.read_csv(filename, sep="\t", index_col=0)
-    data = data.set_index(pandas.to_datetime(data.index))
+        data = pandas.read_csv(filename, sep="\t", index_col=0, parse_dates=[0])
 
     data_10min = data.resample("10Min").mean()
 
     # Group by time of day and
     data_10min["time"] = data_10min.index.time
-    #mask = util.mask_inactivity(data_10min)
     mask = numpy.ones(data_10min.index.shape).astype(bool)
 
     grouped = data_10min[mask].groupby("time")
@@ -30,9 +28,7 @@ def visualize(filename):
     fig = pylab.figure()
 
     ax1 = fig.add_subplot(211)
-    ax1.stackplot(data_10min.index, data_10min.imputed)
-    #ax.stackplot(data_10min.index, numpy.log10(1+data_10min["Lux"]))
-    #ax.stackplot(data_10min.index, data_10min["Inclinometer Off"], data_10min["Inclinometer Standing"], data_10min["Inclinometer Sitting"], data_10min["Inclinometer Lying"])
+    ax1.stackplot(data_10min.index, [data_10min.sleeping, data_10min.walking, data_10min.sedentary, data_10min['light-tasks'], data_10min['moderate'])
 
     ax2 = fig.add_subplot(212, sharex=ax1)
     ax2.plot(data_10min['acceleration'])
