@@ -17,8 +17,8 @@ GOOD_COUNT_THRESHOLD = 0.75
 SLEEP_THRESHOLD = 0.9 # May not be necessary - 30second intervals seem to generally have sleep=0 or 1
 
 def hours_since_noon(timeseries):
-    ''' Return time since the last noon, in hours 
-    
+    ''' Return time since the last noon, in hours
+
     NOTE: if a clock change happens due to daylight savings change
     then this will still give the total number of hours since noon.'''
     timeseries = pandas.to_datetime(timeseries)
@@ -78,21 +78,52 @@ def get_other_sleep_duration(sleep):
     onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
     return other_duration
 
-def RA(activity, time):
+def RA(activity):
     ''' Compute Relative Amplitude of any activity feature
 
     (M10 - L5) / (M10 + L5)
     where M10 = average activity in highest 10 hours of day
     L5 = average activity in lowest 5 hours of day
+    NOTE that this may differ from RA computations done by others
+    because it uses the AVERAGE over all days and then looks for the
+    M10 and L5 of that, versus looking for the M10, L5 of each day and
+    then using those.This avoids the difficult questions of when one day
+    ends and another begins - which is generally not well specified in
+    descriptions of RA. However, this makes the RA value dependent upon
+    the number of days of data collected (going down with more days
+    in general, until very large numbers of days are available).
     '''
 
     # Average over all days of the activity at a specific time-of-day
-    average = activity.groupby(time.dt.time).mean()
+    average = activity.groupby(activity.index.time).mean()
+    # Pad so that the rolling average can 'wrap around' midnights
+    average = pandas.concat([average, average, average], axis=0)
 
     M10 = average.rolling(10 * HOURS_TO_COUNTS).mean().max()
     L5 = average.rolling(5* HOURS_TO_COUNTS).mean().min()
 
     return (M10 - L5) / (M10 + L5)
+
+def IS(activity):
+    '''
+    Interdaily stability value for the given measure
+
+    Calculated as from https://www.sciencedirect.com/science/article/pii/0006322390905235
+    '''
+    hourly_avg = activity.groupby(activity.index.hour).mean() # Average activity in a specific time of day
+    IS = ((hourly_avg - activity.mean())**2).mean() / hourly_avg.var(ddof=0)
+    return IS
+
+def IV(activity):
+    '''
+    Intradaily variability value of the given measure
+
+    Calculated as from https://www.sciencedirect.com/science/article/pii/0006322390905235
+    '''
+
+    hourly_avg = activity.groupby([activity.index.hour, activity.index.date]).mean() # Average activity within a specific hour
+    IV = (hourly_avg.diff(1)**2).mean() / hourly_avg.var(ddof=0)
+    return IV
 
 
 # Load data
@@ -162,7 +193,37 @@ results = dict(
     # Time spent sleeping NOT in main sleep period
     other_sleep_duration_avg = other_sleep_duration.mean(),
     other_sleep_duration_std = other_sleep_duration.std(),
+
 )
+
+# Add RA/IS/IV values for each measure
+for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
+    results.update({
+        activity + "_RA": RA(data[activity]),
+        activity + "_IS": IS(data[activity]),
+        activity + "_IV": IV(data[activity]),
+    })
+
+# Light and temperature values
+for value in ['light', 'temp']:
+    results.update({
+        value + "_avg": data[value].mean(),
+        value + "_std": data[value].std(),
+    })
+
+# Attempt to estimate daylight
+# Since light sensors require calibration which we do not know we estimate a threshold for daylight
+# by using the minimum and highest values observed
+# since daylight is generally orders of magnitude brighter than anything else this should be reliable
+# so long as at least one 30second epoch was exposed to daylight
+# though there is the concern that some will get daylight and others will get direct sunlight which could be much much brighter
+# NOTE: I have decided to not attempt to infer daylight for now
+# the data here shows that the (uncalibrated) lux range of participants is roughly 15 - 500.
+# Real sunlight should be closer to 10000 or more. The enclosure blocks some amount of light but this is more atenuated than expeceted
+# If there is that little difference then we can't reliably differentiate sunlight from office light
+
+#daylight_threshold = (data.light.max() - data.light.min()) / 10 + data.light.min()
+
 
 import json
 json.dump(results, open(args.output, 'w'))
