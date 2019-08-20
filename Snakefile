@@ -44,7 +44,7 @@ rule process_accelerometery:
     input:
         lambda wildcards: f"../data/raw_actigraphy/batch{eids_to_batches[wildcards.id]}/"
     output:
-        expand("../processed/acc_analysis/{{id}}_90001_0_0-{files}", files=["nonWearBouts.csv.gz", "timeSeries.csv.gz", "summary.json"])
+        protected(expand("../processed/acc_analysis/{{id}}_90001_0_0-{files}", files=["nonWearBouts.csv.gz", "timeSeries.csv.gz", "summary.json"]))
     log:
         "log/{id}.accelerometer.analysis.log"
     run:
