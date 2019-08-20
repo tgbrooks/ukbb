@@ -1,10 +1,3 @@
-import argparse
-parser = argparse.ArgumentParser(description="Compute activity features from processed actigraphy timeseries")
-parser.add_argument("input", help="input timeSeries.csv.gz file as output by biobankAccelerometerAnalysis/accProcess.py")
-parser.add_argument("output", help="output file to sleep features write to")
-
-args = parser.parse_args()
-
 import pandas
 import numpy
 
@@ -60,23 +53,7 @@ def extract_main_sleep_period(sleep):
     WASO = numpy.sum(1 - sleep[onset:offset]) / HOURS_TO_COUNTS
     other_duration = (numpy.sum(sleep) - numpy.sum(sleep[onset:offset])) / HOURS_TO_COUNTS
 
-    return onset, offset, num_wakings, WASO, other_duration
-
-def get_main_sleep_onset(sleep):
-    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
-    return onset
-def get_main_sleep_offset(sleep):
-    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
-    return offset
-def get_main_sleep_wakings(sleep):
-    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
-    return num_wakings
-def get_main_sleep_WASO(sleep):
-    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
-    return WASO
-def get_other_sleep_duration(sleep):
-    onset, offset, num_wakings, WASO, other_duration = extract_main_sleep_period(sleep)
-    return other_duration
+    return dict(onset=onset, offset=offset, num_wakings=num_wakings, WASO=WASO, other_duration=other_duration)
 
 def RA(activity):
     ''' Compute Relative Amplitude of any activity feature
@@ -126,110 +103,124 @@ def IV(activity):
     return IV
 
 
-# Load data
-data = pandas.read_csv(args.input, parse_dates=[0])
+def activity_features(data):
+    ''' return dictionary of result summary values '''
 
-# Process the timezones from UTC to London
-# TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
-data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
+    ### Sleep Features
 
-# Rename for convenience - this column name contains redundant information we don't need
-data = data.rename(columns={data.columns[1]: "acceleration"})
-stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
+    # Sleep onset
+    # For, say, Monday, we look for sleep periods starting between noon Monday and noon Tuesday
+    # since we want to put a sleep-onset time of 1AM on Tuesday as being the onset "for Monday"
+    # this is done with the "base=0.5" parameter, offsets the 1day samples by 12 hours
+    sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
+    sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
+    sleep_peak_data_available = stretches.resample("1D", base=0.5).sleep.count() > (COUNTS_PER_DAY * GOOD_COUNT_THRESHOLD)
 
-# Remove data when imputed. We don't like that very much
-data[data.imputed == 1] = float("NaN")
+    # Define the MAIN SLEEP PERIOD to be the period of time such that
+    # there are no periods > 1 HR of time without sleep
+    # and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
+    sleep_by_day = data.sleep.resample("1D", base=0.5)
+    main_sleep_period = sleep_by_day.apply(extract_main_sleep_period)
+    main_sleep_period_df = pandas.DataFrame(main_sleep_period.tolist(), index=main_sleep_period.index)
+    main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, other_sleep_duration = [main_sleep_period_df[col].copy() for col in main_sleep_period_df.columns]
 
-# dictionary of result summary values
+    main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/60/60
+    main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
 
-### Sleep Features
+    # Throw out days without nearly all of the hours
+    # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
+    # should have 2880 for a complete day
+    days_invalid = (data.sleep.resample("1D", base=0.5).count() < 2500)
+    for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, other_sleep_duration]:
+        measure[days_invalid] = float("NaN")
 
-# Sleep onset
-# For, say, Monday, we look for sleep periods starting between noon Monday and noon Tuesday
-# since we want to put a sleep-onset time of 1AM on Tuesday as being the onset "for Monday"
-# this is done with the "base=0.5" parameter, offsets the 1day samples by 12 hours
-sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
-sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
-sleep_peak_data_available = stretches.resample("1D", base=0.5).sleep.count() > (COUNTS_PER_DAY * GOOD_COUNT_THRESHOLD)
+    results = dict(
+        # hours past 0:00 AM (usually of the day prior to the peak sleep)
+        sleep_peak_time_avg = hours_since_noon(sleep_peak_time).mean() + 12,
+        sleep_peak_time_std = hours_since_noon(sleep_peak_time).std(),
 
-# Define the MAIN SLEEP PERIOD to be the period of time such that
-# there are no periods > 1 HR of time without sleep
-# and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
-main_sleep_onset = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_onset)
-main_sleep_offset = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_offset)
-main_sleep_wakings = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_wakings)
-main_sleep_WASO = data.sleep.resample("1D", base=0.5).apply(get_main_sleep_WASO)
-main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/60/60
-main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
-other_sleep_duration = data.sleep.resample("1D", base=0.5).apply(get_other_sleep_duration)
+        # Onset/offset times, from 0:00AM morning of the first day
+        onset_time_avg = hours_since_noon(main_sleep_onset).mean() + 12,
+        onset_time_std = hours_since_noon(main_sleep_onset).std(),
+        offset_time_avg = hours_since_noon(main_sleep_offset).mean() + 12,
+        offset_time_std = hours_since_noon(main_sleep_offset).std(),
 
-# Throw out days without nearly all of the hours
-# eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
-# should have 2880 for a complete day
-days_invalid = (data.sleep.resample("1D", base=0.5).count() < 2500)
-for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, other_sleep_duration]:
-    measure[days_invalid] = float("NaN")
+        # Duration of main period of sleep NOT the total amount of time they slept - may have many waking periods
+        main_sleep_duration_avg = main_sleep_duration.mean(),
+        main_sleep_duration_std = main_sleep_duration.std(),
 
-results = dict(
-    # hours past 0:00 AM (usually of the day prior to the peak sleep)
-    sleep_peak_time_avg = hours_since_noon(sleep_peak_time).mean() + 12,
-    sleep_peak_time_std = hours_since_noon(sleep_peak_time).std(),
+        # Number of times waking up during main sleep period
+        main_sleep_wakings_avg = main_sleep_wakings.mean(),
+        main_sleep_wakings_std = main_sleep_wakings.std(),
 
-    # Onset/offset times, from 0:00AM morning of the first day
-    onset_time_avg = hours_since_noon(main_sleep_onset).mean() + 12,
-    onset_time_std = hours_since_noon(main_sleep_onset).std(),
-    offset_time_avg = hours_since_noon(main_sleep_offset).mean() + 12,
-    offset_time_std = hours_since_noon(main_sleep_offset).std(),
+        # Total time in hours spent not sleeping during main sleep period
+        main_sleep_WASO_avg = main_sleep_WASO.mean(),
+        main_sleep_WASO_std = main_sleep_WASO.std(),
 
-    # Duration of main period of sleep NOT the total amount of time they slept - may have many waking periods
-    main_sleep_duration_avg = main_sleep_duration.mean(),
-    main_sleep_duration_std = main_sleep_duration.std(),
+        # Sleep ratio: fraction of main sleep period spent sleeping
+        main_sleep_ratio_avg = main_sleep_ratio.mean(),
+        main_sleep_ratio_std = main_sleep_ratio.std(),
 
-    # Number of times waking up during main sleep period
-    main_sleep_wakings_avg = main_sleep_wakings.mean(),
-    main_sleep_wakings_std = main_sleep_wakings.std(),
+        # Time spent sleeping NOT in main sleep period
+        other_sleep_duration_avg = other_sleep_duration.mean(),
+        other_sleep_duration_std = other_sleep_duration.std(),
+    )
 
-    # Total time in hours spent not sleeping during main sleep period
-    main_sleep_WASO_avg = main_sleep_WASO.mean(),
-    main_sleep_WASO_std = main_sleep_WASO.std(),
+    # Add RA/IS/IV values for each measure
+    for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
+        results.update({
+            activity + "_RA": RA(data[activity]),
+            activity + "_IS": IS(data[activity]),
+            activity + "_IV": IV(data[activity]),
+        })
 
-    # Sleep ratio: fraction of main sleep period spent sleeping
-    main_sleep_ratio_avg = main_sleep_ratio.mean(),
-    main_sleep_ratio_std = main_sleep_ratio.std(),
+    # Light and temperature values
+    for value in ['light', 'temp']:
+        results.update({
+            value + "_avg": data[value].mean(),
+            value + "_std": data[value].std(),
+        })
 
-    # Time spent sleeping NOT in main sleep period
-    other_sleep_duration_avg = other_sleep_duration.mean(),
-    other_sleep_duration_std = other_sleep_duration.std(),
-)
+    # Attempt to estimate daylight
+    # Since light sensors require calibration which we do not know we estimate a threshold for daylight
+    # by using the minimum and highest values observed
+    # since daylight is generally orders of magnitude brighter than anything else this should be reliable
+    # so long as at least one 30second epoch was exposed to daylight
+    # though there is the concern that some will get daylight and others will get direct sunlight which could be much much brighter
+    # NOTE: I have decided to not attempt to infer daylight for now
+    # the data here shows that the (uncalibrated) lux range of participants is roughly 15 - 500.
+    # Real sunlight should be closer to 10000 or more. The enclosure blocks some amount of light but this is more atenuated than expeceted
+    # If there is that little difference then we can't reliably differentiate sunlight from office light
 
-# Add RA/IS/IV values for each measure
-for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
-    results.update({
-        activity + "_RA": RA(data[activity]),
-        activity + "_IS": IS(data[activity]),
-        activity + "_IV": IV(data[activity]),
-    })
+    #daylight_threshold = (data.light.max() - data.light.min()) / 10 + data.light.min()
 
-# Light and temperature values
-for value in ['light', 'temp']:
-    results.update({
-        value + "_avg": data[value].mean(),
-        value + "_std": data[value].std(),
-    })
-
-# Attempt to estimate daylight
-# Since light sensors require calibration which we do not know we estimate a threshold for daylight
-# by using the minimum and highest values observed
-# since daylight is generally orders of magnitude brighter than anything else this should be reliable
-# so long as at least one 30second epoch was exposed to daylight
-# though there is the concern that some will get daylight and others will get direct sunlight which could be much much brighter
-# NOTE: I have decided to not attempt to infer daylight for now
-# the data here shows that the (uncalibrated) lux range of participants is roughly 15 - 500.
-# Real sunlight should be closer to 10000 or more. The enclosure blocks some amount of light but this is more atenuated than expeceted
-# If there is that little difference then we can't reliably differentiate sunlight from office light
-
-#daylight_threshold = (data.light.max() - data.light.min()) / 10 + data.light.min()
+    return results
 
 
-import json
-json.dump(results, open(args.output, 'w'))
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Compute activity features from processed actigraphy timeseries")
+    parser.add_argument("input", help="input timeSeries.csv.gz file as output by biobankAccelerometerAnalysis/accProcess.py")
+    parser.add_argument("output", help="output file to sleep features write to")
+
+    args = parser.parse_args()
+
+    # Load data
+    data = pandas.read_csv(args.input, parse_dates=[0])
+
+    # Process the timezones from UTC to London
+    # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
+    data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
+
+    # Rename for convenience - this column name contains redundant information we don't need
+    data = data.rename(columns={data.columns[1]: "acceleration"})
+    stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
+
+    # Remove data when imputed. We don't like that very much
+    data[data.imputed == 1] = float("NaN")
+
+    # Run
+    results = activity_features(data)
+
+    import json
+    json.dump(results, open(args.output, 'w'))
