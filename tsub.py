@@ -17,7 +17,7 @@ temp_file = pathlib.Path(f"log/tsub/tmp.{temp_num}.started")
 temp_file.touch()
 
 # Run the command
-with temp as open(temp_file):
+with open(temp_file, "w") as temp:
     command = "bsub " + ' '.join(args.command)
     temp.write("Running:\n")
     temp.write(command)
