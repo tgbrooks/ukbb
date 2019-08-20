@@ -17,9 +17,15 @@ temp_file = pathlib.Path(f"log/tsub/tmp.{temp_num}.started")
 temp_file.touch()
 
 # Run the command
-command = "bsub " + ' '.join(args.command)
-result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE)
-temp_file.write_bytes(result.stdout)
+with temp as open(temp_file):
+    command = "bsub " + ' '.join(args.command)
+    temp.write("Running:\n")
+    temp.write(command)
+    try:
+        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE)
+    except CalledProcessError:
+        temp.write("CALLED BSUB COMMAND FAILED")
+    temp.write(result.stdout.decode())
 
 m = re.match("Job <([\d]+)> is submitted to", result.stdout.decode())
 if m:
