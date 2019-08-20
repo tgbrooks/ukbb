@@ -33,7 +33,7 @@ def extract_main_sleep_period(sleep):
 
     if len(onset_times) == 0:
         # Never slept at all
-        return pandas.to_datetime("NaT"), pandas.to_datetime("NaT"), float("NaN"), float("NaN"), float("NaN")
+        return dict(onset=pandas.to_datetime("NaT"), offset=pandas.to_datetime("NaT"), num_wakings=float("NaN"), WASO=float("NaN"), other_duration=float("NaN"))
 
     # Time between consecutive periods
     gap_lengths = onset_times[1:] - offset_times[:-1]
@@ -107,6 +107,7 @@ def activity_features(data):
     ''' return dictionary of result summary values '''
 
     ### Sleep Features
+    stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
 
     # Sleep onset
     # For, say, Monday, we look for sleep periods starting between noon Monday and noon Tuesday
@@ -168,11 +169,17 @@ def activity_features(data):
 
     # Add RA/IS/IV values for each measure
     for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
-        results.update({
-            activity + "_RA": RA(data[activity]),
-            activity + "_IS": IS(data[activity]),
-            activity + "_IV": IV(data[activity]),
-        })
+        try:
+            results.update({
+                activity + "_RA": RA(data[activity]),
+                activity + "_IS": IS(data[activity]),
+                activity + "_IV": IV(data[activity]),
+            })
+        except KeyError:
+            #Some datasets do not have MET or other columns
+            #so we just drop them here
+            #these will end up as NaNs in the aggregated spreadsheet
+            pass
 
     # Light and temperature values
     for value in ['light', 'temp']:
@@ -196,6 +203,26 @@ def activity_features(data):
 
     return results
 
+def run(input, output):
+    '''Compute and output activity features'''
+    # Load data
+    data = pandas.read_csv(input, parse_dates=[0])
+
+    # Process the timezones from UTC to London
+    # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
+    data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
+
+    # Rename for convenience - this column name contains redundant information we don't need
+    data = data.rename(columns={data.columns[1]: "acceleration"})
+
+    # Remove data when imputed. We don't like that very much
+    data[data.imputed == 1] = float("NaN")
+
+    # Run
+    results = activity_features(data)
+
+    import json
+    json.dump(results, open(output, 'w'))
 
 if __name__ == "__main__":
     import argparse
@@ -205,22 +232,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Load data
-    data = pandas.read_csv(args.input, parse_dates=[0])
-
-    # Process the timezones from UTC to London
-    # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
-    data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
-
-    # Rename for convenience - this column name contains redundant information we don't need
-    data = data.rename(columns={data.columns[1]: "acceleration"})
-    stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
-
-    # Remove data when imputed. We don't like that very much
-    data[data.imputed == 1] = float("NaN")
-
-    # Run
-    results = activity_features(data)
-
-    import json
-    json.dump(results, open(args.output, 'w'))
+    run(args.input, args.output)

@@ -11,11 +11,15 @@ BATCH_SIZE = 20
 batched_eids = [target_eids[i:i+BATCH_SIZE] for i in range(0, len(target_eids), BATCH_SIZE)]
 eids_to_batches = {eid: batch_num for batch_num, batch in enumerate(batched_eids) for eid in batch}
 
+ACTIVITY_FEATURES_BATCH_SIZE = 1000
+activity_features_batches = [target_eids[i:i+ACTIVITY_FEATURES_BATCH_SIZE] for i in range(0, len(target_eids), ACTIVITY_FEATURES_BATCH_SIZE)]
+
 print(f"Found {len(batched_eids)} batches to consider")
 
-rule all_done:
+
+rule all:
     input:
-        "done.txt"
+        "../processed/activity_features_aggregate.txt"
 
 rule ukbfetch_download_raw:
     output:
@@ -56,13 +60,20 @@ rule process_accelerometery:
         log_file = open(log[0], "w")
         subprocess.run(command, stdout=log_file, stderr=log_file, shell=True, cwd=working_path, check=True)
 
-
-rule all:
+rule activity_features_batch:
     input:
-        expand(rules.process_accelerometery.output,
-                    id=target_eids,
-                    files=["timeSeries.csv.gz"])
+        lambda wildcards: expand("../processed/acc_analysis/{id}_90001_0_0-timeSeries.csv.gz", id=activity_features_batches[int(wildcards.batch)])
     output:
-        "done.txt"
+        temp(touch("../processed/activity_features/batch{batch}"))
+    run:
+        import activity_features
+        for file_path, id in zip(input, activity_features_batches[int(wildcards.batch)]):
+            activity_features.run(file_path, f"../processed/activity_features/{id}.json")
+
+rule aggregate:
+    input:
+        expand(rules.activity_features_batch.output, batch=range(len(activity_features_batches)))
+    output:
+        protected("../processed/activity_features_aggregate.txt")
     shell:
-        "touch done.txt"
+        "aggregate ../processed/activity_features/ {output} --file_suffix .json"
