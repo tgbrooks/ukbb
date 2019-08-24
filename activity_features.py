@@ -210,19 +210,22 @@ def run(input, output):
     '''Compute and output activity features'''
     # Load data
     data = pandas.read_csv(input, parse_dates=[0])
+    if 'time' not in data:
+        print(f"Processed timeseries file {input} has no 'time' index collumn and is being skipped")
+        results = {}
+    else:
+        # Process the timezones from UTC to London
+        # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
+        data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
 
-    # Process the timezones from UTC to London
-    # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
-    data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
+        # Rename for convenience - this column name contains redundant information we don't need
+        data = data.rename(columns={data.columns[1]: "acceleration"})
 
-    # Rename for convenience - this column name contains redundant information we don't need
-    data = data.rename(columns={data.columns[1]: "acceleration"})
+        # Remove data when imputed. We don't like that very much
+        data[data.imputed == 1] = float("NaN")
 
-    # Remove data when imputed. We don't like that very much
-    data[data.imputed == 1] = float("NaN")
-
-    # Run
-    results = activity_features(data)
+        # Run
+        results = activity_features(data)
 
     import json
     json.dump(results, open(output, 'w'))
