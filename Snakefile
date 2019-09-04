@@ -76,4 +76,4 @@ rule aggregate:
     output:
         protected("../processed/activity_features_aggregate.txt")
     shell:
-        "aggregate ../processed/activity_features/ {output} --file_suffix .json"
+        "./aggregate.py ../processed/activity_features/ {output} --file_suffix .json"

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import argparse
 parser = argparse.ArgumentParser(description="Aggregate the summary output of each participant into a tab-separated spreadsheet")
 parser.add_argument("input_dir", help="path to input directory of participant accelerometer analyses")
