@@ -134,7 +134,7 @@ def activity_features(data):
         # Throw out days without nearly all of the hours
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
         # should have 2880 for a complete day
-        days_invalid = (data.sleep.resample("1D", base=0.5).count() < 2500)
+        days_invalid = (sleep_by_day.count() < 2500)
         for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, other_sleep_duration]:
             measure[days_invalid] = float("NaN")
 
