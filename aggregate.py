@@ -14,7 +14,7 @@ import json
 # Gather all the summary json file data
 data = {}
 for input_path in pathlib.Path(args.input_dir).glob("*" + args.file_suffix):
-    ID = input_path.name.split("_")[0]
+    ID = input_path.name[:-len(args.file_suffix)]
     with open(input_path) as input_file:
         data[ID] = json.load(input_file)
 
