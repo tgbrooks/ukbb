@@ -64,7 +64,7 @@ rule activity_features_batch:
     input:
         lambda wildcards: expand("../processed/acc_analysis/{id}_90001_0_0-timeSeries.csv.gz", id=activity_features_batches[int(wildcards.batch)])
     output:
-        temp(touch("../processed/activity_features/batch{batch}"))
+        touch("../processed/activity_features/batch{batch}")
     run:
         import activity_features
         for file_path, id in zip(input, activity_features_batches[int(wildcards.batch)]):
