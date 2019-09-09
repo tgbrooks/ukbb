@@ -74,6 +74,8 @@ rule aggregate:
     input:
         expand(rules.activity_features_batch.output, batch=range(len(activity_features_batches)))
     output:
-        protected("../processed/activity_features_aggregate.txt")
+        activity_features = protected("../processed/activity_features_aggregate.txt"),
+        activity_summary = protected("../processed/activity_summary_aggregate.txt")
     shell:
-        "./aggregate.py ../processed/activity_features/ {output} --file_suffix .json"
+        "./aggregate.py ../processed/activity_features/ {output.activity_features} --file_suffix .json && "
+        "./aggregate.py ../processed/activity_features/ {output.activity_summary}"
