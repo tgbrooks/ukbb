@@ -9,6 +9,7 @@ Separate pipeline so that:
 
 import pandas
 import subprocess
+import pathlib
 
 # Gather the EIDs used for this pipeline
 target_eids = [line.strip()  for line in open("../eids_ordered_for_batching.txt").readlines()]
@@ -32,14 +33,17 @@ rule all:
 
 rule gather_near_transitions:
     input:
-        expand("../processed/activity_analysis/batch{batch}", batch in range(len(activity_features_batches)))
+        # TODO: is this the best possible input needed? We aren't really using these but they mark completion of the last pipeline, essentially
+        expand("../processed/activity_features/batch{batch}", batch=range(len(activity_features_batches)))
     output:
         "../processed/dst/week_of_{date}.txt"
     run:
+        pathlib.Path(output[0]).parent.mkdir(exist_ok=True) # Try making the containing directory if necessary
+
         transition = pandas.to_datetime(wildcards.date)
         start_time = (transition - pandas.to_timedelta("1W")).strftime("%Y-%m-%d")
         end_time = (transition + pandas.to_timedelta("1W")).strftime("%Y-%m-%d")
-        command = f"./averages_over_timespan.py {start_time} {end_time} ../processed/activity_analysis/ ../processed/dst/week_of{wildcards.date}.txt ../processed/activity_summary_aggregate.txt"
+        command = f"./average_over_timespan.py {start_time} {end_time} ../processed/acc_analysis/ ../processed/dst/week_of_{wildcards.date}.txt ../processed/activity_summary_aggregate.txt"
         print("Running:")
         print(command)
-        subprocess.run(command, shell=True)
+        subprocess.run(command, shell=True, check=True)
