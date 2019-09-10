@@ -4,8 +4,6 @@ import sys
 
 print("Starting pipeline")
 target_eids = [line.strip()  for line in open("../eids_ordered_for_batching.txt").readlines()]
-#target_eids = [line.strip()  for line in open("../all_eids_with_actigraphy.txt").readlines()]
-#target_eids = [line.strip()  for line in open("../target_eids.txt").readlines()]
 
 BATCH_SIZE = 20
 batched_eids = [target_eids[i:i+BATCH_SIZE] for i in range(0, len(target_eids), BATCH_SIZE)]
@@ -15,7 +13,6 @@ ACTIVITY_FEATURES_BATCH_SIZE = 1000
 activity_features_batches = [target_eids[i:i+ACTIVITY_FEATURES_BATCH_SIZE] for i in range(0, len(target_eids), ACTIVITY_FEATURES_BATCH_SIZE)]
 
 print(f"Found {len(batched_eids)} batches to consider")
-
 
 rule all:
     input:
