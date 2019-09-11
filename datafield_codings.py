@@ -12,16 +12,6 @@ codings = dict(
         to_nan = [-818, -121],
     ),
 
-    504 = dict(
-        #-818    Prefer not to answer
-        #1   Not at all
-        #2   Several days
-        #3   More than half the days
-        #4   Nearly every day
-         fields = [ 20518, 20505, 20510, 20512, 20507, 20519, 20506, 20509, 20514, 20511, 20516, 20513, 20508, 20515, 20520, 20517, ],
-     to_nan = [-818],
-    ),
-
     503 = dict(
         #-818 Prefer not to answer
         #0 No
@@ -31,13 +21,14 @@ codings = dict(
         to_nan = [-818]
     ),
 
-    520 = dict(
-            #-121    Do not know
-            #0   No
-            #1   Yes
-
-            fields = [ 20419, 20429, 20427, 20423, 20422, 20426, 20417, ],
-            to_nan = [-121]
+    504 = dict(
+        #-818    Prefer not to answer
+        #1   Not at all
+        #2   Several days
+        #3   More than half the days
+        #4   Nearly every day
+         fields = [ 20518, 20505, 20510, 20512, 20507, 20519, 20506, 20509, 20514, 20511, 20516, 20513, 20508, 20515, 20520, 20517, ],
+     to_nan = [-818],
     ),
 
     505 = dict(
@@ -50,6 +41,7 @@ codings = dict(
             fields = [ 20436, ],
             to_nan = [-121, -818],
     ),
+
     506 = dict(
             #-818    Prefer not to answer
             #-121    Do not know
@@ -59,7 +51,8 @@ codings = dict(
             fields = [20439],
             to_nan = [-818, -121],
     ),
-    506 = dict(
+
+    507 = dict(
             #-818    Prefer not to answer
             #-121    Do not know
             #0   Stayed about the same or was on a diet
@@ -70,6 +63,25 @@ codings = dict(
             to_nan = [-818, -121]
     ),
 
+    508 = dict(
+            #0   No
+            #1   Yes
+            fields = [ 20534, 20533, 20535],
+            to_nan = [],
+    ),
+
+    509 = dict(
+            #-818    Prefer not to answer
+            #1   Less than a month
+            #2   Between one and three months
+            #3   Over three months, but less than six months
+            #4   Over six months, but less than 12 months
+            #5   One to two years
+            #6   Over two years
+            fields = [20438],
+            to_nan = [-818],
+    ),
+
     1406 = dict(
             #1   Talking therapies, such as psychotherapy, counselling, group therapy or CBT
             #3   Other therapeutic activities such as mindfulness, yoga or art classes
@@ -78,10 +90,14 @@ codings = dict(
             to_nan = [-818],
     ),
 
-    513 = dict(
-            # Age in years if answered
-            fields = [20433, 20434],
-            to_nan = [-818, -121],
+    510 = dict(
+            #-818    Prefer not to answer
+            #0   Not at all
+            #1   A little
+            #2   Somewhat
+            #3   A lot
+            fields = [20418, 20440],
+            to_nan = [-818],
     ),
 
     511 = dict(
@@ -93,14 +109,10 @@ codings = dict(
             #TOOD: what to do with -999?
     ),
 
-    510 = dict(
-            #-818    Prefer not to answer
-            #0   Not at all
-            #1   A little
-            #2   Somewhat
-            #3   A lot
-            fields = [20418, 20440],
-            to_nan = [-818],
+    513 = dict(
+            # Age in years if answered
+            fields = [20433, 20434],
+            to_nan = [-818, -121],
     ),
 
     514 = dict(
@@ -158,6 +170,15 @@ codings = dict(
             #3   Often
             fields = [ 20537, 20539],
             to_nan = [-818, -121],
+    ),
+
+    520 = dict(
+            #-121    Do not know
+            #0   No
+            #1   Yes
+
+            fields = [ 20419, 20429, 20427, 20423, 20422, 20426, 20417, ],
+            to_nan = [-121]
     ),
 
 )
