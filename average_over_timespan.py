@@ -43,7 +43,6 @@ for eid in eids:
         # Align time of all the samples by nearest 30s
         offset = activity_data.index[0] - activity_data.index[0].round('30s')
         activity_data.index = activity_data.index - offset
-        activity_data.index = activity_data.index.localize("Europe/London")
 
         # Make multi-index so that it can be concatenated together with the other dataframes
         # for processing into means, etc
@@ -53,9 +52,11 @@ for eid in eids:
         # Add activity observed, but drop the imputed data since it's not good
         activity_data.loc[activity_data.imputed == 1,columns] = float("NaN")
         activity_dfs.append(activity_data.loc[start_time:end_time, columns])
-    except:
+    except Exception as e:
         print(f"Exception during processing of EID {eid}", file=sys.stderr)
-        raise
+        print(str(e), file=sys.stderr)
+        print(f"Skipping EID {eid}", file=sys.stderr)
+        continue
 
 if activity_dfs:
     all_activity = pandas.concat(activity_dfs, sort=True)
