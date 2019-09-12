@@ -75,4 +75,4 @@ rule aggregate:
         activity_summary = protected("../processed/activity_summary_aggregate.txt")
     shell:
         "./aggregate.py ../processed/activity_features/ {output.activity_features} --file_suffix .json && "
-        "./aggregate.py ../processed/activity_features/ {output.activity_summary}"
+        "./aggregate.py ../processed/acc_analysis/ {output.activity_summary}"
