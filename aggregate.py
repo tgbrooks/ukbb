@@ -17,6 +17,7 @@ for input_path in pathlib.Path(args.input_dir).glob("*" + args.file_suffix):
     ID = input_path.name[:-len(args.file_suffix)]
     with open(input_path) as input_file:
         data[ID] = json.load(input_file)
+print(f"Loaded {len(data)} accelerometer summaries")
 
 # Aggregate the data from many dicts into one dataframe
 # filling in NaNs for any values that are in one dict and not another
