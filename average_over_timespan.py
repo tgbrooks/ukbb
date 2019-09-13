@@ -21,7 +21,7 @@ end_time = pandas.to_datetime(args.end_date) + pandas.to_timedelta("1D")
 in_range = (summary['file-startTime'] < end_time) & (summary['file-endTime'] >= start_time)
 eids = summary.index[in_range]
 
-columns = "moderate,sedentary,sleep,tasks-light,walking,MET,temp,light".split(",")
+columns = "acceleration,moderate,sedentary,sleep,tasks-light,walking,MET,temp,light".split(",")
 
 directory = pathlib.Path(args.activity_analysis_directory)
 index = pandas.date_range(start_time, end_time, freq="30s", tz="Europe/London")
@@ -39,6 +39,7 @@ for eid in eids:
 
         # Load the activity data
         activity_data = pandas.read_csv(directory / f"{eid}_90001_0_0-timeSeries.csv.gz", parse_dates=[0], index_col=0)
+        activity_data.rename(columns={activity_data.columns[0]:"acceleration"}, inplace=True)
 
         # Align time of all the samples by nearest 30s
         offset = activity_data.index[0] - activity_data.index[0].round('30s')
@@ -51,7 +52,7 @@ for eid in eids:
 
         # Add activity observed, but drop the imputed data since it's not good
         activity_data.loc[activity_data.imputed == 1,columns] = float("NaN")
-        activity_dfs.append(activity_data.loc[start_time:end_time, columns])
+        activity_dfs.append(activity_data.loc[start_time:end_time])
     except Exception as e:
         print(f"Exception during processing of EID {eid}", file=sys.stderr)
         print(str(e), file=sys.stderr)
@@ -65,10 +66,9 @@ if activity_dfs:
     mean_activity = grouped_activity.mean()
     std_activity = grouped_activity.std()
     counts = grouped_activity.count()
-    mean_activity['counts'] = counts.sleep # IDK which collumn to use, they should all be the same
+    mean_activity['counts'] = counts.sleep # Pick one collumn to use, they should all be the same
 
     mean_activity.to_csv(args.output_file, sep="\t")
 else:
     print("Failed to find any files in the time range. Output blank file", file=sys.stderr)
     pathlib.Path(args.output_file).touch()
-
