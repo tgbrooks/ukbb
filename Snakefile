@@ -16,7 +16,8 @@ print(f"Found {len(batched_eids)} batches to consider")
 
 rule all:
     input:
-        "../processed/activity_features_aggregate.txt"
+        "../processed/activity_features_aggregate.txt",
+        "../processed/ukbb_data_table.txt"
 
 rule ukbfetch_download_raw:
     output:
@@ -76,3 +77,14 @@ rule aggregate:
     shell:
         "./aggregate.py ../processed/activity_features/ {output.activity_features} --file_suffix .json && "
         "./aggregate.py ../processed/acc_analysis/ {output.activity_summary}"
+
+rule gather_fields:
+    input:
+        "../data/ukb32828.tab",
+        "./data/ukb34939.tab"
+    output:
+        "../processed/ukbb_data_table.txt"
+    resources:
+        mem_mb = 40000
+    shell:
+        "./gather_fields.py -t {input[0]} {input[1]} -o {output}"
