@@ -18,18 +18,29 @@ ACTIVITY_FEATURES_BATCH_SIZE = 1000
 activity_features_batches = [target_eids[i:i+ACTIVITY_FEATURES_BATCH_SIZE] for i in range(0, len(target_eids), ACTIVITY_FEATURES_BATCH_SIZE)]
 
 # Table of the Sundays where the DST transition occured at 1 am
-dates_of_transitions = ['2013-03-31',
-                        '2013-10-27',
+dates_of_transitions = ['2013-10-27',
                         '2014-03-30',
                         '2014-10-26',
                         '2015-03-29',
                         '2015-10-25',
-                        '2016-03-27',
-                        '2016-10-30']
+                        ]
+# Sundays flanking those transitions periods
+# so that we have comparable 2-week periods to check
+other_dates = ['2013-11-10',
+               '2013-10-13',
+               '2014-03-16',
+               '2014-04-13',
+               '2014-10-13',
+               '2014-11-09',
+               '2015-03-15',
+               '2015-04-12',
+               '2015-10-11',
+               '2015-11-08'
+               ]
 
 rule all:
     input:
-        expand("../processed/dst/week_of_{date}.txt", date=dates_of_transitions)
+        expand("../processed/dst/week_of_{date}.txt", date=dates_of_transitions + other_dates)
 
 rule gather_near_transitions:
     input:
