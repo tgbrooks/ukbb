@@ -92,7 +92,7 @@ codings = dict(
             #1   Yes
             fields = [ 20534, 20533, 20535],
             to_nan = [],
-            fillvaue = 0,
+            fillvalue = 0,
     ),
 
     coding509 = dict(
@@ -183,6 +183,7 @@ codings = dict(
             #2   More than one thing
             fields = [20543],
             to_nan = [-818, -121],
+            fill_value = 0, # TODO: is this a reasonable fill-value?
     ),
 
     coding519 = dict(
