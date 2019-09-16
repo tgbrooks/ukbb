@@ -87,6 +87,9 @@ def process_fields(data):
                     if field_name in fields_of_interest.mania_dependent_fields:
                         not_asked |= (data.ever_extreme_irritability == 0) & (data.ever_mania == 0)
 
+                    if field_name == "longest_period_worried":
+                        not_asked |= (data.ever_felt_worried_more_than_month == 0)
+
                     data.loc[not_asked, field_name] = fillvalue
                     print(f"Filling {field_name} with {fillvalue} in {not_asked.sum()} cases")
 
