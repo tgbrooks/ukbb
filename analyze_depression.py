@@ -38,12 +38,13 @@ corr = data.corr()
 # Put corr into long form, so we can sort for all correlation
 corr['first_var'] = corr.index
 corr_long = corr.melt(id_vars=["first_var"])
-corr_long = corr_long.dropna().sort_values(by="value")
+corr_long = corr_long.dropna().sort_values(by="value", ascending=False)
 # Drop those correlations that are redundant (don't need A-vs-B and B-vs-A)
 vars = sorted(set(corr_long.variable))
 first_vars_index = numpy.array([vars.index(var) for var in corr_long.first_var])
 second_vars_index = numpy.array([vars.index(var) for var in corr_long.variable])
 corr_long = corr_long[first_vars_index < second_vars_index]
+corr_long.to_csv("../processed/mental_health/univariate_correlations.txt", sep="\t", index=False)
 
 def plot_corr(A,B, title='', order=False):
     # Show correlations between two matrices A, B
@@ -81,7 +82,7 @@ def plot_corr(A,B, title='', order=False):
 
     corr[numpy.isnan(corr)] = 0 # Why not?
 
-    ax.set_xticklabels(B.columns, rotation=90, horizontalalignment="right")
+    ax.set_xticklabels(B.columns, rotation=90)#, horizontalalignment="right")
     ax.set_xticks(numpy.arange(len(B.columns)))
     ax.set_yticklabels(A.columns)
     fig.subplots_adjust(bottom=0.3, left=0.3)
