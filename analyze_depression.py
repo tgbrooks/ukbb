@@ -7,6 +7,8 @@ from scipy.cluster import hierarchy
 
 PERFORM_PERMUTATION_TEST = False #NOTE: slow! So I've left it disabled
 
+CONDITIONS = ["all", "control", "depressed", "anxious", "depressed_anxious"]
+
 # Load the data
 ukbb_data = pandas.read_csv("../processed/ukbb_data_table.txt", sep="\t", index_col=0)
 
@@ -34,11 +36,22 @@ data['lifetime_depression'] = (data.ever_prolonged_depression == 1) | (data.ever
 
 data['lifetime_anxiety'] =  (data.ever_worried_much_more == 1) | (data.longest_period_worried >= 6) | (data.longest_period_worried == -999)
 
-
 all_data = data
-for sex in [0,1]:
-    data = all_data[all_data.sex == sex].copy()
-    sex_str = ["F","M"][sex]
+for CONDITION in CONDITIONS:
+    if CONDITION == "depressed":
+        data = all_data[all_data.lifetime_depression == 1].copy()
+    elif CONDITION == "anxious":
+        data = all_data[all_data.lifetime_anxiety == 1].copy()
+    elif CONDITION == "depressed_anxious":
+        data = all_data[(all_data.lifetime_anxiety == 1) & (all_data.lifetime_depression == 1)].copy()
+    elif CONDITION == "control":
+        data = all_data[(all_data.lifetime_anxiety == 0) & (all_data.lifetime_depression == 0)].copy()
+
+    # Give estimated values for the '-999' values meaning "Too many to count"
+    # assign 99% percentile to those
+    # TODO: should this be done in gather_fields.py??
+    data.loc[data.longest_period_worried == -999, "longest_period_worried"] = data.longest_period_worried.quantile(0.99)
+    data.loc[data.number_depressed_periods == -999, "number_depressed_periods"] = data.number_depressed_periods.quantile(0.99)
 
     ## Do Univariate correlations on all the variables
     corr = data.corr()
@@ -57,7 +70,7 @@ for sex in [0,1]:
         t = row.correlation * numpy.sqrt((N - 2) / (1 - row.correlation**2))
         return scipy.stats.distributions.t(df=N-2).sf(abs(t)) * 2
     corr_long['p'] = corr_long.apply(corr_p, axis=1)
-    corr_long.to_csv(f"../processed/mental_health/univariate_correlations.{sex_str}.txt", sep="\t", index=False)
+    corr_long.to_csv(f"../processed/mental_health/univariate_correlations.{CONDITION}.txt", sep="\t", index=False)
 
 
     def plot_corr(A,B, title='', order=False):
@@ -112,18 +125,36 @@ for sex in [0,1]:
     mental_health = data[data.use][ukbb_data.columns].select_dtypes(include=["number"])
     activity = data[data.use][list(acc_summary.columns) + list(activity_features.columns)].select_dtypes(include=["number"])
 
+    # We fill in this values so that it's not throwing out all depressive males!!!
+    # TODO: we should either handle this earlier in gather_fields.py OR find another way to handle it (drop it?)
+    mental_health.loc[mental_health.depression_related_to_childbirth.isna(), "depression_related_to_childbirth"] = 0
+
     # Drop rows with NAs and columns with no variation (can't do correlation with no variation)
     # And drop some columns with low numbers of non-nan responses
     # eg: due to only being asked conditional on other questions and having no good default fillvalue
-    if sex_str == "M":
-        mental_health = mental_health.drop(columns=["depression_related_to_childbirth"])
     mental_health = mental_health.drop(columns=['age_at_first_episode', 'age_at_last_episode']).dropna()
-    mental_health = mental_health.loc[:,mental_health.std() > 0]
     activity = activity.dropna()
-    activity = activity.loc[:,activity.std() > 0]
     both_index = mental_health.index.intersection(activity.index)
     mental_health = mental_health.loc[both_index]
     activity = activity.loc[both_index]
+
+    # Control for sex effects
+    # by subtracting the mean for the sex
+    # TODO: do this earlier and add age as a variable
+    original_mental_health = mental_health.copy()
+    original_activity = activity.copy()
+    mental_health_M_mean = mental_health.loc[mental_health.sex == 1].mean()
+    mental_health_F_mean = mental_health.loc[mental_health.sex == 0].mean()
+    mental_health_sex_diff = mental_health_M_mean - mental_health_F_mean
+    mental_health.loc[mental_health.sex == 1] -= mental_health_sex_diff
+    activity_M_mean = activity.loc[mental_health.sex == 1].mean()
+    activity_F_mean = activity.loc[mental_health.sex == 0].mean()
+    activity_sex_diff = activity_M_mean - activity_F_mean
+    activity.loc[mental_health.sex == 1] -= activity_sex_diff
+
+    # Drop rows with no variance (everyone has same value, correlation undefined)
+    activity = activity.loc[:,activity.std() > 0]
+    mental_health = mental_health.loc[:,mental_health.std() > 0]
 
     # Order variables hierarchically by correlation
     mental_health_order = hierarchy.leaves_list(hierarchy.linkage(mental_health.T, metric="correlation", optimal_ordering=True))
@@ -132,13 +163,12 @@ for sex in [0,1]:
     activity = activity.iloc[:,activity_order]
 
     # Plot univariate correlations between the two datasets
-    plot_corr(mental_health, mental_health, "Mental Health Correlations")
-    pylab.savefig(f"../processed/mental_health/mental_health_correlations.{sex_str}.svg")
-    plot_corr(activity, activity, "Activity Correlations")
-    pylab.savefig(f"../processed/mental_health/activity_correlations.{sex_str}.svg")
-    plot_corr(mental_health, activity, "Activity - Mental Health Correlations")
-    pylab.savefig(f"../processed/mental_health/activity_mental_health_correlation.{sex_str}.svg")
-
+    plot_corr(mental_health, mental_health, f"Mental Health Correlations {CONDITION}")
+    pylab.savefig(f"../processed/mental_health/mental_health_correlations.{CONDITION}.svg")
+    plot_corr(activity, activity, f"Activity Correlations {CONDITION}")
+    pylab.savefig(f"../processed/mental_health/activity_correlations.{CONDITION}.svg")
+    plot_corr(mental_health, activity, f"Activity - Mental Health Correlations {CONDITION}")
+    pylab.savefig(f"../processed/mental_health/activity_mental_health_correlation.{CONDITION}.svg")
 
     #### Perform CCA on activity vs mental health questionnaire
     # Perform CCA
@@ -178,9 +208,14 @@ for sex in [0,1]:
     activity_coefficients = pandas.DataFrame(cca_res.x_cancoef[:,cca_pvals < 0.05], index=activity.columns)
     mental_health_scores = mental_health @ mental_health_coefficients
     activity_scores = activity @ activity_coefficients
-    plot_corr(mental_health_scores, mental_health, "Mental Health Variable Correlations with Canonical Components")
-    pylab.savefig(f"../processed/mental_health/mental_health_corr_with_top_cca.{sex_str}.svg")
-    plot_corr(activity_scores, activity, "Activity Variable Correlations with Canonical Components")
-    pylab.savefig(f"../processed/mental_health/activity_corr_with_top_cca.{sex_str}.svg")
+
+    cca_labels = [f"{corr:0.1%}" for corr in cca_test.stats['Canonical Correlation'][cca_pvals < 0.05]]
+    mental_health_scores.columns = cca_labels
+    activity_scores.columns = cca_labels
+
+    plot_corr(mental_health_scores, mental_health, f"Mental Health Variable Correlations with Canonical Components {CONDITION}")
+    pylab.savefig(f"../processed/mental_health/mental_health_corr_with_top_cca.{CONDITION}.svg")
+    plot_corr(activity_scores, activity, f"Activity Variable Correlations with Canonical Components {CONDITION}")
+    pylab.savefig(f"../processed/mental_health/activity_corr_with_top_cca.{CONDITION}.svg")
     #plot_corr(mental_health_scores, A, "Mental Health CCA Scores vs Activity Measures") #The cross correlations
     #plot_corr(activity_scores, B, "Activity CCA Scores vs Mental Health Measures")
