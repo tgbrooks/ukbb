@@ -6,6 +6,7 @@ HOURS_TO_COUNTS = 60*60//SAMPLE_RATE
 COUNTS_PER_DAY = 24*HOURS_TO_COUNTS
 SLEEP_PERIOD = 8*HOURS_TO_COUNTS
 
+MIN_PERIOD_LENGTH = 10 # 5 minutes of sleep consecutively to count as a sleep period
 GOOD_COUNT_THRESHOLD = 0.75
 SLEEP_THRESHOLD = 0.9 # May not be necessary - 30second intervals seem to generally have sleep=0 or 1
 
@@ -32,30 +33,48 @@ def extract_main_sleep_period(day_data):
     onset_times, = numpy.where(diff > 0)
     offset_times, = numpy.where(diff < 0)
 
+
+    # Skip any sleep periods of very short length
+    period_lengths = offset_times - onset_times
+    skip = period_lengths < MIN_PERIOD_LENGTH
+    onset_times = onset_times[~skip]
+    offset_times = offset_times[~skip]
+
     if len(onset_times) == 0:
         # Never slept at all
-        return dict(onset=pandas.to_datetime("NaT"), offset=pandas.to_datetime("NaT"), num_wakings=float("NaN"), WASO=float("NaN"), other_duration=float("NaN"))
+        return dict(onset=pandas.to_datetime("NaT"), offset=pandas.to_datetime("NaT"), num_wakings=float("NaN"), WASO=float("NaN"), other_duration=float("NaN"), acceleration_during_main_sleep=float("NaN"))
 
-    # Time between consecutive periods
-    gap_lengths = onset_times[1:] - offset_times[:-1]
+    while(True):
+        # Lengths of each sleep period
+        period_lengths = offset_times - onset_times
 
-    # Join together all periods that are less than 1 Hour apart
-    joined_onset_times = numpy.concatenate([onset_times[:1], onset_times[1:][gap_lengths > HOURS_TO_COUNTS]])
-    joined_offset_times = numpy.concatenate([offset_times[:-1][gap_lengths > HOURS_TO_COUNTS], offset_times[-1:]])
+        # Time between consecutive periods
+        gap_lengths = onset_times[1:] - offset_times[:-1]
+
+        # Find the gaps that are less than 1 Hour apart
+        # and where both the sleep periods on either side are at least as long as the gap
+        gaps_to_join = (gap_lengths < HOURS_TO_COUNTS) & (gap_lengths < 2*period_lengths[:-1]) & (gap_lengths < 2*period_lengths[1:])
+
+        # Join together all periods whose gaps match the above criteria
+        onset_times = numpy.concatenate([onset_times[:1], onset_times[1:][~gaps_to_join]])
+        offset_times = numpy.concatenate([offset_times[:-1][~gaps_to_join], offset_times[-1:]])
+
+        if not gaps_to_join.any():
+            break
 
     # Extract main (longest) period
-    period_lengths = joined_offset_times - joined_onset_times
+    period_lengths = offset_times - onset_times
     best_period = numpy.argmax(period_lengths)
 
-    onset = sleep.index[0] + pandas.to_timedelta( str(joined_onset_times[best_period] / HOURS_TO_COUNTS) + "H")
-    offset = sleep.index[0] + pandas.to_timedelta( str(joined_offset_times[best_period] / HOURS_TO_COUNTS) + "H")
+    onset = sleep.index[0] + pandas.to_timedelta( str(onset_times[best_period] / HOURS_TO_COUNTS) + "H")
+    offset = sleep.index[0] + pandas.to_timedelta( str(offset_times[best_period] / HOURS_TO_COUNTS) + "H")
 
     num_wakings = numpy.sum(numpy.diff(numpy.concatenate([[0], sleep[onset:offset] > SLEEP_THRESHOLD, [0]])) < 0)
     WASO = numpy.sum(1 - sleep[onset:offset]) / HOURS_TO_COUNTS
     other_duration = (numpy.sum(sleep) - numpy.sum(sleep[onset:offset])) / HOURS_TO_COUNTS
 
     # Average acceleration duing main sleep
-    acceleration_during_main_sleep = day_data.acceleration[joined_onset_times[best_period]:joined_offset_times[best_period]].mean()
+    acceleration_during_main_sleep = day_data.acceleration[onset_times[best_period]:offset_times[best_period]].mean()
 
     return dict(onset=onset,
                 offset=offset,
@@ -253,7 +272,9 @@ def run(input, output):
         results, by_day = activity_features(data)
 
     import json
-    json.dump(results, open(output, 'w'))
+    if output is not None:
+        json.dump(results, open(output, 'w'))
+
     return data, results, by_day
 
 if __name__ == "__main__":
