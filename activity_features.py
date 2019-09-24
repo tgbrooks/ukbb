@@ -23,7 +23,8 @@ def hours_since_noon(timeseries):
     difference[difference < 0] = difference_last_day[difference < 0]
     return difference
 
-def extract_main_sleep_period(sleep):
+def extract_main_sleep_period(day_data):
+    sleep = day_data.sleep
     sleeping = (sleep.values > SLEEP_THRESHOLD).astype('int')# Binarize
 
     # Find periods of sleep
@@ -53,7 +54,15 @@ def extract_main_sleep_period(sleep):
     WASO = numpy.sum(1 - sleep[onset:offset]) / HOURS_TO_COUNTS
     other_duration = (numpy.sum(sleep) - numpy.sum(sleep[onset:offset])) / HOURS_TO_COUNTS
 
-    return dict(onset=onset, offset=offset, num_wakings=num_wakings, WASO=WASO, other_duration=other_duration)
+    # Average acceleration duing main sleep
+    acceleration_during_main_sleep = day_data.acceleration[joined_onset_times[best_period]:joined_offset_times[best_period]].mean()
+
+    return dict(onset=onset,
+                offset=offset,
+                num_wakings=num_wakings,
+                WASO=WASO,
+                other_duration=other_duration,
+                acceleration_during_main_sleep=acceleration_during_main_sleep)
 
 def RA(activity):
     ''' Compute Relative Amplitude of any activity feature
@@ -123,10 +132,10 @@ def activity_features(data):
         # Define the MAIN SLEEP PERIOD to be the period of time such that
         # there are no periods > 1 HR of time without sleep
         # and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
-        sleep_by_day = data.sleep.resample("1D", base=0.5)
-        main_sleep_period = sleep_by_day.apply(extract_main_sleep_period)
+        by_day = data.resample("1D", base=0.5)
+        main_sleep_period = by_day.apply(extract_main_sleep_period)
         main_sleep_period_df = pandas.DataFrame(main_sleep_period.tolist(), index=main_sleep_period.index)
-        main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, other_sleep_duration = [main_sleep_period_df[col].copy() for col in main_sleep_period_df.columns]
+        main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, other_sleep_duration, acceleration_during_main_sleep = [main_sleep_period_df[col].copy() for col in main_sleep_period_df.columns]
 
         main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/60/60
         main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
@@ -134,7 +143,7 @@ def activity_features(data):
         # Throw out days without nearly all of the hours
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
         # should have 2880 for a complete day
-        days_invalid = (sleep_by_day.count() < 2500)
+        days_invalid = (by_day.sleep.count() < 2500)
         for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, other_sleep_duration]:
             measure[days_invalid] = float("NaN")
 
@@ -168,7 +177,23 @@ def activity_features(data):
             # Time spent sleeping NOT in main sleep period
             other_sleep_duration_avg = other_sleep_duration.mean(),
             other_sleep_duration_std = other_sleep_duration.std(),
+
+            #Average acceleration during the main sleep period
+            acceleration_during_main_sleep_avg = acceleration_during_main_sleep.mean(),
+            acceleration_during_main_sleep_std = acceleration_during_main_sleep.std()
         ))
+
+        by_day = dict(
+            total_sleep = by_day.sleep.sum() * 30 / 60 / 60,
+            main_sleep_onset = main_sleep_onset,
+            main_sleep_offset = main_sleep_offset,
+            main_sleep_wakings = main_sleep_wakings,
+            main_sleep_WASO = main_sleep_WASO,
+            other_sleep_duration = other_sleep_duration,
+            main_sleep_duration = main_sleep_duration,
+            main_sleep_ratio = main_sleep_ratio,
+            acceleration_during_main_sleep = acceleration_during_main_sleep,
+        )
 
     # Add RA/IS/IV values for each measure
     for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
@@ -204,7 +229,7 @@ def activity_features(data):
 
     #daylight_threshold = (data.light.max() - data.light.min()) / 10 + data.light.min()
 
-    return results
+    return results, by_day
 
 def run(input, output):
     '''Compute and output activity features'''
@@ -225,10 +250,11 @@ def run(input, output):
         data[data.imputed == 1] = float("NaN")
 
         # Run
-        results = activity_features(data)
+        results, by_day = activity_features(data)
 
     import json
     json.dump(results, open(output, 'w'))
+    return data, results, by_day
 
 if __name__ == "__main__":
     import argparse
