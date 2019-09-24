@@ -157,6 +157,7 @@ codings = dict(
             fields = [20492],
             to_nan = [-818, -121],
             type="ordinal",
+            fillvalue = 0,
     ),
 
     coding516 = dict(
@@ -166,6 +167,7 @@ codings = dict(
             #1   Needed treatment or caused problems with work, relationships, finances, the law or other aspects of life.
             fields = [20493],
             to_nan = [-818, -121],
+            fillvalue = 0,
     ),
 
     coding517 = dict(
@@ -173,6 +175,7 @@ codings = dict(
             # or period in months
             fields = [20420],
             to_nan = [],
+            fillvalue = 0,
             # TODO: what to do with -999?
     ),
 
@@ -183,7 +186,7 @@ codings = dict(
             #2   More than one thing
             fields = [20543],
             to_nan = [-818, -121],
-            fill_value = 0, # TODO: is this a reasonable fill-value?
+            fillvalue = 0, # TODO: is this a reasonable fill-value?
     ),
 
     coding519 = dict(
@@ -196,6 +199,7 @@ codings = dict(
             fields = [ 20537, 20539],
             to_nan = [-818, -121],
             type="ordinal",
+            fillvalue = 0,
     ),
 
     coding520 = dict(
