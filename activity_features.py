@@ -273,7 +273,9 @@ def run(input, output):
         data = data.rename(columns={data.columns[1]: "acceleration"})
 
         # Remove data when imputed. We don't like that very much
-        data[data.imputed == 1] = float("NaN")
+        imputed = data.imputed.copy()
+        data[imputed == 1] = float("NaN")
+        data.imputed = imputed
 
         # Run
         results, by_day = activity_features(data)

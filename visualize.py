@@ -11,23 +11,10 @@ import util
 import activity_features
 
 def visualize(filename):
-    if filename.endswith("csv") or filename.endswith(".csv.gz"):
-        data = util.read_actigraphy(filename)
-    else:
-        data = pandas.read_csv(filename, sep="\t", index_col=0, parse_dates=[0])
     filename = pathlib.Path(filename)
 
     # Get activity features to plot the 'main sleep' times
-    _, results, by_day  = activity_features.run(filename, None)
-    main_sleep_onset = by_day['main_sleep_onset']
-    main_sleep_offset = by_day['main_sleep_offset']
-    data['main_sleep_period'] = False
-    for day in main_sleep_onset.index:
-        if pandas.isna(main_sleep_onset[day]):
-            continue
-        data.loc[main_sleep_onset[day]:main_sleep_offset[day], 'main_sleep_period'] = True
-    data['main_sleep'] = (data.sleep > 0) & data.main_sleep_period
-    data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
+    data, results, by_day  = activity_features.run(filename, None)
 
     mask = numpy.ones(data.index.shape).astype(bool)
 
@@ -55,7 +42,8 @@ def visualize(filename):
     num_days = math.ceil((data.index[-1] - data.index[0]).total_seconds() / (24*60*60)) + 1
     fig, axes = pylab.subplots(nrows=num_days, sharex=True)
     for i, ax in enumerate(axes):
-        start = pandas.to_datetime(data.index[0].date()) + i * pandas.to_timedelta("1 day")
+        # Start at midnight morning of the day until midnight at night of second day
+        start = data.index[0].floor("1D") + i * pandas.to_timedelta("1 day")
         end = start + pandas.to_timedelta("2 day")
         day = data.loc[start:end]
         index = (day.index - start).total_seconds() / (60*60)
