@@ -27,17 +27,6 @@ def visualize(filename):
     activities = ['main_sleep', 'other_sleep', 'sedentary', 'walking', 'tasks-light', 'moderate', 'imputed']
     activity_colors = ["b", "c", "r", "g", "y", "m", "k"]
 
-
-    # Long plot
-    #fig = pylab.figure()
-
-    #ax1 = fig.add_subplot(211)
-    #ax1.stackplot(data.index, [data[act] for act in activities], labels=activities)
-
-    #ax2 = fig.add_subplot(212, sharex=ax1)
-    #ax2.plot(data['acceleration'])
-    #fig.legend()
-
     # stacked days, double-plotted
     num_days = math.ceil((data.index[-1] - data.index[0]).total_seconds() / (24*60*60)) + 1
     fig, axes = pylab.subplots(nrows=num_days, sharex=True)
@@ -64,6 +53,14 @@ def visualize(filename):
         # Plot acceleration
         ax.plot(index.values, day.acceleration.values, c='k')
 
+        # Plot light
+        ax_light = ax.twinx()
+        ax_light.plot(index.values, day.light.values, c='w')
+        ax_light.set_yticks([],[])
+        ax_temp = ax.twinx()
+        ax_temp.plot(index.values, day.temp.values, c='grey')
+        ax_temp.set_yticks([],[])
+
         ax.set_yticks([],[])
         ax.set_ylabel(start.strftime("%a"))
         ax.set_ylim(0,data['acceleration'].max())
@@ -71,8 +68,11 @@ def visualize(filename):
 
     axes[0].set_title(filename.name)
 
-    patches = [matplotlib.patches.Patch(color=color, alpha=0.5) for color in activity_colors]
-    fig.legend(patches, activities)
+    painters = [matplotlib.patches.Patch(color=color, alpha=0.5, label=act) for color, act in zip(activity_colors, activities)]
+    painters.append(matplotlib.lines.Line2D([0],[0], color="k", label="accel"))
+    painters.append(matplotlib.lines.Line2D([0],[0], color="w", label="light"))
+    painters.append(matplotlib.lines.Line2D([0],[0], color="grey", label="temp"))
+    fig.legend(painters, activities + ['accel', 'light', 'temp'])
 
     # 24Hour compressed data
     #fig2 = pylab.figure()
