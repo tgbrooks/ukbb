@@ -168,7 +168,6 @@ def IV(activity):
     IV = (hourly_avg.diff(1)**2).mean() / hourly_avg.var(ddof=0)
     return IV
 
-
 def activity_features(data):
     ''' return dictionary of result summary values '''
 
@@ -200,44 +199,54 @@ def activity_features(data):
             data.loc[results_by_day.onset[day]:results_by_day.offset[day], 'main_sleep_period'] = True
         data['main_sleep'] = (data.sleep > 0) & data.main_sleep_period
         data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
+
+        # Collect day-level results
+        results_by_day.set_index(results_by_day.index.normalize(), inplace=True)
         # For computing 'other' times, we want the data to be for a midnight-to-midnight day
         # not the noon-to-noon day that we use for sleep periods
         by_midnight_day = data.resample("1D", base=0.0)
 
-        # Collect day-level results
-        results_by_day['main_sleep_duration'] = by_day.main_sleep.sum() / HOURS_TO_COUNTS
-        results_by_day['other_sleep'] = (by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS).values
-        # Total sleep is napping between that days midnight-midnight period
-        # plus actual sleep in the main sleep from the noon-noon period
-        results_by_day['total_sleep'] = results_by_day.main_sleep_duration - results_by_day.WASO + results_by_day.other_sleep
-        results_by_day['main_sleep_ratio'] = (results_by_day.main_sleep_duration - results_by_day.WASO) / results_by_day.main_sleep_duration
+
         results_by_day['sleep_peak_time'] = hours_since_noon(sleep_peak_time) + 12
         results_by_day['sleep_peak_quality'] = sleep_peak_quality
         results_by_day.onset = hours_since_noon(results_by_day.onset) + 12
         results_by_day.offset = hours_since_noon(results_by_day.offset) + 12
-        results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
+        results_by_day['other_sleep'] = by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS
+        results_by_day['main_sleep_duration'] = results_by_day.offset - results_by_day.onset
+        # Total sleep is napping between that days midnight-midnight period
+        # plus actual sleep in the main sleep from the noon-noon period
+        results_by_day['total_sleep'] = results_by_day.main_sleep_duration - results_by_day.WASO + results_by_day.other_sleep
+        results_by_day['main_sleep_ratio'] = (results_by_day.main_sleep_duration - results_by_day.WASO) / results_by_day.main_sleep_duration
 
         # Light and Temperature values
         # Note that these were not calibrated so they might not be very useful
-        results_by_day['total_light'] = by_midnight_day.light.mean().values
-        results_by_day['light_90th'] = by_midnight_day.light.quantile(0.9).values
-        results_by_day['light_10th'] = by_midnight_day.light.quantile(0.1).values
-        results_by_day['temp'] = by_midnight_day.temp.mean().values
-        results_by_day['temp_90th'] = by_midnight_day.temp.quantile(0.9).values
-        results_by_day['temp_10th'] = by_midnight_day.temp.quantile(0.1).values
+        results_by_day['total_light'] = by_midnight_day.light.mean()
+        results_by_day['light_90th'] = by_midnight_day.light.quantile(0.9)
+        results_by_day['light_10th'] = by_midnight_day.light.quantile(0.1)
+        results_by_day['temp'] = by_midnight_day.temp.mean()
+        results_by_day['temp_90th'] = by_midnight_day.temp.quantile(0.9)
+        results_by_day['temp_10th'] = by_midnight_day.temp.quantile(0.1)
 
         while_sleep = data[data.main_sleep].resample("1D", base=0.5)
-        results_by_day['light_while_main_sleep'] = while_sleep.light.mean()
-        results_by_day['temp_while_main_sleep'] = while_sleep.temp.mean()
+        light_while_main_sleep = while_sleep.light.mean()
+        light_while_main_sleep.set_axis(light_while_main_sleep.index.normalize(), axis=0, inplace=True)
+        results_by_day['light_while_main_sleep'] = light_while_main_sleep
+
+        temp_while_main_sleep = while_sleep.temp.mean()
+        temp_while_main_sleep.set_axis(temp_while_main_sleep.index.normalize(), axis=0, inplace=True)
+        results_by_day['temp_while_main_sleep'] = temp_while_main_sleep
 
         # Throw out days without nearly all of the hours
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
         # should have 2880 for a complete day
         days_invalid = (by_day.sleep.count() < 2500)
-        results_by_day = results_by_day[~days_invalid]
+        results_by_day = results_by_day[~days_invalid.set_axis(days_invalid.index.normalize(), axis=0, inplace=False)]
+
+        # Give better column names
+        results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
 
         # Now fix the index by converting to dates instead of datetimes
-        results_by_day.set_index(results_by_day.index.date, inplace=True)
+        results_by_day.set_axis(results_by_day.index.date, axis=0, inplace=True)
 
         # Collect summary level results, across all days
         results.update( {col + "_avg": results_by_day[col].mean() for col in results_by_day})
