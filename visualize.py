@@ -1,22 +1,34 @@
 import argparse
 import math
+import pathlib
 
 import pandas
 import numpy
 import pylab
+import matplotlib
 
 import util
+import activity_features
 
 def visualize(filename):
     if filename.endswith("csv") or filename.endswith(".csv.gz"):
         data = util.read_actigraphy(filename)
     else:
         data = pandas.read_csv(filename, sep="\t", index_col=0, parse_dates=[0])
+    filename = pathlib.Path(filename)
 
-    #data = data.resample("10Min").mean()
+    # Get activity features to plot the 'main sleep' times
+    _, results, by_day  = activity_features.run(filename, None)
+    main_sleep_onset = by_day['main_sleep_onset']
+    main_sleep_offset = by_day['main_sleep_offset']
+    data['main_sleep_period'] = False
+    for day in main_sleep_onset.index:
+        if pandas.isna(main_sleep_onset[day]):
+            continue
+        data.loc[main_sleep_onset[day]:main_sleep_offset[day], 'main_sleep_period'] = True
+    data['main_sleep'] = (data.sleep > 0) & data.main_sleep_period
+    data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
 
-    # Group by time of day and
-    #data["time"] = data.index.time
     mask = numpy.ones(data.index.shape).astype(bool)
 
     grouped = data[mask].groupby(data.index.time)
@@ -25,8 +37,9 @@ def visualize(filename):
     day_avg = grouped.mean()
 
     #### Make figures
-    activities = ['sleep', 'sedentary', 'walking', 'tasks-light', 'moderate', 'imputed']
-    activity_colors = ["b", "r", "g", "y", "c", "k"]
+    activities = ['main_sleep', 'other_sleep', 'sedentary', 'walking', 'tasks-light', 'moderate', 'imputed']
+    activity_colors = ["b", "c", "r", "g", "y", "m", "k"]
+
 
     # Long plot
     #fig = pylab.figure()
@@ -49,17 +62,16 @@ def visualize(filename):
 
         # Shade regions based off the inferred activity
         shading_rects = []
+        shading_activities = []
         for act, color in zip(activities, activity_colors):
             changes = numpy.diff(numpy.concatenate([[0], (day[act] > 0).astype(int), [0]]))
             starts, = numpy.where(changes > 0)
             stops, = numpy.where(changes < 0)
+
             for (a, b) in zip(starts, stops):
                 first = index[a]
                 last = index[min(b, len(day.index)-1)]
                 rect = ax.axvspan(first, last, facecolor=color, alpha=0.5)
-            # Grab one rect per activity for legend
-            # only do this for the first day
-            shading_rects.append(rect)
 
         # Plot acceleration
         ax.plot(index.values, day.acceleration.values, c='k')
@@ -69,23 +81,27 @@ def visualize(filename):
         ax.set_ylim(0,data['acceleration'].max())
         ax.set_xticks([0,6,12,18,24,30,36,42,48])
 
-    fig.legend(shading_rects, activities)
+    axes[0].set_title(filename.name)
+
+    patches = [matplotlib.patches.Patch(color=color, alpha=0.5) for color in activity_colors]
+    fig.legend(patches, activities)
 
     # 24Hour compressed data
-    fig2 = pylab.figure()
+    #fig2 = pylab.figure()
 
-    ax = fig2.add_subplot(111)
-    ax.plot(day_max['acceleration'])
-    ax.plot(day_avg['acceleration'])
-    ax.plot(day_min['acceleration'])
-    ax.set_title("Activity through Day")
+    #ax = fig2.add_subplot(111)
+    #ax.plot(day_max['acceleration'])
+    #ax.plot(day_avg['acceleration'])
+    #ax.plot(day_min['acceleration'])
+    #ax.set_title(f"Activity through Day\n{filename.name}")
 
     pylab.show()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=f"Visualize an actigraphy data, preferably downsampled to be, say, 1minute intervals")
-    parser.add_argument("-f", "--filename", required=True, help="path to file to load")
+    parser.add_argument("-f", "--filename", required=True, help="path(s) to file(s) to load", nargs="+")
     args = parser.parse_args()
 
-    visualize(args.filename)
+    for filename in args.filename:
+        visualize(filename)
