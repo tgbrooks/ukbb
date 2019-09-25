@@ -188,18 +188,14 @@ def activity_features(data):
         # and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
         by_day = data.resample("1D", base=0.5)
         main_sleep_period = by_day.apply(extract_main_sleep_period)
-        main_sleep_period_df = pandas.DataFrame(main_sleep_period.tolist(), index=main_sleep_period.index)
-        main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, acceleration_during_main_sleep = [main_sleep_period_df[col].copy() for col in main_sleep_period_df.columns]
-
-        main_sleep_duration = (main_sleep_offset - main_sleep_onset).dt.total_seconds()/60/60
-        main_sleep_ratio = (main_sleep_duration - main_sleep_WASO)/ main_sleep_duration
+        results_by_day = pandas.DataFrame(main_sleep_period.tolist(), index=main_sleep_period.index)
 
         # Define sleep as either 'main sleep' or 'other sleep'
         data['main_sleep_period'] = False
-        for day in main_sleep_onset.index:
-            if pandas.isna(main_sleep_onset[day]):
+        for day in results_by_day.index:
+            if pandas.isna(results_by_day.onset[day]):
                 continue
-            data.loc[main_sleep_onset[day]:main_sleep_offset[day], 'main_sleep_period'] = True
+            data.loc[results_by_day.onset[day]:results_by_day.offset[day], 'main_sleep_period'] = True
         data['main_sleep'] = (data.sleep > 0) & data.main_sleep_period
         data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
         # For computing 'other' times, we want the data to be for a midnight-to-midnight day
@@ -207,58 +203,29 @@ def activity_features(data):
         by_midnight_day = data.resample("1D", base=0.0)
 
         # Collect day-level results
-        results_by_day = main_sleep_period_df
         results_by_day['main_sleep_duration'] = by_day.main_sleep.sum() / HOURS_TO_COUNTS
         results_by_day['other_sleep'] = (by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS).values
         # Total sleep is napping between that days midnight-midnight period
         # plus actual sleep in the main sleep from the noon-noon period
         results_by_day['total_sleep'] = results_by_day.main_sleep_duration - results_by_day.WASO + results_by_day.other_sleep
         results_by_day['main_sleep_ratio'] = (results_by_day.main_sleep_duration - results_by_day.WASO) / results_by_day.main_sleep_duration
+        results_by_day['sleep_peak_time'] = hours_since_noon(sleep_peak_time) + 12
+        results_by_day['sleep_peak_quality'] = sleep_peak_quality
+        results_by_day.onset = hours_since_noon(results_by_day.onset) + 12
+        results_by_day.offset = hours_since_noon(results_by_day.offset) + 12
+        results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
 
         # Throw out days without nearly all of the hours
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
         # should have 2880 for a complete day
         days_invalid = (by_day.sleep.count() < 2500)
-        for measure in [main_sleep_onset, main_sleep_offset, main_sleep_wakings, main_sleep_WASO, main_sleep_duration, main_sleep_ratio, acceleration_during_main_sleep]:
-            measure[days_invalid] = float("NaN")
+        results_by_day = results_by_day[~days_invalid]
 
 
         # Collect summary level results, across all days
-        results.update(dict(
-            # hours past 0:00 AM (usually of the day prior to the peak sleep)
-            sleep_peak_time_avg = hours_since_noon(sleep_peak_time).mean() + 12,
-            sleep_peak_time_std = hours_since_noon(sleep_peak_time).std(),
 
-            # Onset/offset times, from 0:00AM morning of the first day
-            onset_time_avg = hours_since_noon(main_sleep_onset).mean() + 12,
-            onset_time_std = hours_since_noon(main_sleep_onset).std(),
-            offset_time_avg = hours_since_noon(main_sleep_offset).mean() + 12,
-            offset_time_std = hours_since_noon(main_sleep_offset).std(),
-
-            # Duration of main period of sleep NOT the total amount of time they slept - may have many waking periods
-            main_sleep_duration_avg = main_sleep_duration.mean(),
-            main_sleep_duration_std = main_sleep_duration.std(),
-
-            # Number of times waking up during main sleep period
-            main_sleep_wakings_avg = main_sleep_wakings.mean(),
-            main_sleep_wakings_std = main_sleep_wakings.std(),
-
-            # Total time in hours spent not sleeping during main sleep period
-            main_sleep_WASO_avg = main_sleep_WASO.mean(),
-            main_sleep_WASO_std = main_sleep_WASO.std(),
-
-            # Sleep ratio: fraction of main sleep period spent sleeping
-            main_sleep_ratio_avg = main_sleep_ratio.mean(),
-            main_sleep_ratio_std = main_sleep_ratio.std(),
-
-            # Time spent sleeping NOT in main sleep period
-            other_sleep_duration_avg = by_midnight_day.other_sleep.sum().mean() / HOURS_TO_COUNTS,
-            other_sleep_duration_std = by_midnight_day.other_sleep.sum().std() / HOURS_TO_COUNTS,
-
-            #Average acceleration during the main sleep period
-            acceleration_during_main_sleep_avg = acceleration_during_main_sleep.mean(),
-            acceleration_during_main_sleep_std = acceleration_during_main_sleep.std()
-        ))
+        results.update( {col + "_avg": results_by_day[col].mean() for col in results_by_day})
+        results.update( {col + "_std": results_by_day[col].std() for col in results_by_day})
 
     # Add RA/IS/IV values for each measure
     for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
