@@ -81,7 +81,7 @@ rule aggregate:
 rule gather_fields:
     input:
         "../data/ukb32828.tab",
-        "./data/ukb34939.tab"
+        "../data/ukb34939.tab"
     output:
         "../processed/ukbb_data_table.txt"
     resources:
