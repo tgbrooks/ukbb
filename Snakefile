@@ -66,7 +66,7 @@ rule activity_features_batch:
     run:
         import activity_features
         for file_path, id in zip(input, activity_features_batches[int(wildcards.batch)]):
-            activity_features.run(file_path, f"../processed/activity_features/{id}.json")
+            activity_features.run(file_path, f"../processed/activity_features/{id}.json", f"../processed/activity_features/{id}.by_day.txt")
 
 rule aggregate:
     input:
