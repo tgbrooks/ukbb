@@ -215,15 +215,29 @@ def activity_features(data):
         results_by_day.offset = hours_since_noon(results_by_day.offset) + 12
         results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
 
+        # Light and Temperature values
+        # Note that these were not calibrated so they might not be very useful
+        results_by_day['total_light'] = by_midnight_day.light.mean().values
+        results_by_day['light_90th'] = by_midnight_day.light.quantile(0.9).values
+        results_by_day['light_10th'] = by_midnight_day.light.quantile(0.1).values
+        results_by_day['temp'] = by_midnight_day.temp.mean().values
+        results_by_day['temp_90th'] = by_midnight_day.temp.quantile(0.9).values
+        results_by_day['temp_10th'] = by_midnight_day.temp.quantile(0.1).values
+
+        while_sleep = data[data.main_sleep].resample("1D", base=0.5)
+        results_by_day['light_while_main_sleep'] = while_sleep.light.mean()
+        results_by_day['temp_while_main_sleep'] = while_sleep.temp.mean()
+
         # Throw out days without nearly all of the hours
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
         # should have 2880 for a complete day
         days_invalid = (by_day.sleep.count() < 2500)
         results_by_day = results_by_day[~days_invalid]
 
+        # Now fix the index by converting to dates instead of datetimes
+        results_by_day.set_index(results_by_day.index.date, inplace=True)
 
         # Collect summary level results, across all days
-
         results.update( {col + "_avg": results_by_day[col].mean() for col in results_by_day})
         results.update( {col + "_std": results_by_day[col].std() for col in results_by_day})
 
@@ -240,26 +254,6 @@ def activity_features(data):
             #so we just drop them here
             #these will end up as NaNs in the aggregated spreadsheet
             pass
-
-    # Light and temperature values
-    for value in ['light', 'temp']:
-        results.update({
-            value + "_avg": data[value].mean(),
-            value + "_std": data[value].std(),
-        })
-
-    # Attempt to estimate daylight
-    # Since light sensors require calibration which we do not know we estimate a threshold for daylight
-    # by using the minimum and highest values observed
-    # since daylight is generally orders of magnitude brighter than anything else this should be reliable
-    # so long as at least one 30second epoch was exposed to daylight
-    # though there is the concern that some will get daylight and others will get direct sunlight which could be much much brighter
-    # NOTE: I have decided to not attempt to infer daylight for now
-    # the data here shows that the (uncalibrated) lux range of participants is roughly 15 - 500.
-    # Real sunlight should be closer to 10000 or more. The enclosure blocks some amount of light but this is more atenuated than expeceted
-    # If there is that little difference then we can't reliably differentiate sunlight from office light
-
-    #daylight_threshold = (data.light.max() - data.light.min()) / 10 + data.light.min()
 
     return results, results_by_day
 
