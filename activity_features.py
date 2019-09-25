@@ -268,7 +268,7 @@ def activity_features(data):
 
     return results, results_by_day
 
-def run(input, output):
+def run(input, output=None, by_day_output=None):
     '''Compute and output activity features'''
     # Load data
     data = pandas.read_csv(input, parse_dates=[0])
@@ -295,14 +295,18 @@ def run(input, output):
     if output is not None:
         json.dump(results, open(output, 'w'))
 
+    if by_day_output is not None:
+        by_day.to_csv(by_day_output, sep="\t")
+
     return data, results, by_day
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Compute activity features from processed actigraphy timeseries")
     parser.add_argument("input", help="input timeSeries.csv.gz file as output by biobankAccelerometerAnalysis/accProcess.py")
-    parser.add_argument("output", help="output file to sleep features write to")
+    parser.add_argument("output", help="output file to write activity features summary to")
+    parser.add_argument("--by_day", help="output file to write day-level statistics to", default=None)
 
     args = parser.parse_args()
 
-    run(args.input, args.output)
+    run(args.input, args.output, args.by_day)
