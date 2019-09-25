@@ -96,8 +96,10 @@ def extract_main_sleep_period(day_data):
     offset_times = numpy.concatenate([offset_times[:-1][~gaps_to_join], offset_times[-1:]])
 
     # Extract main (longest) period
-    period_lengths = offset_times - onset_times
-    best_period = numpy.argmax(period_lengths)
+    # by most sleep (not counting the imputed times as sleep since sometimes that will call
+    # a giant imputed block at the start of the readings as the main sleep period)
+    sleep_by_period = [sleep.iloc[onset:offset].sum() for onset,offset in zip(onset_times, offset_times)]
+    best_period = numpy.argmax(sleep_by_period)
 
     onset_index = onset_times[best_period]
     offset_index = offset_times[best_period]
