@@ -174,15 +174,14 @@ def activity_features(data):
 
     ### Sleep Features
     if 'sleep' in data:
-        stretches = data.rolling(SLEEP_PERIOD, center=True).mean()
 
         # Sleep onset
         # For, say, Monday, we look for sleep periods starting between noon Monday and noon Tuesday
         # since we want to put a sleep-onset time of 1AM on Tuesday as being the onset "for Monday"
         # this is done with the "base=0.5" parameter, offsets the 1day samples by 12 hours
+        stretches = data.rolling(SLEEP_PERIOD, center=True, win_type="gaussian").mean(std=SLEEP_PERIOD)
         sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
         sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
-        sleep_peak_data_available = stretches.resample("1D", base=0.5).sleep.count() > (COUNTS_PER_DAY * GOOD_COUNT_THRESHOLD)
 
         # Define the MAIN SLEEP PERIOD to be the period of time such that
         # there are no periods > 1 HR of time without sleep
