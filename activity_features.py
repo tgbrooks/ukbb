@@ -1,5 +1,6 @@
 import pandas
 import numpy
+import pytz
 
 SAMPLE_RATE = 30 # in Seconds
 HOURS_TO_COUNTS = 60*60//SAMPLE_RATE
@@ -200,15 +201,18 @@ def activity_features(data):
         data['main_sleep'] = (data.sleep > 0) & data.main_sleep_period
         data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
 
-        # Collect day-level results
+        # Collect more day-level results
+        results_by_day['sleep_peak_time'] = hours_since_noon(sleep_peak_time) + 12
+        results_by_day['sleep_peak_quality'] = sleep_peak_quality
+
+        # convert the index to be 'day-at-0:00' not 'day-at-noon'
+        # so that we can use the base=0.0 resampling too
         results_by_day.set_index(results_by_day.index.normalize(), inplace=True)
+
         # For computing 'other' times, we want the data to be for a midnight-to-midnight day
         # not the noon-to-noon day that we use for sleep periods
         by_midnight_day = data.resample("1D", base=0.0)
 
-
-        results_by_day['sleep_peak_time'] = hours_since_noon(sleep_peak_time) + 12
-        results_by_day['sleep_peak_quality'] = sleep_peak_quality
         results_by_day.onset = hours_since_noon(results_by_day.onset) + 12
         results_by_day.offset = hours_since_noon(results_by_day.offset) + 12
         results_by_day['other_sleep'] = by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS
@@ -277,8 +281,22 @@ def run(input, output=None, by_day_output=None):
         results = {}
     else:
         # Process the timezones from UTC to London
-        # TODO: determine if this is the right starting timezone or if, in fact, they start in Europe/London
-        data = data.set_index(data.time.dt.tz_localize("UTC").dt.tz_convert("Europe/London"))
+        # Taking into account how they are reported
+
+        # Times reported to use from processing of the CWA file are in a confusing state
+        # where they are neither Europe/London nor UTC
+        # Essentially, they are either in UTC if not in daylight savings time
+        # and are in British Summer Time if in daylight savings time
+        # and maintain whatever timezone they are in even if the DST crossover happens!!
+        # Moreover - and impossible to fix with what we know - some of those that start
+        # shortly after (somewhere around the next 3-4 days) the DST crossover
+        # remain in the old time zone.
+        if data.time[0].dst():
+            time = data.time.dt.tz_localize(pytz.FixedOffset(1)) # British Summer Time
+        else:
+            time = data.time.dt.tz_localize("UTC") # non-DST London time
+        time = time.dt.tz_convert("Europe/London")
+        data = data.set_index(time)
 
         # Rename for convenience - this column name contains redundant information we don't need
         data = data.rename(columns={data.columns[1]: "acceleration"})

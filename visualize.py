@@ -32,10 +32,12 @@ def visualize(filename):
     fig, axes = pylab.subplots(nrows=num_days, sharex=True)
     for i, ax in enumerate(axes):
         # Start at midnight morning of the day until midnight at night of second day
-        start = data.index[0].floor("1D") + i * pandas.to_timedelta("1 day")
+        # If daylight savings crossover happens then affected days are 1 hour shorter or longer
+        # (due to double-plotting this affects two days)
+        start = data.index[0].date() + i * pandas.to_timedelta("1 day")
         end = start + pandas.to_timedelta("2 day")
         day = data.loc[start:end]
-        index = (day.index - start).total_seconds() / (60*60)
+        index = (day.index - day.index[0].normalize()).total_seconds() / (60*60)
 
         # Shade regions based off the inferred activity
         shading_rects = []
