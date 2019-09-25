@@ -6,7 +6,8 @@ parser.add_argument("end_date", help="Last date (in YYYY-MM-DD format) to proces
 parser.add_argument("activity_analysis_directory", help="folder containing the activity analysis timeseries data")
 parser.add_argument("output_file", help="file to output the by-date summary")
 parser.add_argument("summary_file", help="tab-separated file with the agregated summary output of the activity analysis, contains dates of subjects")
-
+parser.add_argument("--activation_date", help="select only those whose start date of activity data is this date (optional)", default=None)
+parser.add_argument("--quantile", help="quantile to take (eg: 0.9 is 90th percentile). By default compute the mean instead", default="mean")
 args = parser.parse_args()
 
 import pathlib
@@ -14,11 +15,13 @@ import pandas
 import json
 import sys
 
-
 summary = pandas.read_csv(args.summary_file, sep="\t", index_col=0, parse_dates=["file-startTime", "file-endTime"])
 start_time = pandas.to_datetime(args.start_date)
 end_time = pandas.to_datetime(args.end_date) + pandas.to_timedelta("1D")
 in_range = (summary['file-startTime'] < end_time) & (summary['file-endTime'] >= start_time)
+if args.activation_date is not None:
+    activation_date = pandas.to_datetime(args.activation_date).date()
+    in_range &= summary['file-startTime'].dt.date == activation_date
 eids = summary.index[in_range]
 
 columns = "acceleration,moderate,sedentary,sleep,tasks-light,walking,MET,temp,light".split(",")
@@ -63,12 +66,21 @@ if activity_dfs:
     all_activity = pandas.concat(activity_dfs, sort=True)
     del activity_dfs # This can use a large amount of memory and it's now redundant
     grouped_activity = all_activity.groupby(level=0)
-    mean_activity = grouped_activity.mean()
-    std_activity = grouped_activity.std()
-    counts = grouped_activity.count()
-    mean_activity['counts'] = counts.sleep # Pick one collumn to use, they should all be the same
+    if args.quantile == 'mean':
+        summary_activity = grouped_activity.mean()
+    else:
+        try:
+            quantile = float(args.quantile)
+        except ValueError:
+            print(f"Invalid 'quantile' parameter, need float 0-1, got `{args.quantile}`")
+            exit(0)
+        summary_activity = grouped_activity.quantile(quantile)
 
-    mean_activity.to_csv(args.output_file, sep="\t")
+
+    counts = grouped_activity.count()
+    summary_activity['counts'] = counts.sleep # Pick one collumn to use, they should all be the same
+
+    summary_activity.to_csv(args.output_file, sep="\t")
 else:
     print("Failed to find any files in the time range. Output blank file", file=sys.stderr)
     pathlib.Path(args.output_file).touch()

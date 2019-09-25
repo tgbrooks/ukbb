@@ -291,7 +291,7 @@ def run(input, output=None, by_day_output=None):
         # Moreover - and impossible to fix with what we know - some of those that start
         # shortly after (somewhere around the next 3-4 days) the DST crossover
         # remain in the old time zone.
-        if data.time[0].dst():
+        if data.time[0].tz_localize("Europe/London").dst():
             time = data.time.dt.tz_localize(pytz.FixedOffset(1)) # British Summer Time
         else:
             time = data.time.dt.tz_localize("UTC") # non-DST London time
