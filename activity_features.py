@@ -255,6 +255,8 @@ def activity_features(data):
         # Collect summary level results, across all days
         results.update( {col + "_avg": results_by_day[col].mean() for col in results_by_day})
         results.update( {col + "_std": results_by_day[col].std() for col in results_by_day})
+    else:
+        results_by_day = pandas.DataFrame([])
 
     # Add RA/IS/IV values for each measure
     for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
