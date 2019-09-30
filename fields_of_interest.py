@@ -3,6 +3,7 @@ general_fields = dict(
     actigraphy_file = 90004,
     birth_year = 34,
     sex = 31,
+    assessment_center = 54,
 )
 
 mental_health_fields = dict(
