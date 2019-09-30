@@ -17,6 +17,13 @@ codings = dict(
         to_nan = [],
     ),
 
+    coding10 = dict(
+        # Values 110## are different assessment centers
+        fields=[54],
+        to_nan=[],
+        type="categorical",
+    ),
+
     coding502 = dict(
         #0  No
         #1  Yes
