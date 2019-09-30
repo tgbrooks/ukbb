@@ -18,10 +18,11 @@ codings = dict(
     ),
 
     coding10 = dict(
-        # Values 110## are different assessment centers
+        # Values 110** are different assessment centers
         fields=[54],
         to_nan=[],
-        type="categorical",
+        # We don't handle categorical for now, and this is probably unecessary to handle it for this field
+        #type="categorical",
     ),
 
     coding502 = dict(
