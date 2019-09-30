@@ -73,10 +73,12 @@ rule aggregate:
         expand(rules.activity_features_batch.output, batch=range(len(activity_features_batches)))
     output:
         activity_features = protected("../processed/activity_features_aggregate.txt"),
-        activity_summary = protected("../processed/activity_summary_aggregate.txt")
+        activity_summary = protected("../processed/activity_summary_aggregate.txt"),
+        activity_by_day = protected("../processed/activity_by_day.txt")
     shell:
         "./aggregate.py ../processed/activity_features/ {output.activity_features} --file_suffix .json && "
-        "./aggregate.py ../processed/acc_analysis/ {output.activity_summary}"
+        "./aggregate.py ../processed/acc_analysis/ {output.activity_summary} && "
+        "./aggregate.py ../processed/activity_features/ {output.activity_by_day} --file_suffix .by_day.txt"
 
 rule gather_fields:
     input:
