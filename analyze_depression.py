@@ -4,6 +4,7 @@ import pylab
 import scipy
 from statsmodels.multivariate import cancorr
 from scipy.cluster import hierarchy
+from sklearn.decomposition import PCA
 
 PERFORM_PERMUTATION_TEST = False #NOTE: slow! So I've left it disabled
 
@@ -21,6 +22,8 @@ def select_columns(col):
 acc_summary = acc_summary[[c for c in acc_summary.columns if select_columns(c)]]
 
 activity_features = pandas.read_csv("../processed/activity_features_aggregate.txt", sep="\t", index_col = 0)
+#Drop this column since it is linearly dependent upon several others and makes CCA impossible
+activity_features.drop(columns=["total_sleep_avg", "total_sleep_std", "main_sleep_duration_avg", "main_sleep_duration_std"], inplace=True)
 
 data = ukbb_data.join(acc_summary, how="inner").join(activity_features, how="inner")
 
@@ -219,3 +222,18 @@ for CONDITION in CONDITIONS:
     pylab.savefig(f"../processed/mental_health/activity_corr_with_top_cca.{CONDITION}.svg")
     #plot_corr(mental_health_scores, A, "Mental Health CCA Scores vs Activity Measures") #The cross correlations
     #plot_corr(activity_scores, B, "Activity CCA Scores vs Mental Health Measures")
+
+
+    ### PERFORM PCA within just the actigraphy values
+    pca = PCA(n_components=2)
+    activity_data = data.loc[data.use, list(activity_features.columns) + list(acc_summary.columns)].dropna()
+    zscore_activity = (activity_data - activity_data.mean(axis=0)) / activity_data.std(axis=0)
+    zscore_activity.dropna(axis=1, inplace=True)
+    activity_PCA_coords =  pca.fit_transform(zscore_activity)
+    fig = pylab.figure(figsize=(8,8))
+    ax = fig.add_subplot(111)
+    ax.scatter(*(activity_PCA_coords.T))
+    ax.set_xlabel(f"PCA1 {pca.explained_variance_ratio_[0]:0.1%}")
+    ax.set_ylabel(f"PCA2 {pca.explained_variance_ratio_[1]:0.1%}")
+    ax.set_title(f"PCA of Activity Variables - {CONDITION}")
+    fig.savefig(f"../processed/mental_health/activity_PCA.{CONDITION}.png")
