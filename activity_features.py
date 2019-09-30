@@ -281,6 +281,7 @@ def run(input, output=None, by_day_output=None):
     if 'time' not in data:
         print(f"Processed timeseries file {input} has no 'time' index collumn and is being skipped")
         results = {}
+        by_day = pandas.DataFrame([])
     else:
         # Process the timezones from UTC to London
         # Taking into account how they are reported
