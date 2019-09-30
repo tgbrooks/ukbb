@@ -274,6 +274,20 @@ def activity_features(data):
 
     return results, results_by_day
 
+# The data for the UKBB switches between two timezones, UTC+1 (British Summer Time) and UTC
+# and it does so nearly but not quite on the daylight savings time transitions
+# We record here manually observed transitions of these changes for the purposes of correcting
+# the time zones
+# Each entry is a (first_day, last_day, offset) tuples, where offset is in hours
+# Data from other datasets would need to be processed differently
+TIMEZONES = [("2013-06-01", "2013-10-30", 1),
+             ("2013-10-31", "2014-04-03", 0),
+             ("2014-04-04", "2014-10-29", 1),
+             ("2014-10-30", "2015-04-01", 0),
+             ("2015-04-02", "2015-10-28", 1),
+             ("2015-10-29", "2015-12-29", 0)
+             ]
+
 def run(input, output=None, by_day_output=None):
     '''Compute and output activity features'''
     # Load data
@@ -286,20 +300,19 @@ def run(input, output=None, by_day_output=None):
         # Process the timezones from UTC to London
         # Taking into account how they are reported
 
-        # Times reported to use from processing of the CWA file are in a confusing state
-        # where they are neither Europe/London nor UTC
-        # Essentially, they are either in UTC if not in daylight savings time
-        # and are in British Summer Time if in daylight savings time
-        # and maintain whatever timezone they are in even if the DST crossover happens!!
-        # Moreover - and impossible to fix with what we know - some of those that start
-        # shortly after (somewhere around the next 3-4 days) the DST crossover
-        # remain in the old time zone.
-        if data.time[0].tz_localize("Europe/London").dst():
-            time = data.time.dt.tz_localize(pytz.FixedOffset(60)) # British Summer Time
-        else:
-            time = data.time.dt.tz_localize("UTC") # non-DST London time
-        time = time.dt.tz_convert("Europe/London")
-        data = data.set_index(time)
+        # Times reported to use from processing of the CWA file are in different timezones
+        # based on when they start
+        # We convert those all to Europe/London
+        start_day = data.time[0].date()
+        tz = None
+        for first_day, last_day, offset in TIMEZONES:
+            if (pandas.to_datetime(first_day).date() <= start_day and
+                       pandas.to_datetime(last_day).date() >= start_day):
+                tz = pytz.FixedOffset(60*offset)
+        if tz == None:
+            print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {start_day}")
+        time = data.time.tz_localize(tz)
+        data = data.set_index(time.tz_convert("Europe/London"))
 
         # Rename for convenience - this column name contains redundant information we don't need
         data = data.rename(columns={data.columns[1]: "acceleration"})
