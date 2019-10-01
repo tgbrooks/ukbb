@@ -209,8 +209,12 @@ def activity_features(data):
                 # needs to be midnight-to-midnight
                 continue
             # For some reason, cannot do idxmax except on resampled DataFrame
-            peak_time = window.resample("1D", base=0.0)[feature].idxmax()
-            peak_value = peak_values[feature]
+            try:
+                peak_time = window.resample("1D", base=0.0)[feature].idxmax()
+                peak_value = peak_values[feature]
+            except KeyError:
+                # Lacking MET probably
+                continue
 
             # If we literally have no data about the feature (it's all zero)
             # then we'll give a peak_time of NaN
@@ -285,8 +289,13 @@ def activity_features(data):
         for feature in ALL_COLUMNS:
             if feature == 'sleep':
                 continue
-            results_by_day[feature + "_peak_time"] = hours_since_midnight(feature_peak_times[feature])
-            results_by_day[feature + "_peak_value"] = feature_peak_values[feature]
+
+            try:
+                results_by_day[feature + "_peak_time"] = hours_since_midnight(feature_peak_times[feature])
+                results_by_day[feature + "_peak_value"] = feature_peak_values[feature]
+            except KeyError:
+                # Lacking MET, probably
+                continue
 
         # Give better column names
         results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
@@ -312,7 +321,7 @@ def activity_features(data):
             #Some datasets do not have MET or other columns
             #so we just drop them here
             #these will end up as NaNs in the aggregated spreadsheet
-            pass
+            continue
 
     return results, results_by_day
 
