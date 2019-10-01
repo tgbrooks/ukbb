@@ -64,7 +64,7 @@ def visualize(filename):
         ax_temp.set_yticks([],[])
 
         ax.set_yticks([],[])
-        ax.set_ylabel(start.strftime("%a"))
+        ax.set_ylabel(start.strftime("%a") + "\n" + str(start))
         ax.set_ylim(0,data['acceleration'].max())
         ax.set_xticks([0,6,12,18,24,30,36,42,48])
 
