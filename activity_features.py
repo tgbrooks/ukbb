@@ -6,6 +6,8 @@ SAMPLE_RATE = 30 # in Seconds
 HOURS_TO_COUNTS = 60*60//SAMPLE_RATE
 COUNTS_PER_DAY = 24*HOURS_TO_COUNTS
 SLEEP_PERIOD = 8*HOURS_TO_COUNTS
+ACTIVITY_WINDOW = 4*HOURS_TO_COUNTS
+ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
 
 MIN_PERIOD_LENGTH = 10 # 5 minutes of sleep consecutively to count as a sleep period
 JUMP_RATIO = 0.5 # Length of longest gap to jump over as a ratio of the size of the adjacent sleep periods
@@ -20,12 +22,22 @@ def hours_since_noon(timeseries):
     NOTE: if a clock change happens due to daylight savings change
     then this will still give the total number of hours since noon.'''
     timeseries = pandas.to_datetime(timeseries)
-    noon_same_day = timeseries.dt.round("1D") + pandas.to_timedelta("0.5D")
+    noon_same_day = timeseries.dt.floor("1D") + pandas.to_timedelta("0.5D")
     difference = (timeseries - noon_same_day).dt.total_seconds() / 60 / 60
 
     noon_last_day = noon_same_day - pandas.to_timedelta("1D")
     difference_last_day = (timeseries - noon_last_day).dt.total_seconds() / 60 / 60
     difference[difference < 0] = difference_last_day[difference < 0]
+    return difference
+
+def hours_since_midnight(timeseries):
+    ''' Return time since the last midnight, in hours
+
+    NOTE: if a clock change happens due to daylight savings change
+    then this will still give the total number of hours since midnight.'''
+    timeseries = pandas.to_datetime(timeseries)
+    midnight = timeseries.dt.floor("1D")
+    difference = (timeseries - midnight).dt.total_seconds() / 60 / 60
     return difference
 
 def extract_main_sleep_period(day_data):
@@ -185,6 +197,29 @@ def activity_features(data):
         sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
         sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
 
+        # Find peak times for each feature type based off when the value maximizes in each noon-noon day
+        # and the peak value, which is a weighted sum of the values over the window of size ACTIVITY_WINDOW
+        feature_peak_times = {}
+        feature_peak_values = {}
+        window = data.rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian").mean(std=ACTIVITY_WINDOW/4)
+        peak_values = window.resample("1D", base=0.0).max()
+        for feature in ALL_COLUMNS:
+            if feature == 'sleep':
+                # Skip 'sleep' since it is done separately above
+                # needs to be midnight-to-midnight
+                continue
+            # For some reason, cannot do idxmax except on resampled DataFrame
+            peak_time = window.resample("1D", base=0.0)[feature].idxmax()
+            peak_value = peak_values[feature]
+
+            # If we literally have no data about the feature (it's all zero)
+            # then we'll give a peak_time of NaN
+            # NOTE: this works since all our features are non-negative
+            peak_time[peak_value == 0.0] = float("NaN")
+
+            feature_peak_times[feature]  = peak_time
+            feature_peak_values[feature] = peak_value
+
         # Define the MAIN SLEEP PERIOD to be the period of time such that
         # there are no periods > 1 HR of time without sleep
         # and that maximizes the total amount of sleep in that period over the entire day (ie. of ones starting in a noon-to-noon)
@@ -246,6 +281,13 @@ def activity_features(data):
         days_invalid = (by_day.sleep.count() < 2500)
         results_by_day = results_by_day[~days_invalid.set_axis(days_invalid.index.normalize(), axis=0, inplace=False)]
 
+        # Gather the feature peak times/values
+        for feature in ALL_COLUMNS:
+            if feature == 'sleep':
+                continue
+            results_by_day[feature + "_peak_time"] = hours_since_midnight(feature_peak_times[feature])
+            results_by_day[feature + "_peak_value"] = feature_peak_values[feature]
+
         # Give better column names
         results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
 
@@ -259,7 +301,7 @@ def activity_features(data):
         results_by_day = pandas.DataFrame([])
 
     # Add RA/IS/IV values for each measure
-    for activity in ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']:
+    for activity in ALL_COLUMNS:
         try:
             results.update({
                 activity + "_RA": RA(data[activity]),
@@ -311,11 +353,12 @@ def run(input, output=None, by_day_output=None):
                 tz = pytz.FixedOffset(60*offset)
         if tz == None:
             print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {start_day}")
-        time = data.time.tz_localize(tz)
-        data = data.set_index(time.tz_convert("Europe/London"))
+        time = data.time.dt.tz_localize(tz)
+        data = data.set_index(time.dt.tz_convert("Europe/London"))
 
         # Rename for convenience - this column name contains redundant information we don't need
-        data = data.rename(columns={data.columns[1]: "acceleration"})
+        data.rename(columns={data.columns[1]: "acceleration"}, inplace=True)
+        data.drop(columns=["time"], inplace=True)
 
         # Remove data when imputed. We don't like that very much
         imputed = data.imputed.copy()
@@ -343,4 +386,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    run(args.input, args.output, args.by_day)
+    data, results, results_by_day = run(args.input, args.output, args.by_day)
