@@ -25,7 +25,7 @@ def hours_since_noon(timeseries):
     noon_same_day = timeseries.dt.floor("1D") + pandas.to_timedelta("0.5D")
     difference = (timeseries - noon_same_day).dt.total_seconds() / 60 / 60
 
-    noon_last_day = noon_same_day - pandas.to_timedelta("1D")
+    noon_last_day = noon_same_day - pandas.DateOffset(1)
     difference_last_day = (timeseries - noon_last_day).dt.total_seconds() / 60 / 60
     difference[difference < 0] = difference_last_day[difference < 0]
     return difference
