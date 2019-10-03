@@ -28,7 +28,7 @@ def visualize(filename):
     activity_colors = ["b", "c", "r", "g", "y", "m", "k"]
 
     # stacked days, double-plotted
-    num_days = math.ceil((data.index[-1] - data.index[0]).total_seconds() / (24*60*60)) + 1
+    num_days = (data.index[-1].date() - data.index[0].date()).days + 1
     fig, axes = pylab.subplots(nrows=num_days, sharex=True)
     for i, ax in enumerate(axes):
         # Start at midnight morning of the day until midnight at night of second day
