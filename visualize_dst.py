@@ -44,25 +44,26 @@ female_means = female_by_day.mean()
 female_std = female_by_day.std()
 female_N = female_by_day.count().ID
 
-def plot_week_difference(variables, diff="week"):
+def plot_week_difference(variables, diff=7, interval_size=1.96):
     def week_diff(means, std, N):
-        week_ago =  means.shift(7,"D")
-        week_ago_std = std.shift(7,"D")
-        week_ago_N = N.shift(7,"D")
+        week_ago =  means.shift(diff,"D")
+        week_ago_std = std.shift(diff,"D")
+        week_ago_N = N.shift(diff,"D")
         # SEM of the difference
         # uses that sigma^2 = sigma_A^2 + sigma_B^2 is the STD of A-B if A,B are normal
         SEM = std.divide( numpy.sqrt(N), axis=0)
         week_ago_SEM = week_ago_std.divide(numpy.sqrt(week_ago_N), axis=0)
         diff_SEM = numpy.sqrt(SEM**2 + week_ago_SEM**2)
         return means - week_ago, diff_SEM
-    if diff == "week":
-        male_diff, male_SEM = week_diff(male_means, male_std, male_N)
-        female_diff, female_SEM = week_diff(female_means, female_std, female_N)
-    else:
+
+    if diff == "mean":
         male_diff = male_means - male_means.mean(axis=0)
         male_SEM = male_std.divide(numpy.sqrt(male_N), axis=0)
         female_diff = female_means - female_means.mean(axis=0)
         female_SEM = female_std.divide(numpy.sqrt(female_N), axis=0)
+    else:
+        male_diff, male_SEM = week_diff(male_means, male_std, male_N)
+        female_diff, female_SEM = week_diff(female_means, female_std, female_N)
 
     fig = pylab.figure()
     axes = fig.subplots(nrows=len(variables), sharex=True, squeeze=False)
@@ -70,10 +71,16 @@ def plot_week_difference(variables, diff="week"):
         ax.plot(male_diff.index, numpy.zeros(shape=male_diff.index.shape), color="k")
 
         ax.plot(male_diff.index, male_diff[variable], color=MALE_COLOR)
-        ax.fill_between(male_SEM.index, male_diff[variable]-male_SEM[variable], male_diff[variable]+male_SEM[variable], color=MALE_COLOR, alpha=0.5)
+        ax.fill_between(male_SEM.index,
+                        male_diff[variable]-interval_size*male_SEM[variable],
+                        male_diff[variable]+interval_size*male_SEM[variable],
+                        color=MALE_COLOR, alpha=0.5)
 
         ax.plot(female_diff.index, female_diff[variable], color=FEMALE_COLOR)
-        ax.fill_between(female_SEM.index, female_diff[variable]-female_SEM[variable], female_diff[variable]+female_SEM[variable], color=FEMALE_COLOR, alpha=0.5)
+        ax.fill_between(female_SEM.index,
+                        female_diff[variable]-interval_size*female_SEM[variable],
+                        female_diff[variable]+interval_size*female_SEM[variable],
+                        color=FEMALE_COLOR, alpha=0.5)
 
         ax.set_ylabel(variable)
     pylab.show()
