@@ -6,7 +6,8 @@ SAMPLE_RATE = 30 # in Seconds
 HOURS_TO_COUNTS = 60*60//SAMPLE_RATE
 COUNTS_PER_DAY = 24*HOURS_TO_COUNTS
 SLEEP_PERIOD = 8*HOURS_TO_COUNTS
-ACTIVITY_WINDOW = 4*HOURS_TO_COUNTS
+ACTIVITY_WINDOW = 8*HOURS_TO_COUNTS
+ACTIVITY_WINDOW_STD = 1*HOURS_TO_COUNTS
 ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
 
 MIN_PERIOD_LENGTH = 10 # 5 minutes of sleep consecutively to count as a sleep period
@@ -15,19 +16,34 @@ RIGHT_JUMP_RATIO = 1.5
 MAX_GAP_LENGTH = 2.0 * HOURS_TO_COUNTS
 GOOD_COUNT_THRESHOLD = 0.75
 SLEEP_THRESHOLD = 0.9 # May not be necessary - 30second intervals seem to generally have sleep=0 or 1
+MIN_COUNTS_IN_DAY = 20 * HOURS_TO_COUNTS
 
-def hours_since_noon(timeseries):
-    ''' Return time since the last noon, in hours
+def hours_since_midnight_before_last_noon(timeseries):
+    ''' Return time since most recent midnight that was
+    at least one noon ago. (11:00 gives 35 hours)
 
     NOTE: if a clock change happens due to daylight savings change
     then this will still give the total number of hours since noon.'''
     timeseries = pandas.to_datetime(timeseries)
-    noon_same_day = timeseries.dt.floor("1D") + pandas.to_timedelta("0.5D")
-    difference = (timeseries - noon_same_day).dt.total_seconds() / 60 / 60
 
-    noon_last_day = noon_same_day - pandas.DateOffset(1)
-    difference_last_day = (timeseries - noon_last_day).dt.total_seconds() / 60 / 60
-    difference[difference < 0] = difference_last_day[difference < 0]
+    # Find the timezone for the timeseries
+    tz = None
+    for i in timeseries:
+        if not pandas.isna(i):
+            tz = i.tz
+            break
+    if tz == None:
+        return float("NaN")
+
+    midnight_same_day = timeseries.dt.floor("D")
+    difference = (timeseries - midnight_same_day).dt.total_seconds() / 60 / 60
+
+    midnight_last_day = midnight_same_day - pandas.DateOffset(days=1)
+    difference_last_day = (timeseries - midnight_last_day).dt.total_seconds() / 60 / 60
+
+    noon_same_day = pandas.to_datetime(dict(year=timeseries.dt.year, month=timeseries.dt.month, day=timeseries.dt.day, hour=12)).dt.tz_localize(tz)
+    difference[noon_same_day > timeseries] = difference_last_day[noon_same_day > timeseries]
+
     return difference
 
 def hours_since_midnight(timeseries):
@@ -125,8 +141,13 @@ def extract_main_sleep_period(day_data):
     num_wakings = numpy.sum(numpy.diff(numpy.concatenate([[0], sleeping[onset_index:offset_index] > SLEEP_THRESHOLD, [0]])) < 0) - 1
     WASO = numpy.sum(1 - sleeping[onset_index:offset_index]) / HOURS_TO_COUNTS
 
-    # Average acceleration duing main sleep
-    acceleration_during_main_sleep = day_data.acceleration[onset_times[best_period]:offset_times[best_period]].mean()
+    # Average acceleration duing main sleep while actually sleeping
+    main_sleep = day_data[onset_times[best_period]:offset_times[best_period]]
+    # just the sleeping part of the main sleep period, counting imputed areas
+    # we'll use acceleration = 0 for imputed areas since they were low enough to trigger
+    # the non-wear-time assessment
+    main_sleep = main_sleep[main_sleep.sleep != 0]
+    acceleration_during_main_sleep = main_sleep.acceleration.fillna(0).mean()
 
     return dict(onset=onset,
                 offset=offset,
@@ -193,7 +214,8 @@ def activity_features(data):
         # For, say, Monday, we look for sleep periods starting between noon Monday and noon Tuesday
         # since we want to put a sleep-onset time of 1AM on Tuesday as being the onset "for Monday"
         # this is done with the "base=0.5" parameter, offsets the 1day samples by 12 hours
-        stretches = data.rolling(SLEEP_PERIOD, center=True, win_type="gaussian").mean(std=SLEEP_PERIOD)
+        # min_periods=1 so that we essentially ignore NaNs
+        stretches = data.rolling(SLEEP_PERIOD, center=True, win_type="gaussian", min_periods=1).mean(std=SLEEP_PERIOD)
         sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
         sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
 
@@ -201,7 +223,8 @@ def activity_features(data):
         # and the peak value, which is a weighted sum of the values over the window of size ACTIVITY_WINDOW
         feature_peak_times = {}
         feature_peak_values = {}
-        window = data.rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian").mean(std=ACTIVITY_WINDOW/4)
+        # fillna(0) to make the imputed stretches become 0's
+        window = data.fillna(0).rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian").mean(std=ACTIVITY_WINDOW_STD)
         peak_values = window.resample("1D", base=0.0).max()
         for feature in ALL_COLUMNS:
             if feature == 'sleep':
@@ -237,7 +260,7 @@ def activity_features(data):
         data['other_sleep'] = (data.sleep > 0) & (~data.main_sleep_period)
 
         # Collect more day-level results
-        results_by_day['sleep_peak_time'] = hours_since_noon(sleep_peak_time) + 12
+        results_by_day['sleep_peak_time'] = hours_since_midnight_before_last_noon(sleep_peak_time)
         results_by_day['sleep_peak_quality'] = sleep_peak_quality
 
         # convert the index to be 'day-at-0:00' not 'day-at-noon'
@@ -248,8 +271,8 @@ def activity_features(data):
         # not the noon-to-noon day that we use for sleep periods
         by_midnight_day = data.resample("1D", base=0.0)
 
-        results_by_day.onset = hours_since_noon(results_by_day.onset) + 12
-        results_by_day.offset = hours_since_noon(results_by_day.offset) + 12
+        results_by_day.onset = hours_since_midnight_before_last_noon(results_by_day.onset)
+        results_by_day.offset = hours_since_midnight_before_last_noon(results_by_day.offset)
         results_by_day['other_sleep'] = by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS
         results_by_day['main_sleep_duration'] = results_by_day.offset - results_by_day.onset
         # Total sleep is napping between that days midnight-midnight period
@@ -259,10 +282,10 @@ def activity_features(data):
 
         # Light and Temperature values
         # Note that these were not calibrated so they might not be very useful
-        results_by_day['total_light'] = by_midnight_day.light.mean()
+        results_by_day['light_mean'] = by_midnight_day.light.mean()
         results_by_day['light_90th'] = by_midnight_day.light.quantile(0.9)
         results_by_day['light_10th'] = by_midnight_day.light.quantile(0.1)
-        results_by_day['temp'] = by_midnight_day.temp.mean()
+        results_by_day['temp_mean'] = by_midnight_day.temp.mean()
         results_by_day['temp_90th'] = by_midnight_day.temp.quantile(0.9)
         results_by_day['temp_10th'] = by_midnight_day.temp.quantile(0.1)
 
@@ -275,10 +298,9 @@ def activity_features(data):
         temp_while_main_sleep.set_axis(temp_while_main_sleep.index.normalize(), axis=0, inplace=True)
         results_by_day['temp_while_main_sleep'] = temp_while_main_sleep
 
-        # Throw out days without nearly all of the hours
+        # Throw out noon-noon days without nearly all of the hours since we can't estimate sleep well
         # eg: if the data starts at Monday 10:00am, we don't want to consider Sunday noon - Monday noon a day
-        # should have 2880 for a complete day
-        days_invalid = (by_day.sleep.count() < 2500)
+        days_invalid = (by_day.sleep.count() < MIN_COUNTS_IN_DAY)
         results_by_day = results_by_day[~days_invalid.set_axis(days_invalid.index.normalize(), axis=0, inplace=False)]
 
         # Gather the feature peak times/values
