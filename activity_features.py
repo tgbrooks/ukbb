@@ -224,7 +224,7 @@ def activity_features(data):
         feature_peak_times = {}
         feature_peak_values = {}
         # fillna(0) to make the imputed stretches become 0's
-        window = data.fillna(0).rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian").mean(std=ACTIVITY_WINDOW_STD)
+        window = data.fillna(0).rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian", min_periods=1).mean(std=ACTIVITY_WINDOW_STD)
         peak_values = window.resample("1D", base=0.0).max()
         for feature in ALL_COLUMNS:
             if feature == 'sleep':
