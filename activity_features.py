@@ -1,3 +1,4 @@
+import datetime
 import pandas
 import numpy
 import pytz
@@ -10,13 +11,17 @@ ACTIVITY_WINDOW = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW_STD = 1*HOURS_TO_COUNTS
 ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
 
-MIN_PERIOD_LENGTH = 10 # 5 minutes of sleep consecutively to count as a sleep period
 JUMP_RATIO = 0.5 # Length of longest gap to jump over as a ratio of the size of the adjacent sleep periods
 RIGHT_JUMP_RATIO = 1.5
 MAX_GAP_LENGTH = 2.0 * HOURS_TO_COUNTS
-GOOD_COUNT_THRESHOLD = 0.75
 SLEEP_THRESHOLD = 0.9 # May not be necessary - 30second intervals seem to generally have sleep=0 or 1
 MIN_COUNTS_IN_DAY = 20 * HOURS_TO_COUNTS
+
+def noon_same_day(time):
+    '''return Noon of the same day as `time`.
+    Handles DST and timezones'''
+    noon = datetime.datetime(year=time.year, month=time.month, day=time.day, hour=12)
+    return time.tz.localize(noon)
 
 def hours_since_midnight_before_last_noon(timeseries):
     ''' Return time since most recent midnight that was
@@ -56,8 +61,8 @@ def hours_since_midnight(timeseries):
     difference = (timeseries - midnight).dt.total_seconds() / 60 / 60
     return difference
 
-def extract_main_sleep_period(day_data):
-    sleep = day_data.sleep
+def extract_main_sleep_periods(data):
+    sleep = data.sleep
     # Binarize slepe (it seems to be 0 or 1 already aynway)
     # and this also converts NaNs to 1, i.e. to sleeping which seems to be a common
     # mistake of the calling algorithm, to give non-wear time to sleep episodes during the night
@@ -69,14 +74,9 @@ def extract_main_sleep_period(day_data):
     onset_times, = numpy.where(diff > 0)
     offset_times, = numpy.where(diff < 0)
 
-    # Skip any sleep periods of very short length
-    #period_lengths = offset_times - onset_times
-    #skip = period_lengths < MIN_PERIOD_LENGTH
-    #onset_times = onset_times[~skip]
-    #offset_times = offset_times[~skip]
-
     if len(onset_times) == 0:
         # Never slept at all
+        #TODO: return empty DataFrame
         return dict(onset=pandas.to_datetime("NaT"), offset=pandas.to_datetime("NaT"), num_wakings=float("NaN"), WASO=float("NaN"), acceleration_during_main_sleep=float("NaN"))
 
     # Lengths of each sleep period
@@ -123,50 +123,69 @@ def extract_main_sleep_period(day_data):
     onset_times = numpy.concatenate([onset_times[:1], onset_times[1:][~gaps_to_join]])
     offset_times = numpy.concatenate([offset_times[:-1][~gaps_to_join], offset_times[-1:]])
 
-    # We want to analyze an onset time that is before noon the next day
-    # (If DST change happens, this will require onset before 11am/1pm the next day
-    # but this is not a big deal, those sleep periods could go to either day really)
-    next_noon = day_data.index[0].normalize() + pandas.to_timedelta("36H")
-    last_good_onset = numpy.searchsorted(day_data.index, next_noon)
-    offset_times = offset_times[onset_times <= last_good_onset]
-    onset_times = onset_times[onset_times <= last_good_onset]
+    # Calculate total sleep time in each period
+    sleep_by_period = numpy.array([sleep.iloc[onset:offset].sum() for onset,offset in zip(onset_times, offset_times)])
 
-    # Extract main (longest) period
-    # by most sleep (not counting the imputed times as sleep since sometimes that will call
-    # a giant imputed block at the start of the readings as the main sleep period)
-    sleep_by_period = [sleep.iloc[onset:offset].sum() for onset,offset in zip(onset_times, offset_times)]
-    best_period = numpy.argmax(sleep_by_period)
+    # Break the data into noon-noon days to find the main sleep period of each day
+    days = pandas.unique(data.index.normalize())
+    noon_to_noon_ranges = [slice(noon_same_day(day), noon_same_day(day + pandas.DateOffset(days=1)))
+                            for day in days]
+    results = {}
+    for noon_to_noon, day in zip(noon_to_noon_ranges, days):
+        start = numpy.searchsorted(data.index, noon_to_noon.start)
+        stop = numpy.searchsorted(data.index, noon_to_noon.stop)
 
-    onset_index = onset_times[best_period]
-    offset_index = offset_times[best_period]
+        # Count the number of datapoints where we have non-nan values in the noon-to-noon day
+        count = data.sleep[noon_to_noon].count()
 
-    onset_time = sleep.index[0] + pandas.to_timedelta( str(onset_index / HOURS_TO_COUNTS) + "H")
-    offset_time = sleep.index[0] + pandas.to_timedelta( str(offset_index / HOURS_TO_COUNTS) + "H")
+        in_range = (onset_times >= start) & (onset_times < stop)
+        if not any(in_range):
+            results[day] = dict(onset=pandas.to_datetime("NaT"),
+                                offset=pandas.to_datetime("NaT"),
+                                num_wakings=float("NaN"),
+                                WASO=float("NaN"),
+                                acceleration_during_main_sleep=float("NaN"),
+                                count=count)
+            continue
 
-    # Number of times woken up
-    # counted as number of transitions from sleep
-    num_wakings = numpy.sum(numpy.diff(numpy.concatenate([[0], sleeping[onset_index:offset_index] > SLEEP_THRESHOLD, [0]])) < 0) - 1
-    WASO = numpy.sum(1 - sleeping[onset_index:offset_index]) / HOURS_TO_COUNTS
+        # Extract main (longest) period
+        # by most sleep (not counting the imputed times as sleep since sometimes that will call
+        # a giant imputed block at the start of the readings as the main sleep period)
+        best_period = numpy.argmax(sleep_by_period[in_range]) + numpy.where(in_range)[0][0]
 
-    # Average acceleration duing main sleep while actually sleeping
-    main_sleep = day_data[onset_index:offset_index]
-    # just the sleeping part of the main sleep period, counting imputed areas
-    # we'll use acceleration = 0 for imputed areas since they were low enough to trigger
-    # the non-wear-time assessment
-    main_sleep = main_sleep[main_sleep.sleep != 0]
-    acceleration_during_main_sleep = main_sleep.acceleration.fillna(0).mean()
+        onset_index = onset_times[best_period]
+        offset_index = offset_times[best_period]
 
-    # Count the number of datapoints where we have non-nan values in the noon-to-noon day
-    count = day_data.sleep[:last_good_onset].count()
+        onset_time = sleep.index[0] + pandas.to_timedelta( str(onset_index / HOURS_TO_COUNTS) + "H")
+        offset_time = sleep.index[0] + pandas.to_timedelta( str(offset_index / HOURS_TO_COUNTS) + "H")
 
-    return dict(onset=onset_index / HOURS_TO_COUNTS,
-                offset=offset_index / HOURS_TO_COUNTS,
-                onset_time=onset_time,
-                offset_time=offset_time,
-                num_wakings=num_wakings,
-                WASO=WASO,
-                acceleration_during_main_sleep=acceleration_during_main_sleep,
-                count=count)
+        # Number of times woken up
+        # counted as number of transitions from sleep
+        num_wakings = numpy.sum(numpy.diff(numpy.concatenate([[0], sleeping[onset_index:offset_index] > SLEEP_THRESHOLD, [0]])) < 0) - 1
+        WASO = numpy.sum(1 - sleeping[onset_index:offset_index]) / HOURS_TO_COUNTS
+
+        # Average acceleration duing main sleep while actually sleeping
+        main_sleep = data[onset_index:offset_index]
+        # just the sleeping part of the main sleep period, counting imputed areas
+        # we'll use acceleration = 0 for imputed areas since they were low enough to trigger
+        # the non-wear-time assessment
+        main_sleep = main_sleep[main_sleep.sleep != 0]
+        acceleration_during_main_sleep = main_sleep.acceleration.fillna(0).mean()
+
+        # Compute the time in hours since midnight of onset/offset
+        onset = (onset_time - day).total_seconds() / 60 / 60
+        offset = (offset_time - day).total_seconds() / 60 / 60
+
+        results[day] = dict(onset=onset,
+                        offset=offset,
+                        onset_time=onset_time,
+                        offset_time=offset_time,
+                        num_wakings=num_wakings,
+                        WASO=WASO,
+                        acceleration_during_main_sleep=acceleration_during_main_sleep,
+                        count=count)
+
+    return pandas.DataFrame(results).T
 
 def RA(activity):
     ''' Compute Relative Amplitude of any activity feature
@@ -266,13 +285,7 @@ def activity_features(data):
         # Find the MAIN SLEEP PERIOD
         # within each noon-to-noon day
         # allowing a sleep period to go beyond noon the next day
-        days = pandas.unique(data.index.normalize())
-        by_day = {day: data[day:day + pandas.DateOffset(days=2)]
-                    for day in days}
-        main_sleep_period = {day: extract_main_sleep_period(day_data)
-                                for day, day_data in by_day.items()}
-        results_by_day = pandas.DataFrame(main_sleep_period).T
-        results_by_day.set_index(pandas.to_datetime(days), inplace=True)
+        results_by_day = extract_main_sleep_periods(data)
 
         # Define sleep as either 'main sleep' or 'other sleep'
         data['main_sleep_period'] = False
