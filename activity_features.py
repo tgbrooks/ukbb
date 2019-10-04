@@ -76,8 +76,7 @@ def extract_main_sleep_periods(data):
 
     if len(onset_times) == 0:
         # Never slept at all
-        #TODO: return empty DataFrame
-        return dict(onset=pandas.to_datetime("NaT"), offset=pandas.to_datetime("NaT"), num_wakings=float("NaN"), WASO=float("NaN"), acceleration_during_main_sleep=float("NaN"))
+        return pandas.DataFrame([], columns=[onset, onset_time, offset, offset_time, num_wakings, WASO, acceleration_during_main_sleep, count])
 
     # Lengths of each sleep period
     period_lengths = offset_times - onset_times
@@ -141,7 +140,9 @@ def extract_main_sleep_periods(data):
         in_range = (onset_times >= start) & (onset_times < stop)
         if not any(in_range):
             results[day] = dict(onset=pandas.to_datetime("NaT"),
+                                onset_time=pandas.to_datetime("NaT"),
                                 offset=pandas.to_datetime("NaT"),
+                                offset_time=pandas.to_datetime("NaT"),
                                 num_wakings=float("NaN"),
                                 WASO=float("NaN"),
                                 acceleration_during_main_sleep=float("NaN"),
@@ -286,6 +287,9 @@ def activity_features(data):
         # within each noon-to-noon day
         # allowing a sleep period to go beyond noon the next day
         results_by_day = extract_main_sleep_periods(data)
+
+        if len(results_by_day) == 0:
+            return dict(), results_by_day
 
         # Define sleep as either 'main sleep' or 'other sleep'
         data['main_sleep_period'] = False
