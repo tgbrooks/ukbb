@@ -439,6 +439,40 @@ def run(input, output=None, by_day_output=None):
     if by_day_output is not None:
         by_day.to_csv(by_day_output, sep="\t")
 
+    # Perform basic results quality assessments
+    if any(by_day.main_sleep_offset < by_day.main_sleep_onset):
+        print(f"Error in {input} observed main_sleep_offset < main_sleep_onset")
+    if any(by_day.main_sleep_ratio > 1):
+        print(f"Error in {input} observed main_sleep_ratio > 1")
+    if any(by_day.main_sleep_ratio < 0):
+        print(f"Error in {input} observed main_sleep_ratio < 0")
+    if any(by_day.main_sleep_duration < 0):
+        print(f"Error in {input} observed main_sleep_duration < 0")
+    if any(by_day.total_sleep < 0):
+        print(f"Error in {input} observed total_sleep < 0")
+    if any(by_day.sleep_peak_quality > 1):
+        print(f"Error in {input} observed sleep_peak_quality > 1")
+    if any(by_day.sleep_peak_quality < 0):
+        print(f"Error in {input} observed sleep_peak_quality < 0")
+    if any(by_day.acceleration_during_main_sleep < 0):
+        print(f"Error in {input} observed acceleration_during_main_sleep < 0")
+    if any(by_day.main_sleep_onset > 37):
+        print(f"Error in {input} observed main_sleep_onset > 37")
+    if any(by_day.main_sleep_onset < 11):
+        print(f"Error in {input} observed main_sleep_onset < 11")
+    if any(by_day.sleep_peak_time > 37):
+        print(f"Error in {input} observed sleep_peak_time > 37")
+    if any(by_day.sleep_peak_time < 11):
+        print(f"Error in {input} observed sleep_peak_time < 11")
+    if any(by_day.walking_peak_time > 25):
+        print(f"Error in {input} observed walking_peak_time > 25")
+    if any(by_day.walking_peak_time < 0):
+        print(f"Error in {input} observed walking_peak_time < 0")
+    if any(by_day.sedentary_peak_time > 25):
+        print(f"Error in {input} observed sedentary_peak_time > 25")
+    if any(by_day.sedentary_peak_time < 0):
+        print(f"Error in {input} observed sedentary_peak_time < 0")
+
     return data, results, by_day
 
 if __name__ == "__main__":
