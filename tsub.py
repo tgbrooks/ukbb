@@ -7,6 +7,7 @@ import pathlib
 
 parser = argparse.ArgumentParser(description="Runs bsub but watches to make sure the job is successfully submitted and quits if it doesn't start soon enough.")
 parser.add_argument("--timeout", help="time in seconds to wait until giving up watching for the job to enter RUN state", default=30, type=int)
+parser.add_argument("-M", "memory", help="memory limit in MB", default=12000, type=int)
 parser.add_argument("command", help="command to pass to bsub to run", nargs=argparse.REMAINDER)
 
 args = parser.parse_args()
@@ -18,7 +19,7 @@ temp_file.touch()
 
 # Run the command
 with open(temp_file, "w") as temp:
-    command = "bsub " + ' '.join(args.command)
+    command = "bsub " + f'-M {args.memory} -R "rusage [mem={args.memory}]"'+ ' '.join(args.command)
     temp.write("Running:\n")
     temp.write(command)
     try:

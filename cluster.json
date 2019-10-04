@@ -3,5 +3,9 @@
         name: "JOB.{rule}.{wildcards}.job",
         output: "log/cluster/{rule}.%J.{wildcards}.out" ,
         error: "log/cluster/{rule}.%J.{wildcards}.err",
+        memory: 12000,
+    },
+    "aggregate": {
+        memory: 40000,
     },
 }
