@@ -66,7 +66,11 @@ rule activity_features_batch:
     run:
         import activity_features
         for file_path, id in zip(input, activity_features_batches[int(wildcards.batch)]):
-            activity_features.run(file_path, f"../processed/activity_features/{id}.json", f"../processed/activity_features/{id}.by_day.txt")
+            try:
+                activity_features.run(file_path, f"../processed/activity_features/{id}.json", f"../processed/activity_features/{id}.by_day.txt")
+            except Exception:
+                print(f"An Exception occured processed {file_path}")
+                raise
 
 rule aggregate:
     input:
