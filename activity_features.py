@@ -76,7 +76,7 @@ def extract_main_sleep_periods(data):
 
     if len(onset_times) == 0:
         # Never slept at all
-        return pandas.DataFrame([], columns=[onset, onset_time, offset, offset_time, num_wakings, WASO, acceleration_during_main_sleep, count])
+        return pandas.DataFrame([], columns="onset onset_time offset offset_time num_wakings WASO acceleration_during_main_sleep count".split(' '))
 
     # Lengths of each sleep period
     period_lengths = offset_times - onset_times
@@ -139,9 +139,9 @@ def extract_main_sleep_periods(data):
 
         in_range = (onset_times >= start) & (onset_times < stop)
         if not any(in_range):
-            results[day] = dict(onset=pandas.to_datetime("NaT"),
+            results[day] = dict(onset=float("NaN"),
                                 onset_time=pandas.to_datetime("NaT"),
-                                offset=pandas.to_datetime("NaT"),
+                                offset=float("NaN"),
                                 offset_time=pandas.to_datetime("NaT"),
                                 num_wakings=float("NaN"),
                                 WASO=float("NaN"),
@@ -152,7 +152,8 @@ def extract_main_sleep_periods(data):
         # Extract main (longest) period
         # by most sleep (not counting the imputed times as sleep since sometimes that will call
         # a giant imputed block at the start of the readings as the main sleep period)
-        best_period = numpy.argmax(sleep_by_period[in_range]) + numpy.where(in_range)[0][0]
+        indexes_in_range = numpy.where(in_range)[0] #Indexes into the list of sleep times
+        best_period = indexes_in_range[numpy.argmax(sleep_by_period[in_range])]
 
         onset_index = onset_times[best_period]
         offset_index = offset_times[best_period]
@@ -289,6 +290,13 @@ def activity_features(data):
         results_by_day = extract_main_sleep_periods(data)
 
         if len(results_by_day) == 0:
+            # Quit early but first:
+            # Give better column names
+            results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
+            results_by_day.drop(columns=["onset_time", "offset_time"], inplace=True)
+
+            # Now fix the index by converting to dates instead of datetimes
+            results_by_day.set_axis(results_by_day.index.date, axis=0, inplace=True)
             return dict(), results_by_day
 
         # Define sleep as either 'main sleep' or 'other sleep'
@@ -384,6 +392,42 @@ def activity_features(data):
 
     return results, results_by_day
 
+def check_bounds(by_day):
+    # Perform basic results quality assessments
+    if any(by_day.main_sleep_offset < by_day.main_sleep_onset):
+        print(f"Error in {input} observed main_sleep_offset < main_sleep_onset")
+    if any(by_day.main_sleep_ratio > 1):
+        print(f"Error in {input} observed main_sleep_ratio > 1")
+    if any(by_day.main_sleep_ratio < 0):
+        print(f"Error in {input} observed main_sleep_ratio < 0")
+    if any(by_day.main_sleep_duration < 0):
+        print(f"Error in {input} observed main_sleep_duration < 0")
+    if any(by_day.total_sleep < 0):
+        print(f"Error in {input} observed total_sleep < 0")
+    if any(by_day.sleep_peak_quality > 1):
+        print(f"Error in {input} observed sleep_peak_quality > 1")
+    if any(by_day.sleep_peak_quality < 0):
+        print(f"Error in {input} observed sleep_peak_quality < 0")
+    if any(by_day.acceleration_during_main_sleep < 0):
+        print(f"Error in {input} observed acceleration_during_main_sleep < 0")
+    if any(by_day.main_sleep_onset > 37):
+        print(f"Error in {input} observed main_sleep_onset > 37")
+    if any(by_day.main_sleep_onset < 11):
+        print(f"Error in {input} observed main_sleep_onset < 11")
+    if any(by_day.sleep_peak_time > 37):
+        print(f"Error in {input} observed sleep_peak_time > 37")
+    if any(by_day.sleep_peak_time < 11):
+        print(f"Error in {input} observed sleep_peak_time < 11")
+    if any(by_day.walking_peak_time > 25):
+        print(f"Error in {input} observed walking_peak_time > 25")
+    if any(by_day.walking_peak_time < 0):
+        print(f"Error in {input} observed walking_peak_time < 0")
+    if any(by_day.sedentary_peak_time > 25):
+        print(f"Error in {input} observed sedentary_peak_time > 25")
+    if any(by_day.sedentary_peak_time < 0):
+        print(f"Error in {input} observed sedentary_peak_time < 0")
+
+
 # The data for the UKBB switches between two timezones, UTC+1 (British Summer Time) and UTC
 # and it does so nearly but not quite on the daylight savings time transitions
 # We record here manually observed transitions of these changes for the purposes of correcting
@@ -442,40 +486,6 @@ def run(input, output=None, by_day_output=None):
 
     if by_day_output is not None:
         by_day.to_csv(by_day_output, sep="\t")
-
-    # Perform basic results quality assessments
-    if any(by_day.main_sleep_offset < by_day.main_sleep_onset):
-        print(f"Error in {input} observed main_sleep_offset < main_sleep_onset")
-    if any(by_day.main_sleep_ratio > 1):
-        print(f"Error in {input} observed main_sleep_ratio > 1")
-    if any(by_day.main_sleep_ratio < 0):
-        print(f"Error in {input} observed main_sleep_ratio < 0")
-    if any(by_day.main_sleep_duration < 0):
-        print(f"Error in {input} observed main_sleep_duration < 0")
-    if any(by_day.total_sleep < 0):
-        print(f"Error in {input} observed total_sleep < 0")
-    if any(by_day.sleep_peak_quality > 1):
-        print(f"Error in {input} observed sleep_peak_quality > 1")
-    if any(by_day.sleep_peak_quality < 0):
-        print(f"Error in {input} observed sleep_peak_quality < 0")
-    if any(by_day.acceleration_during_main_sleep < 0):
-        print(f"Error in {input} observed acceleration_during_main_sleep < 0")
-    if any(by_day.main_sleep_onset > 37):
-        print(f"Error in {input} observed main_sleep_onset > 37")
-    if any(by_day.main_sleep_onset < 11):
-        print(f"Error in {input} observed main_sleep_onset < 11")
-    if any(by_day.sleep_peak_time > 37):
-        print(f"Error in {input} observed sleep_peak_time > 37")
-    if any(by_day.sleep_peak_time < 11):
-        print(f"Error in {input} observed sleep_peak_time < 11")
-    if any(by_day.walking_peak_time > 25):
-        print(f"Error in {input} observed walking_peak_time > 25")
-    if any(by_day.walking_peak_time < 0):
-        print(f"Error in {input} observed walking_peak_time < 0")
-    if any(by_day.sedentary_peak_time > 25):
-        print(f"Error in {input} observed sedentary_peak_time > 25")
-    if any(by_day.sedentary_peak_time < 0):
-        print(f"Error in {input} observed sedentary_peak_time < 0")
 
     return data, results, by_day
 
