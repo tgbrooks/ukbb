@@ -10,6 +10,7 @@ SLEEP_PERIOD = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW_STD = 1*HOURS_TO_COUNTS
 ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
+LONGEST_IMPUTED_STRETCH = 2.5 * HOURS_TO_COUNTS
 
 JUMP_RATIO = 0.5 # Length of longest gap to jump over as a ratio of the size of the adjacent sleep periods
 RIGHT_JUMP_RATIO = 1.5
@@ -63,11 +64,25 @@ def hours_since_midnight(timeseries):
 
 def extract_main_sleep_periods(data):
     sleep = data.sleep
-    # Binarize slepe (it seems to be 0 or 1 already aynway)
-    # and this also converts NaNs to 1, i.e. to sleeping which seems to be a common
-    # mistake of the calling algorithm, to give non-wear time to sleep episodes during the night
-    # (only will matter for computing the main sleep period, not for computing total sleep)
-    sleeping = (~(sleep.values < SLEEP_THRESHOLD)).astype('int')
+
+    # We will treat small 'imputed' stretches as sleeping for this purpose
+    # it seems that the algorithm mis-calls some sleep periods as non-wear due to
+    # the low acceleration values in it and this breaks up main sleep periods
+    # but we also do not want to take genuine non-wear time
+    # Find periods of imputated sleep
+    imputed_diff = numpy.diff(numpy.concatenate([[0], data.imputed, [0]]))
+    imputed_onset_times, = numpy.where(imputed_diff > 0)
+    imputed_offset_times, = numpy.where(imputed_diff < 0)
+    imputed_lengths = imputed_offset_times - imputed_onset_times
+    # Select sufficiently short imputed stretches
+    imputed_onset_times = imputed_onset_times[imputed_lengths < LONGEST_IMPUTED_STRETCH]
+    imputed_offset_times = imputed_offset_times[imputed_lengths < LONGEST_IMPUTED_STRETCH]
+
+    # Binarize sleep (it seems to be 0 or 1 already aynway)
+    sleeping = (sleep.values > SLEEP_THRESHOLD).astype('int')
+    # and treat the short imputed stretches as sleeping too
+    for onset,offset in zip(imputed_onset_times, imputed_offset_times):
+        sleeping[onset:offset] = True
 
     # Find periods of sleep
     diff = numpy.diff(numpy.concatenate([[0], sleeping, [0]]))
