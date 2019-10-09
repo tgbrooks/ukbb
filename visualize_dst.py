@@ -17,6 +17,8 @@ ukbb = pandas.read_csv("../processed/ukbb_data_table.txt", sep="\t", index_col=0
 data = pandas.read_csv("../processed/activity_by_day.txt", sep="\t", index_col=0, parse_dates=[0])
 raw_data = data.copy()
 
+data.drop(columns=["count"], inplace=True)
+
 # Regress out age as an activity confounder
 birth_year = data.ID.map(ukbb.birth_year)
 age = data.index.year - birth_year

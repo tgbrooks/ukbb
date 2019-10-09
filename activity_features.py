@@ -10,6 +10,7 @@ SLEEP_PERIOD = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW_STD = 1*HOURS_TO_COUNTS
 ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
+LONGEST_IMPUTED_STRETCH = 1.75 * HOURS_TO_COUNTS
 
 JUMP_RATIO = 0.5 # Length of longest gap to jump over as a ratio of the size of the adjacent sleep periods
 RIGHT_JUMP_RATIO = 1.5
@@ -63,10 +64,11 @@ def hours_since_midnight(timeseries):
 
 def extract_main_sleep_periods(data):
     sleep = data.sleep
-    # Binarize slepe (it seems to be 0 or 1 already aynway)
-    # and this also converts NaNs to 1, i.e. to sleeping which seems to be a common
-    # mistake of the calling algorithm, to give non-wear time to sleep episodes during the night
-    # (only will matter for computing the main sleep period, not for computing total sleep)
+
+    # Binarize sleep (it seems to be 0 or 1 already aynway)
+    # this also converts NaNs (form non-wear stretches) to 'sleeping'
+    # since the non-wear calling seems to trigger in periods of sleep
+    # and messes with main sleep period extraction
     sleeping = (~(sleep.values < SLEEP_THRESHOLD)).astype('int')
 
     # Find periods of sleep
@@ -90,7 +92,8 @@ def extract_main_sleep_periods(data):
     # must never be more than MAX_GAP_LENGTH. And the lengths of the periods being
     # joined together must be large enough compared to the gap
     gaps_to_join = numpy.zeros(shape=gap_lengths.shape, dtype=bool)
-    for i in range(len(gap_lengths)):
+    i = 0
+    while i < len(gap_lengths):
         joined_period_length = period_lengths[i]
 
         furthest_jump = i
@@ -101,6 +104,15 @@ def extract_main_sleep_periods(data):
 
             if jump_length > MAX_GAP_LENGTH or jump_length >= JUMP_RATIO * joined_period_length:
                 # Searched past the max gap length, so need to stop
+                break
+
+            imputed_counts = data.imputed[onset_times[i]:offset_times[j]].sum()
+            if imputed_counts > LONGEST_IMPUTED_STRETCH:
+                # We only allow a certain amount of imputed region
+                # in our main sleep period. Since non-wear time triggers
+                # during sleep but we also do not want to grab, say, two
+                # days of non-wear time
+                print(f"Stopping due to long imputed region {imputed_counts} at {onset_times[i]/HOURS_TO_COUNTS}:{offset_times[j]/HOURS_TO_COUNTS}")
                 break
 
             # Add this period to the lengths of those joined so far
@@ -117,6 +129,8 @@ def extract_main_sleep_periods(data):
 
         # Join all gaps (possibly 0, possibly many) that span between these two periods
         gaps_to_join[i:furthest_jump] = True
+
+        i = furthest_jump + 1
 
     # Join together all periods whose gaps match the above criteria
     onset_times = numpy.concatenate([onset_times[:1], onset_times[1:][~gaps_to_join]])
@@ -293,7 +307,7 @@ def activity_features(data):
             # Quit early but first:
             # Give better column names
             results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
-            results_by_day.drop(columns=["onset_time", "offset_time"], inplace=True)
+            results_by_day.drop(columns=["onset_time", "offset_time", "count"], inplace=True)
 
             return dict(), results_by_day
 
