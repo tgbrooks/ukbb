@@ -295,8 +295,6 @@ def activity_features(data):
             results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
             results_by_day.drop(columns=["onset_time", "offset_time"], inplace=True)
 
-            # Now fix the index by converting to dates instead of datetimes
-            results_by_day.set_axis(results_by_day.index.date, axis=0, inplace=True)
             return dict(), results_by_day
 
         # Define sleep as either 'main sleep' or 'other sleep'
