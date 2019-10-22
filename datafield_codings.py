@@ -253,7 +253,7 @@ codings = dict(
             #-818    Prefer not to answer
             fields = [20549, 20546],
             to_nan = [-818],
-            type="list",
+            type="array",
             fillvalue = "", #TODO: how do we fill in as an empty list?
     ),
 
@@ -263,7 +263,50 @@ codings = dict(
             #-818    Prefer not to answer
             fields = [20550, 20547],
             to_nan = [-818],
-            type = "list",
+            type = "array",
             fillvalue = "", #TODO: how do we fill in as an empty list?
     ),
+
+    coding100349 = dict(
+        #1	Yes
+        #0	No
+        #-1	Do not know
+        #-3	Prefer not to answer
+        fields=[1767, 3912, 3942, 3571, 1677, 3616, 2335, 2443, 4598, 2345, 2674, 2694, 2365, 2774, 4653, 4642, 2907, 2784, 4631, 2814, 4067, 1797, 1960, 3005, 2463, 2956, 10844, 2030, 3799, 10793, 2257, 3414, 1940, 3773, 5463, 4728, 5452, 5496, 5485, 5474, 2644, 2020, 2188, 1787, 3720, 1930, 1920, 1835, 3404, 1970, 4501, 1777, 10016, 2040, 2100, 2090, 1950, 4717, 2986, 3741, 2010, 5529, 1990, 2316, 1980, 2000],
+        to_nan=[-1,-3],
+    ),
+
+    coding100579 = dict(
+        #1	Yes
+        #0	No
+        #2	Not sure - had a hysterectomy
+        #3	Not sure - other reason
+        #-3	Prefer not to answer
+        fields=[2724],
+        to_nan=[2,3,-3],
+    ),
+
+    coding100698 = dict(
+        #-313 Ongoing when data entered
+        fields=[22603],
+        type="array",
+    ),
+
+    coding489 = dict(
+        #0	Shift pattern was worked for some (but not all) of job
+        #1	Shift pattern was worked for whole of job
+        #9	This type of shift pattern was not worked during job
+        fields=[22650],
+        type="array",
+    ),
+
+    codingNONE_array = dict(
+        fields=[22605, 22620],
+        type="array",
+    ),
 )
+
+field_to_codings = {}
+for coding_name, coding in codings.items():
+    for field in coding.fields:
+        field_to_codings[field] = coding

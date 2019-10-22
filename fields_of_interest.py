@@ -1,3 +1,5 @@
+import datafield_codings
+
 ### Data about which fields to take
 general_fields = dict(
     actigraphy_file = 90004,
@@ -94,7 +96,7 @@ recent_depression = dict(
     recent_poor_appetite_overeating = 20511,
     recent_thoughts_of_suicide = 20513,
     recent_trouble_concentrating = 20508,
-    recent_sleep_troubles= 20517,
+    recent_sleep_troubles = 20517,
 )
 
 mania_fields = dict(
@@ -109,9 +111,60 @@ mania_dependent_fields = dict(
     severity_of_problems_due_to_mania = 20493,
 )
 
+# Biological Samples
+blood_fields = dict(
+    testosterone = 30850, # pmol/L
+    oestradiol = 30800, #pmol/L
+)
+
+# Female-specific
+female_specific_fields = dict(
+    age_bilateral_oophorectomy = 3882,
+    age_hysterectomy = 2824,
+    age_menopause = 3581,
+    age_last_HRT = 3546,
+    age_start_HRT = 3536,
+    age_periods_started = 2714,
+    bilateral_oophorectomy = 2834,
+    ever_hysterectomy = 3591,
+    ever_HRT = 2814,
+    had_menopause = 2724,
+)
+
+# Employment history fields
+employment_fields = dict(
+    consecutive_night_shifts_during_mixed_shifts=22644,
+    consecutive_night_shifts_during_night_sihfts=22654,
+    day_shifts_worked=22630,
+    job_involved_shift_work=22620,
+    mixture_of_day_and_night_shifts=22640,
+    night_shifts_worked=22650,
+    number_night_shifts_monthly_during_mixed_shifts=22643,
+    number_night_shifts_monthly_during_night_shifts=22653,
+    period_spent_working_day_shifts=22631,
+    period_spent_working_mixed_shifts,22641,
+    period_spent_working_night_shifts=22651,
+    rest_days_during_mixed_shift_periods=22645,
+    rest_days_during_night_shift_periods=22655,
+    length_of_night_shift_during_mixed_shifts=22642,
+    length_of_night_shift_during_night_shifts=22652,
+    #22604Work hours - lumped category
+    work_hours_per_week=22605,
+    year_job_ended=22603,
+    year_job_start=22602,
+)
+
 # Collect all the different fields
 field_groups = [general_fields, mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields]
 all_fields = dict()
 for group in field_groups:
-    # Convert field numbers into the right column name eg "f.90001.0.0"
     all_fields.update(group)
+
+def get_columns(data, field_dict):
+    for field_name, field in field_dict.items():
+        coding = datafield_codings.fields_to_codings[field]
+        if coding.get("type", None) == "array":
+            cols = [c for c in data.columns if c.startswith(f"f.{field}.")]
+            yield from cols
+        else:
+            yield f"f.{field}.0.0"
