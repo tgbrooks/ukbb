@@ -9,6 +9,10 @@ FEMALE = 0
 MALE_COLOR = "b"
 FEMALE_COLOR = "r"
 
+# NOTE: set this to False for typical useage
+# just randomizing to see what it looks like comparing to actual sex
+RANDOMIZE_GENDER = False
+
 # Warning: QC plots are slow
 QC = False
 
@@ -35,13 +39,20 @@ data['age'] = age
 by_day = data.groupby(level=0)
 N = by_day.count().ID
 
+sex = ukbb.sex
+if RANDOMIZE_GENDER:
+    # Perform a randomization so we can compare male/female differences
+    # to a random difference
+    numpy.random.seed(0)
+    sex[:] = numpy.random.choice([0,1], size=sex.shape)
+
 # Gather gender-specific data
-male_by_day = data[data.ID.map(ukbb.sex) == MALE].groupby(level=0)
+male_by_day = data[data.ID.map(sex) == MALE].groupby(level=0)
 male_means = male_by_day.mean()
 male_std = male_by_day.std()
 male_N = male_by_day.count().ID
 
-female_by_day = data[data.ID.map(ukbb.sex) == FEMALE].groupby(level=0)
+female_by_day = data[data.ID.map(sex) == FEMALE].groupby(level=0)
 female_means = female_by_day.mean()
 female_std = female_by_day.std()
 female_N = female_by_day.count().ID
@@ -72,19 +83,20 @@ def plot_week_difference(variables, diff=7, interval_size=1.96):
     for variable, ax in zip(variables, axes.flatten()):
         ax.plot(male_diff.index, numpy.zeros(shape=male_diff.index.shape), color="k")
 
-        ax.plot(male_diff.index, male_diff[variable], color=MALE_COLOR)
+        ax.plot(male_diff.index, male_diff[variable], color=MALE_COLOR, label="M")
         ax.fill_between(male_SEM.index,
                         male_diff[variable]-interval_size*male_SEM[variable],
                         male_diff[variable]+interval_size*male_SEM[variable],
                         color=MALE_COLOR, alpha=0.5)
 
-        ax.plot(female_diff.index, female_diff[variable], color=FEMALE_COLOR)
+        ax.plot(female_diff.index, female_diff[variable], color=FEMALE_COLOR, label="F")
         ax.fill_between(female_SEM.index,
                         female_diff[variable]-interval_size*female_SEM[variable],
                         female_diff[variable]+interval_size*female_SEM[variable],
                         color=FEMALE_COLOR, alpha=0.5)
 
         ax.set_ylabel(variable)
+        ax.legend()
     pylab.show()
 
 plot_week_difference(["main_sleep_duration"])

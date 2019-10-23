@@ -270,6 +270,16 @@ def activity_features(data):
         sleep_peak_quality.index = sleep_peak_quality.index.normalize()
 
 
+        # Inactivity peak
+        # estimates the inactivity (i.e. sleep?) levels just from the raw data without
+        # the use of the ML classifier and so may be more robust
+        activity = data[['acceleration']].fillna(0)
+        activity_avg = activity.rolling(SLEEP_PERIOD, center=True, win_type="gaussian", min_periods=1*HOURS_TO_COUNTS).mean(std=SLEEP_PERIOD/2)
+        inactivity_peak_time = activity_avg.resample("1D", base=0.5).acceleration.idxmin()
+        inactivity_peak_time.set_axis(inactivity_peak_time.index.normalize(), inplace=True, axis=0)
+        inactivity_peak_value = activity_avg.resample("1D", base=0.5).acceleration.min()
+        inactivity_peak_value.set_axis(inactivity_peak_value.index.normalize(), inplace=True, axis=0)
+
         # Find peak times for each feature type based off when the value maximizes in each noon-noon day
         # and the peak value, which is a weighted sum of the values over the window of size ACTIVITY_WINDOW
         feature_peak_times = {}
@@ -374,6 +384,9 @@ def activity_features(data):
             except KeyError:
                 # Lacking MET, probably
                 continue
+
+        results_by_day['inactivity_peak_time'] = hours_since_midnight_before_last_noon(inactivity_peak_time)
+        results_by_day['inactivity_peak_value'] = inactivity_peak_value #Note: lower is less active
 
         # Give better column names
         results_by_day.rename(columns={"onset": "main_sleep_onset", "offset": "main_sleep_offset"}, inplace=True)
