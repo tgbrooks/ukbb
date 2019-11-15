@@ -16,8 +16,10 @@ print(f"Found {len(batched_eids)} batches to consider")
 
 rule all:
     input:
-        "../processed/activity_features_aggregate.txt",
-        "../processed/ukbb_data_table.txt"
+        #"../processed/activity_features_aggregate.txt",
+        "../processed/ukbb_mental_health.txt",
+        "../processed/ukbb_employment.txt",
+        "../processed/ukbb_data_table.txt",
 
 rule ukbfetch_download_raw:
     output:
@@ -84,13 +86,19 @@ rule aggregate:
         "./aggregate.py ../processed/acc_analysis/ {output.activity_summary} && "
         "./aggregate.py ../processed/activity_features/ {output.activity_by_day} --file_suffix .by_day.txt"
 
-rule gather_fields:
+rule process_ukbb_table:
     input:
         "../data/ukb32828.tab",
-        "../data/ukb34939.tab"
+        "../data/ukb34939.tab",
+        "../Data_Dictionary_Showcase.csv",
+        "../Codings_Showcase.csv",
     output:
-        "../processed/ukbb_data_table.txt"
+        mental_health_table = "../processed/ukbb_mental_health.h5",
+        employment_table = "../processed/ukbb_employment.h5",
+        general_table = "../processed/ukbb_data_table.h5",
     resources:
         mem_mb = 40000
     shell:
-        "./gather_fields.py -t {input[0]} {input[1]} -o {output}"
+        "./process_ukbb_table.py -t {input[0]} {input[1]} -o {output.mental_health_table} -s mental_health_fields &&"
+        "./process_ukbb_table.py -t {input[0]} -o {output.employment_table} -s employment_fields &&"
+        "./process_ukbb_table.py -t {input[0]} -o {output.general_table} -s all_general_fields"
