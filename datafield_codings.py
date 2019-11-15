@@ -308,5 +308,5 @@ codings = dict(
 
 field_to_codings = {}
 for coding_name, coding in codings.items():
-    for field in coding.fields:
+    for field in coding['fields']:
         field_to_codings[field] = coding
