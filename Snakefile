@@ -16,10 +16,11 @@ print(f"Found {len(batched_eids)} batches to consider")
 
 rule all:
     input:
-        #"../processed/activity_features_aggregate.txt",
+        "../processed/activity_features_aggregate.txt",
         "../processed/ukbb_mental_health.txt",
         "../processed/ukbb_employment.txt",
         "../processed/ukbb_data_table.txt",
+        "../processed/ukbb_icd10_entries.txt",
 
 rule ukbfetch_download_raw:
     output:
@@ -102,3 +103,13 @@ rule process_ukbb_table:
         "./process_ukbb_table.py -t {input[0]} {input[1]} -o {output.mental_health_table} -s mental_health_fields &&"
         "./process_ukbb_table.py -t {input[0]} -o {output.employment_table} -s employment_fields &&"
         "./process_ukbb_table.py -t {input[0]} -o {output.general_table} -s all_general_fields"
+
+rule process_icd10_codes:
+    input:
+        "../data/ukb32828.tab",
+    output:
+        "../processed/ukbb_icd10_entries.txt"
+    resources:
+        mem_mb = 40000
+    shell:
+        "./process_icd_codes.py -t {input} -o {output}"
