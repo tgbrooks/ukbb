@@ -205,12 +205,14 @@ female_specific_fields = dict(
 
 # Employment history fields
 employment_fields = dict(
-    consecutive_night_shifts_during_mixed_shifts=22644,
-    consecutive_night_shifts_during_night_sihfts=22654,
-    day_shifts_worked=22630,
+    year_job_ended=22603,
+    year_job_start=22602,
+    #22604Work hours - lumped category
+    work_hours_per_week=22605,
     job_involved_shift_work=22620,
-    mixture_of_day_and_night_shifts=22640,
+    day_shifts_worked=22630,
     night_shifts_worked=22650,
+    mixture_of_day_and_night_shifts=22640,
     number_night_shifts_monthly_during_mixed_shifts=22643,
     number_night_shifts_monthly_during_night_shifts=22653,
     period_spent_working_day_shifts=22631,
@@ -220,10 +222,8 @@ employment_fields = dict(
     rest_days_during_night_shift_periods=22655,
     length_of_night_shift_during_mixed_shifts=22642,
     length_of_night_shift_during_night_shifts=22652,
-    #22604Work hours - lumped category
-    work_hours_per_week=22605,
-    year_job_ended=22603,
-    year_job_start=22602,
+    consecutive_night_shifts_during_mixed_shifts=22644,
+    consecutive_night_shifts_during_night_sihfts=22654,
 )
 
 # Covariates

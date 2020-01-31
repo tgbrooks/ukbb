@@ -13,7 +13,6 @@ So a participant may have multiple entries
 parser = argparse.ArgumentParser(description)
 parser.add_argument("-t", "--table", help="UKBB table file to read in", required=True)
 parser.add_argument("-o", "--output", help="output tab-separated file to write to", required=True)
-parser.add_argument("-ids", help="list of IDs to gather", required=False)
 
 args = parser.parse_args()
 
