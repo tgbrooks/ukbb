@@ -91,7 +91,8 @@ for file in tab_separated_files_to_clean:
         new_file.rename(file)
 
 dirs_to_scrub = ["../processed/acc_analysis",
-                 "../data/raw_actigraphy"]
+                 "../data/raw_actigraphy",
+                 "../processed/activity_features"]
 for dir in dirs_to_scrub:
     print(f"Scrubbing {dir} directory")
     for id in ids_removing:
