@@ -10,7 +10,7 @@ import matplotlib
 import util
 import activity_features
 
-def visualize(filename):
+def visualize(filename, show=True, **kwargs):
     filename = pathlib.Path(filename)
 
     # Get activity features to plot the 'main sleep' times
@@ -29,7 +29,7 @@ def visualize(filename):
 
     # stacked days, double-plotted
     num_days = (data.index[-1].date() - data.index[0].date()).days + 1
-    fig, axes = pylab.subplots(nrows=num_days, sharex=True)
+    fig, axes = pylab.subplots(nrows=num_days, sharex=True, **kwargs)
     for i, ax in enumerate(axes):
         # Start at midnight morning of the day until midnight at night of second day
         # If daylight savings crossover happens then affected days are 1 hour shorter or longer
@@ -64,7 +64,7 @@ def visualize(filename):
         ax_temp.set_yticks([],[])
 
         ax.set_yticks([],[])
-        ax.set_ylabel(start.strftime("%a") + "\n" + str(start))
+        ax.set_ylabel(start.strftime("%a") + "\n" + start.strftime("%y-%m-%d"))
         ax.set_ylim(0,data['acceleration'].max())
         ax.set_xticks([0,6,12,18,24,30,36,42,48])
 
@@ -85,7 +85,8 @@ def visualize(filename):
     #ax.plot(day_min['acceleration'])
     #ax.set_title(f"Activity through Day\n{filename.name}")
 
-    pylab.show()
+    if show:
+        pylab.show()
 
 
 if __name__ == '__main__':
