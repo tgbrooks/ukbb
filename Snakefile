@@ -21,6 +21,7 @@ rule all:
         "../processed/ukbb_employment.txt",
         "../processed/ukbb_data_table.txt",
         "../processed/ukbb_icd10_entries.txt",
+        "../processed/ukbb_employment_history.txt",
 
 rule ukbfetch_download_raw:
     output:
@@ -113,3 +114,13 @@ rule process_icd10_codes:
         mem_mb = 40000
     shell:
         "./process_icd_codes.py -t {input} -o {output}"
+
+rule process_employment_history:
+    input:
+        "../data/ukb32828.tab",
+    output:
+        "../processed/ukbb_employment_history.txt"
+    resources:
+        mem_mb = 40000
+    shell:
+        "./process_employment.py -t {input} -o {output}"

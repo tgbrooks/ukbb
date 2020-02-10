@@ -13,7 +13,6 @@ So a participant may have multiple entries
 parser = argparse.ArgumentParser(description)
 parser.add_argument("-t", "--table", help="UKBB table file to read in", required=True)
 parser.add_argument("-o", "--output", help="output tab-separated file to write to", required=True)
-parser.add_argument("-ids", help="list of IDs to gather", required=False)
 
 args = parser.parse_args()
 
@@ -25,9 +24,9 @@ import pandas
 
 # These two files contain the information describing the fields in the UKBB
 # they are downloaded from:
-# http://biobank.ndph.ox.ac.uk/~bbdatan/Codings_Showcase.csv
+# http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=19
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-codings = pandas.read_csv("../Codings_Showcase.csv", index_col=0)
+codings = pandas.read_csv("../icd10_coding.txt", index_col=0)
 fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
 
 data = pandas.read_csv(args.table, sep="\t", index_col=0)
