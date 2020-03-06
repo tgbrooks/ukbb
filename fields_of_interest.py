@@ -135,7 +135,7 @@ trauma_fields = dict(
 )
 
 self_harm_fields = dict(
-    every_thought_life_not_worth_living = 20479,
+    ever_thought_life_not_worth_living = 20479,
     ever_contemplated_self_harm = 20485,
     contemplated_self_harm_last_year = 20486,
     ever_self_harmed = 20480,
@@ -168,11 +168,223 @@ cannabis_fields = dict(
     max_frequency_cannabis = 20454,
 )
 
+# Mood questions from an online questionnaire
+mood_fields = dict(
+    mood_down_in_dumps_last_week = 23046,
+    mood_downhearted_depressed_last_week = 23072,
+    mood_felt_calm_last_week = 23047,
+    mood_happy_last_week = 23076,
+    mood_nervous_last_week = 23045,
+    mood_when_described = 23079,
+)
+
+# Mental health questions from the assessment center
+mental_health_assessment = dict(
+    bipolar_mdd = 20126, #Bipolar and major depression status
+    bipolar = 20122, #Bipolar disorder status
+    ever_depressed = 4598, #Ever depressed for a whole week
+    ever_highly_irritable = 4653, #Ever highly irritable/argumentative for 2 days
+    ever_manic = 4642, #Ever manic/hyper for 2 days
+    ever_unenthusiastic =4631, #Ever unenthusiastic/disinterested for a whole week
+    family_relationship_satisfaction = 4559, #Family relationship satisfaction
+    fed_up_feelings = 1960, #Fed-up feelings
+    financial_satisfcation = 4581, #Financial situation satisfaction
+    freq_depressed_mood_last_2_weeks = 2050, #Frequency of depressed mood in last 2 weeks
+    freq_tenseness_last_2_weeks = 2070, #Frequency of tenseness / restlessness in last 2 weeks
+    freq_tiredness_last_2_weeks = 2080, #Frequency of tiredness / lethargy in last 2 weeks
+    freq_unenthusiasm_last_2_weeks = 2060, #Frequency of unenthusiasm / disinterest in last 2 weeks
+    friendship_satisfaction = 4570, #Friendships satisfaction
+    guilty_feelings = 2030, #Guilty feelings
+    happiness = 4526, #Happiness
+    health_satisfication = 4548, #Health satisfaction
+    illness_injury_last_2_weeks = 6145, #Illness, injury, bereavement, stress in last 2 years
+    #10721Illness, injury, bereavement, stress in last 2 years (pilot)
+    irritability = 1940, #Irritability
+    lenth_longest_mania = 5663, #Length of longest manic/irritable episode
+    loneliness_isolation = 2020, #Loneliness, isolation
+    longest_depression = 4609, #Longest period of depression
+    longest_unenthusiasm = 5375, #Longest period of unenthusiasm / disinterest
+    manic_symptoms = 6156, #Manic/hyper symptoms
+    miserableness = 1930, #Miserableness
+    mood_swings = 1920, #Mood swings
+    nervous_feelings = 1970, #Nervous feelings
+    neuroticism_score = 20127, #Neuroticism score
+    number_depressed_episodes = 4620, #Number of depression episodes
+    number_unenthusiasm_episodes = 5386, #Number of unenthusiastic/disinterested episodes
+    probable_recurrent_mdd_moderate = 20124, #Probable recurrent major depression (moderate)
+    pprobable_recurrent_mdd_severe = 20125, #Probable recurrent major depression (severe)
+    risk_taking = 2040, #Risk taking
+    seen_psychiatrist = 2100, #Seen a psychiatrist for nerves, anxiety, tension or depression
+    seen_doctor_for_mental_health = 2090, #Seen doctor (GP) for nerves, anxiety, tension or depression
+    sensitivity_hurt_feelings = 1950, #Sensitivity / hurt feelings
+    severity_of_mania = 5674, #Severity of manic/irritable episodes
+    single_episode_mdd = 20123, #Single episode of probable major depression
+    nerves = 2010, #Suffer from 'nerves'
+    tense = 1990, #Tense / 'highly strung'
+    job_satisfcation = 4537, #Work/job satisfaction
+    worrier = 1980, #Worrier / anxious feelings
+    worry_too_long = 2000, #Worry too long after embarrassment
+)
+
 # Biological Samples
 blood_fields = dict(
-    testosterone = 30850, # pmol/L
-    oestradiol = 30800, #pmol/L
+    # Blood biochemistry fields
+    alanine_aminotransferase = 30620, #Alanine aminotransferase
+    albumin = 30600, #Albumin
+    alkaline_phosphatase = 30610, #Alkaline phosphatase
+    apolipoprotein_A = 30630, #Apolipoprotein A
+    apolipoprotein_B = 30640, #Apolipoprotein B
+    aspartate_aminotransferase = 30650, #Aspartate aminotransferase
+    c_reactive_protein = 30710, #C-reactive protein
+    calcium = 30680, #Calcium
+    cholesterol = 30690, #Cholesterol
+    creatinine = 30700, #Creatinine
+    cystatin_C = 30720, #Cystatin C
+    direct_bilirubin = 30660, #Direct bilirubin
+    gamma_glutamyltransferase = 30730, #Gamma glutamyltransferase
+    glucose = 30740, #Glucose
+    glycated_heamoglobin = 30750, #Glycated haemoglobin (HbA1c)
+    hdl_cholesterol = 30760, #HDL cholesterol
+    igf_1 = 30770, #IGF-1
+    ldl_direct = 30780, #LDL direct
+    lipoprotein_A = 30790, #Lipoprotein A
+    oestradiol = 30800, #Oestradiol pmol/L
+    phosphate = 30810, #Phosphate
+    rheumatoid_factor = 30820, #Rheumatoid factor
+    shbg = 30830, #SHBG
+    testosterone = 30850, #Testosterone pmol/L
+    total_bilirubin = 30840, #Total bilirubin
+    total_protein = 30860, #Total protein
+    triglycerides = 30870, #Triglycerides
+    urate = 30880, #Urate
+    urea = 30670, #Urea
+    vitamin_D = 30890, #Vitamin D
+
+    # Blood count fields
+    basophill_count = 30160, #Basophill count
+    basophill_percent = 30220, #Basophill percentage
+    eosinophill_count = 30150, #Eosinophill count
+    eosinophill_percent = 30210, #Eosinophill percentage
+    haematocrit_percent = 30030, #Haematocrit percentage
+    haemoglobin_concentration = 30020, #Haemoglobin concentration
+    high_light_scatter_reticulocyte_count = 30300, #High light scatter reticulocyte count
+    high_light_scatter_reticulocyte_percent = 30290, #High light scatter reticulocyte percentage
+    immature_reticulocyte_fraction = 30280, #Immature reticulocyte fraction
+    lymphocyte_count = 30120, #Lymphocyte count
+    lymphocyte_percent = 30180, #Lymphocyte percentage
+    mean_corpuscular_haemoglobin = 30050, #Mean corpuscular haemoglobin
+    mean_corpuscular_haemoglobin_conc = 30060, #Mean corpuscular haemoglobin concentration
+    mean_corpuscular_volume = 30040, #Mean corpuscular volume
+    mean_platelt_volume = 30100, #Mean platelet (thrombocyte) volume
+    mean_reticulocyte_volume = 30260, #Mean reticulocyte volume
+    mean_sphered_cell_volume = 30270, #Mean sphered cell volume
+    monocyte_count = 30130, #Monocyte count
+    monocyte_percent = 30190, #Monocyte percentage
+    neutrophill_count = 30140, #Neutrophill count
+    neutrophill_percent = 30200, #Neutrophill percentage
+    nucleated_red_blood_cell_count = 30170, #Nucleated red blood cell count
+    nucleated_red_blood_cell_percent = 30230, #Nucleated red blood cell percentage
+    platelet_count = 30080, #Platelet count
+    platelet_crit = 30090, #Platelet crit
+    platelet_distribution_width = 30110, #Platelet distribution width
+    red_blood_cell_count = 30010, #Red blood cell (erythrocyte) count
+    red_blood_cell_distribution_width = 30070, #Red blood cell (erythrocyte) distribution width
+    reticulocyte_count = 30250, #Reticulocyte count
+    reticulocyte_percentage = 30240, #Reticulocyte percentage
+    white_blood_cell_count = 30000, #White blood cell (leukocyte) count
+
+    blood_smaple_time_collected = 3166,
+    blood_sample_fasting_time = 74,
 )
+
+# Infectious disease markers
+def name(line):
+    name = line[:line.index(':')]
+    return name.replace(" ", "_").replace("-","_").replace("/", "").replace(".","_")
+def number(line):
+    return line[line.index(':')+1:]
+
+# Actually these are all used to derive the below summaries, so should generally not be used
+infectious_diseases_antigens = { f"inf_dis_{name(line)}": number(line) for line in 
+'''
+23000:1gG antigen for Herpes Simplex virus-1
+23001:2mgG unique antigen for Herpes Simplex virus-2
+23049:Antigen assay QC indicator
+23048:Antigen assay date
+23026:BK VP1 antigen for Human Polyomavirus BKV
+23039:CagA antigen for Helicobacter pylori
+23043:Catalase antigen for Helicobacter pylori
+23018:Core antigen for Hepatitis C Virus
+23030:E6 antigen for Human Papillomavirus type-16
+23031:E7 antigen for Human Papillomavirus type-16
+23006:EA-D antigen for Epstein-Barr Virus
+23004:EBNA-1 antigen for Epstein-Barr Virus
+23042:GroEL antigen for Helicobacter pylori
+23016:HBc antigen for Hepatitis B Virus
+23017:HBe antigen for Hepatitis B Virus
+23025:HIV-1 env antigen for Human Immunodeficiency Virus
+23024:HIV-1 gag antigen for Human Immunodeficiency Virus
+23023:HTLV-1 env antigen for Human T-Lymphotropic Virus 1
+23022:HTLV-1 gag antigen for Human T-Lymphotropic Virus 1
+23010:IE1A antigen for Human Herpesvirus-6
+23011:IE1B antigen for Human Herpesvirus-6
+23027:JC VP1 antigen for Human Polyomavirus JCV
+23015:K8.1 antigen for Kaposi's Sarcoma-Associated Herpesvirus
+23029:L1 antigen for Human Papillomavirus type-16
+23032:L1 antigen for Human Papillomavirus type-18
+23014:LANA antigen for Kaposi's Sarcoma-Associated Herpesvirus
+23028:MC VP1 antigen for Merkel Cell Polyomavirus
+23019:NS3 antigen for Hepatitis C Virus
+23041:OMP antigen for Helicobacter pylori
+23037:PorB antigen for Chlamydia trachomatis
+23013:U14 antigen for Human Herpesvirus-7
+23044:UreA antigen for Helicobacter pylori
+23003:VCA p18 antigen for Epstein-Barr Virus
+23040:VacA antigen for Helicobacter pylori
+23005:ZEBRA antigen for Epstein-Barr Virus
+23002:gE / gI antigen for Varicella Zoster Virus
+23034:momp A antigen for Chlamydia trachomatis
+23033:momp D antigen for Chlamydia trachomatis
+23012:p101 k antigen for Human Herpesvirus-6
+23020:p22 antigen for Toxoplasma gondii
+23038:pGP3 antigen for Chlamydia trachomatis
+23009:pp 28 antigen for Human Cytomegalovirus
+23008:pp 52 antigen for Human Cytomegalovirus
+23007:pp150 Nter antigen for Human Cytomegalovirus
+23021:sag1 antigen for Toxoplasma gondii
+23035:tarp-D F1 antigen for Chlamydia trachomatis
+23036:tarp-D F2 antigen for Chlamydia trachomatis
+'''.strip().splitlines()}
+
+# Summary True/False values for each infectious disease
+infectious_diseases = { f"inf_dis_{name(line)}": number(line) for line in 
+'''
+23065:BKV seropositivity for Human Polyomavirus BKV
+23070:C. trachomatis Definition I seropositivity for Chlamydia trachomatis
+23071:C. trachomatis Definition II seropositivity for Chlamydia trachomatis
+23054:CMV seropositivity for Human Cytomegalovirus
+23053:EBV seropositivity for Epstein-Barr Virus
+23073:H. pylori Definition I seropositivity for Helicobacter pylori
+23074:H. pylori Definition II seropositivity for Helicobacter pylori
+23060:HBV seropositivity for Hepatitis B Virus
+23061:HCV seropositivity for Hepatitis C Virus
+23055:HHV-6 overall seropositivity for Human Herpesvirus-6
+23056:HHV-6A seropositivity for Human Herpesvirus-6
+23057:HHV-6B seropositivity for Human Herpesvirus-6
+23058:HHV-7 seropositivity for Human Herpesvirus-7
+23064:HIV-1 seropositivity for Human Immunodeficiency Virus
+23068:HPV 16 Definition I seropositivity for Human Papillomavirus type-16
+23075:HPV 16 Definition II seropositivity for Human Papillomavirus type-16
+23069:HPV 18 seropositivity for Human Papillomavirus type-18
+23050:HSV-1 seropositivity for Herpes Simplex virus-1
+23051:HSV-2 seropositivity for Herpes Simplex virus-2
+23063:HTLV-1 seropositivity for Human T-Lymphotropic Virus 1
+23066:JCV seropositivity for Human Polyomavirus JCV
+23059:KSHV seropositivity for Kaposi's Sarcoma-Associated Herpesvirus
+23067:MCV seropositivity for Merkel Cell Polyomavirus
+23062:T. gondii seropositivity for Toxoplasma gondii
+23052:VZV seropositivity for Varicella Zoster Virus
+'''.strip().splitlines()}
 
 # Physical measures
 physical_measures = dict(
@@ -180,13 +392,15 @@ physical_measures = dict(
     diastolic_blood_pressure_manual = 94,
     pulse_rate = 102,
     systolic_blood_pressure = 4080,
-    systolic_blood_pressure_anual = 93,
+    systolic_blood_pressure_manual = 93,
     BMI = 21001,
-    Height = 12144,
+    height = 12144,
     hip_circumference = 49,
     waist_circumference = 48,
     weight = 21002,
     IPAQ_activity_group = 22032,
+    hand_grip_strength_left = 46,
+    hand_grip_strength_right = 47,
 )
 
 # Female-specific
@@ -228,20 +442,38 @@ employment_fields = dict(
 
 # Covariates
 covariates = dict(
-        alcohol_frequency = 1558,
-        education = 6138,
-        ethnicity = 21000,
-        overall_health = 2178,
-        household_income = 738,
-        smoking = 20116,
+    alcohol_frequency = 1558,
+    education = 6138,
+    ethnicity = 21000,
+    overall_health = 2178,
+    household_income = 738,
+    smoking = 20116,
 )
 
 #Medications
 medications = dict(
     medication_cholesterol_bp_diabetes = 6177,
     medication_cholesterol_bp_diabetes_or_exog_hormones = 6153,
-
+    medication_for_pain_relief_constipation_heartburn = 6154,
 )
+
+# Full medications list - needs to be processed separately since long array
+full_meidcations = dict(
+        medication_code =  20003,
+)
+
+
+# Sleep questionnaire
+sleep = dict(
+    daytime_dozing = 1220,
+    getting_up_in_morning = 1170,
+    monring_evening_persion = 1180,
+    nap_during_day = 1190,
+    sleep_duration = 1160,
+    sleeplessness = 1200,
+    snoring = 1210,
+)
+
 # Collect all the different fields
 field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields]
 all_fields = dict()
