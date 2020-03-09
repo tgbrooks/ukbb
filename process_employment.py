@@ -37,8 +37,7 @@ for i in range(num_entries):
     print(f"Processing {i} of {num_entries}")
     fields = {name:f"f.{fnum}.0.{i}" for name,fnum in employment_fields.items()}
     # Note: some fields are not present in later entries!
-    # the reasons for this are not entirely clear.
-    # We filter those out here
+    # this is because the column is removed if all their entries for all participants are blank
     fields = {name:field for name,field in fields.items()
                 if field in data.columns}
 
