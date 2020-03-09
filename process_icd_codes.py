@@ -64,7 +64,7 @@ for i, (code_field, date_field) in enumerate(zip(icd10code_fields, first_date_fi
     valid = ~code.isna()
     code = code[valid]
     date = date[valid]
-    entries = pandas.DataFrame(CODE_FIELD: code, "first_date": date})
+    entries = pandas.DataFrame(CODE_NAME: code, "first_date": date})
     processed_data.append(entries)
 
 all_data = pandas.concat(processed_data)

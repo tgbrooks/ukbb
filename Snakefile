@@ -23,6 +23,8 @@ rule all:
         "../processed/ukbb_icd10_entries.txt",
         "../processed/ukbb_icd9_entries.txt",
         "../processed/ukbb_employment_history.txt",
+        "../processed/ukbb_self_reported_conditions.txt",
+        "../processed/ukbb_medications.txt",
 
 rule ukbfetch_download_raw:
     output:
@@ -119,12 +121,33 @@ rule process_icd10_codes:
 rule process_icd9_codes:
     input:
         "../data/ukb32828.tab",
+        # TODO: update to the new ukb*.tab file?
     output:
         "../processed/ukbb_icd9_entries.txt"
     resources:
         mem_mb = 40000
     shell:
         "./process_icd_codes.py -t {input} -o {output} -v 9"
+
+rule process_self_reported_conditions:
+    input:
+        "../data/ukb32828.tab",
+    output:
+        "../processed/ukbb_self_reported_conditions.txt"
+    resources:
+        mem_mb = 40000
+    shell:
+        "./process_self_reported_conditions.py -t {input} -o {output}"
+
+rule process_self_reported_conditions:
+    input:
+        "../data/ukb32828.tab",
+    output:
+        "../processed/ukbb_medications.txt"
+    resources:
+        mem_mb = 40000
+    shell:
+        "./process_self_reported_conditions.py -t {input} -o {output}"
 
 rule process_employment_history:
     input:
