@@ -458,7 +458,7 @@ medications = dict(
 )
 
 # Full medications list - needs to be processed separately since long array
-full_meidcations = dict(
+full_medications = dict(
         medication_code =  20003,
 )
 
@@ -474,8 +474,16 @@ sleep = dict(
     snoring = 1210,
 )
 
+# Self-reported conditions
+# Needs to be handled specially since it is a long array
+# and coding is hanlded as described here:
+# http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=6
+self_reported_conditions = dict(
+    condition_code = 20002,
+)
+
 # Collect all the different fields
-field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields]
+field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, infectious_diseases, sleep, full_medications, medications, mental_health_assessment, mood_fields ]
 all_fields = dict()
 for group in field_groups:
     all_fields.update(group)
@@ -487,7 +495,8 @@ for group in general_groups:
     all_general_fields.update(group)
 
 # Just mental health fields
-mental_health_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields]
+mental_health_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, mood_fields, mental_health_assessment]
 mental_health_fields = dict()
+
 for group in mental_health_groups:
     mental_health_fields.update(group)
