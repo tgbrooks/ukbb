@@ -13,6 +13,9 @@ FEMALE_COLOR = "r"
 # just randomizing to see what it looks like comparing to actual sex
 RANDOMIZE_GENDER = False
 
+# What statistic to use
+STATISTIC = "median"
+
 # Warning: QC plots are slow
 QC = False
 
@@ -48,35 +51,41 @@ if RANDOMIZE_GENDER:
 
 # Gather gender-specific data
 male_by_day = data[data.ID.map(sex) == MALE].groupby(level=0)
-male_means = male_by_day.mean()
+if STATISTIC == "mean":
+    male_means = male_by_day.mean()
+elif STATISTIC == "median":
+    male_means = male_by_day.median()
 male_std = male_by_day.std()
 male_N = male_by_day.count().ID
 
 female_by_day = data[data.ID.map(sex) == FEMALE].groupby(level=0)
-female_means = female_by_day.mean()
+if STATISTIC == "mean":
+    female_means = female_by_day.mean()
+elif STATISTIC == "median":
+    female_means = female_by_day.median()
 female_std = female_by_day.std()
 female_N = female_by_day.count().ID
 
-def plot_week_difference(variables, diff=7, interval_size=1.96):
-    def week_diff(means, std, N):
-        week_ago =  means.shift(diff,"D")
-        week_ago_std = std.shift(diff,"D")
-        week_ago_N = N.shift(diff,"D")
-        # SEM of the difference
-        # uses that sigma^2 = sigma_A^2 + sigma_B^2 is the STD of A-B if A,B are normal
-        SEM = std.divide( numpy.sqrt(N), axis=0)
-        week_ago_SEM = week_ago_std.divide(numpy.sqrt(week_ago_N), axis=0)
-        diff_SEM = numpy.sqrt(SEM**2 + week_ago_SEM**2)
-        return means - week_ago, diff_SEM
+def week_diff(means, std, N, diff=7):
+    week_ago =  means.shift(diff,"D")
+    week_ago_std = std.shift(diff,"D")
+    week_ago_N = N.shift(diff,"D")
+    # SEM of the difference
+    # uses that sigma^2 = sigma_A^2 + sigma_B^2 is the STD of A-B if A,B are normal
+    SEM = std.divide( numpy.sqrt(N), axis=0)
+    week_ago_SEM = week_ago_std.divide(numpy.sqrt(week_ago_N), axis=0)
+    diff_SEM = numpy.sqrt(SEM**2 + week_ago_SEM**2)
+    return means - week_ago, diff_SEM
 
+def plot_week_difference(variables, diff=7, interval_size=1.96):
     if diff == "mean":
         male_diff = male_means - male_means.mean(axis=0)
         male_SEM = male_std.divide(numpy.sqrt(male_N), axis=0)
         female_diff = female_means - female_means.mean(axis=0)
         female_SEM = female_std.divide(numpy.sqrt(female_N), axis=0)
     else:
-        male_diff, male_SEM = week_diff(male_means, male_std, male_N)
-        female_diff, female_SEM = week_diff(female_means, female_std, female_N)
+        male_diff, male_SEM = week_diff(male_means, male_std, male_N, diff)
+        female_diff, female_SEM = week_diff(female_means, female_std, female_N, diff)
 
     fig = pylab.figure()
     axes = fig.subplots(nrows=len(variables), sharex=True, squeeze=False)
