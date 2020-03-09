@@ -419,8 +419,9 @@ female_specific_fields = dict(
 
 # Employment history fields
 employment_fields = dict(
+    year_job_started=22602,
     year_job_ended=22603,
-    year_job_start=22602,
+    job_code=22601,
     #22604Work hours - lumped category
     work_hours_per_week=22605,
     job_involved_shift_work=22620,
