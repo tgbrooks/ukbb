@@ -26,28 +26,27 @@ from fields_of_interest import employment_fields
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
 field_data = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
 
-data = pandas.read_csv(args.table, sep="\t", index_col=0)
-data.index.rename("ID", inplace=True)
-
-num_entries = field_data.loc[employment_fields['year_job_start']].Array
+num_entries = field_data.loc[employment_fields['year_job_started']].Array
 
 processed_data = []
 
-for i in range(num_entries):
-    print(f"Processing {i} of {num_entries}")
-    fields = {name:f"f.{fnum}.0.{i}" for name,fnum in employment_fields.items()}
-    # Note: some fields are not present in later entries!
-    # this is because the column is removed if all their entries for all participants are blank
-    fields = {name:field for name,field in fields.items()
-                if field in data.columns}
 
-    fields_reversed = {field:name for name,field in fields.items()}
+for data in pandas.read_csv(args.table, sep="\t", index_col=0, chunksize=10_000, low_memory=False):
+    data.index.rename("ID", inplace=True)
+    for i in range(num_entries):
+        fields = {name:f"f.{fnum}.0.{i}" for name,fnum in employment_fields.items()}
+        # Note: some fields are not present in later entries!
+        # this is because the column is removed if all their entries for all participants are blank
+        fields = {name:field for name,field in fields.items()
+                    if field in data.columns}
 
-    entry = data[fields.values()].rename(columns=fields_reversed)
+        fields_reversed = {field:name for name,field in fields.items()}
 
-    valid = ~(entry.year_job_start.isna())
-    entry = entry[valid]
-    processed_data.append(entry)
+        entry = data[fields.values()].rename(columns=fields_reversed)
+
+        valid = ~(entry.year_job_started.isna())
+        entry = entry[valid]
+        processed_data.append(entry)
 
 all_data = pandas.concat(processed_data, sort=True)
 all_data.sort_index(inplace=True, kind="mergesort")

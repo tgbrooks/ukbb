@@ -21,7 +21,7 @@ args = parser.parse_args()
 
 ICD10_FIELD = 41270
 ICD10_FIRST_DATE_FIELD = 41280
-ICD9_FIELD = 41270
+ICD9_FIELD = 41271
 ICD9_FIRST_DATE_FIELD = 41281
 
 if args.version == "10":
@@ -41,31 +41,27 @@ import pandas
 # http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=87
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
 if args.version == "10":
-    codings = pandas.read_csv("../icd10_coding.txt", index_col=0)
+    codings = pandas.read_csv("../icd10_coding.txt", index_col=0, sep="\t")
 else:
-    codings = pandas.read_csv("../icd9_coding.txt", index_col=0)
+    codings = pandas.read_csv("../icd9_coding.txt", index_col=0, sep="\t")
 fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
-
-data = pandas.read_csv(args.table, sep="\t", index_col=0)
-data.index.rename("ID", inplace=True)
-
 num_entries = fields.loc[CODE_FIELD].Array
-
-
-processed_data = []
 
 icd10code_fields = [f"f.{CODE_FIELD}.0.{i}" for i in range(num_entries)]
 first_date_fields = [f"f.{FIRST_DATE_FIELD}.0.{i}" for i in range(num_entries)]
-for i, (code_field, date_field) in enumerate(zip(icd10code_fields, first_date_fields)):
-    print(f"Processing {i} of {num_entries}")
-    code = data[code_field]
-    date = data[date_field]
 
-    valid = ~code.isna()
-    code = code[valid]
-    date = date[valid]
-    entries = pandas.DataFrame(CODE_NAME: code, "first_date": date})
-    processed_data.append(entries)
+processed_data = []
+for data in pandas.read_csv(args.table, sep="\t", index_col=0, chunksize=10_000, low_memory=False):
+    data.index.rename("ID", inplace=True)
+    for i, (code_field, date_field) in enumerate(zip(icd10code_fields, first_date_fields)):
+        code = data[code_field]
+        date = data[date_field]
+
+        valid = ~code.isna()
+        code = code[valid]
+        date = date[valid]
+        entries = pandas.DataFrame({CODE_NAME: code, "first_date": date})
+        processed_data.append(entries)
 
 all_data = pandas.concat(processed_data)
 all_data.sort_index(inplace=True, kind="mergesort")

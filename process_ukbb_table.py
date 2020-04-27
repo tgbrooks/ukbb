@@ -9,6 +9,8 @@ parser.add_argument("-s", "--set", help="Set of fields to extract, as defined in
 
 args = parser.parse_args()
 
+import re
+
 import numpy
 import pandas
 
@@ -26,6 +28,13 @@ NAN_VALUES = [
         "Measure not cleanly recoverable from data",
 ]
 
+import fields_of_interest
+try:
+    field_group =  fields_of_interest.__dict__[args.set]
+except KeyError:
+    print(f"Failed to find field set {args.set} in 'fields_of_interest.py'")
+    raise SystemExit(1)
+
 # These two files contain the information describing the fields in the UKBB
 # they are downloaded from:
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Codings_Showcase.csv
@@ -33,20 +42,31 @@ NAN_VALUES = [
 codings = pandas.read_csv("../Codings_Showcase.csv", index_col=0)
 fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
 
-data_tables = [pandas.read_csv(table, index_col=0, sep="\t") for table in args.tables]
-data = pandas.concat(data_tables, axis=1)
-del data_tables
+def is_of_interest(field_name):
+    # Find only columns that we care about, for the sake of memory
+    if field_name == "f.eid":
+        return True
+
+    match = re.match("f.(\d+).", field_name)
+    if match:
+        number = int(match.groups()[0])
+        interest = number in field_group.values()
+        return interest
+    return False
+
+data_tables = [pandas.read_csv(table, index_col=0, sep="\t", usecols = is_of_interest)
+                    for table in args.tables]
+data_tables_unique = [table[~table.index.duplicated(keep="first")]
+                            for table in data_tables]
+print(f"Dropped {sum(len(tbl) for tbl in data_tables) - sum(len(tbl) for tbl in data_tables_unique)} rows with duplicated ids")
+data = pandas.concat(data_tables_unique, axis=1)
+data = data.loc[:, ~data.columns.duplicated(keep="last")]
+#del data_tables, data_tables_unique
 
 if args.filter is not None:
     # Drop rows
     data.dropna(subset=[f"f.{args.filter}.0.0"], inplace=True)
 
-import fields_of_interest
-try:
-    field_group =  fields_of_interest.__dict__[args.set]
-except KeyError:
-    print(f"Failed to find field set {args.set} in 'fields_of_interest.py'")
-    raise SystemExit(1)
 
 output = {}
 for field_name, field in field_group.items():
@@ -111,8 +131,17 @@ for field_name, field in field_group.items():
         col = process_field(field, col)
         categories = coding.Value.astype(int)
         labels = coding.Meaning
-        column = pandas.Categorical(data[f"f.{field}.0.0"], categories)
-        output[field_name] =  column.rename_categories({cat:label for cat, label in zip(categories, labels)})
+        if len(set(labels)) == len(labels):
+            column = pandas.Categorical(data[f"f.{field}.0.0"], categories)
+            # All labels are unique so can just reassign the categories
+            output[field_name] =  column.rename_categories({cat:label for cat, label in zip(categories, labels)})
+        else:
+            # Otherwise, some labels have multiple encodings (eg: job categories in coding 2)
+            # so we do the slow thing and map them to strings
+            column = data[f"f.{field}.0.0"]
+            mapping = {float(cat): label for cat, label in zip(categories, labels)}
+            column = column.map(mapping)
+            output[field_name] = column
     elif type == "Categorical multiple":
         # The UKBB stores "Category Multiple" variables as multiple columns and each participant filling out
         # the first several of those columns with the values of the category that they have

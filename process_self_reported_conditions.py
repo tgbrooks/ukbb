@@ -29,26 +29,24 @@ import pandas
 #codings = pandas.read_csv("../self_reported_conditions_coding.txt", index_col=0) # NOTE: not currently used but handy for analysis
 fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
 
-data = pandas.read_csv(args.table, sep="\t", index_col=0)
-data.index.rename("ID", inplace=True)
-
 num_entries = fields.loc[SELF_REPORTED_CONDITION_FIELD].Array
 
 processed_data = []
 
-for i in enumerate(condition_fields):
-    condition_field = f"f.{SELF_REPORTED_CONDITION_FIELD}.0.{i}"
-    year_field = f"f.{YEAR_FIRST_DIAGNOSED_FIELD}.0.{i}"
-    print(f"Processing {i} of {num_entries}")
-    code = data[condition_field]
-    year = data[year_field]
-    year[year.isin(YERA_UNKNOWN_CODES)] = float("NaN")
+for data in pandas.read_csv(args.table, sep="\t", index_col=0, chunksize=10_000, low_memory=False):
+    data.index.rename("ID", inplace=True)
+    for i in range(num_entries):
+        condition_field = f"f.{SELF_REPORTED_CONDITION_FIELD}.0.{i}"
+        year_field = f"f.{YEAR_FIRST_DIAGNOSED_FIELD}.0.{i}"
+        code = data[condition_field]
+        year = data[year_field]
+        year[year.isin(YEAR_UNKNOWN_CODES)] = float("NaN")
 
-    valid = ~code.isna()
-    code = code[valid]
-    year = year[valid]
-    entries = pandas.DataFrame({"condition_code": code, "year": year})
-    processed_data.append(entries)
+        valid = ~code.isna()
+        code = code[valid]
+        year = year[valid]
+        entries = pandas.DataFrame({"condition_code": code, "year": year})
+        processed_data.append(entries)
 
 all_data = pandas.concat(processed_data)
 all_data.sort_index(inplace=True, kind="mergesort")
