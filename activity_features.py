@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import datetime
 import pandas
 import numpy
@@ -459,18 +460,34 @@ def check_bounds(by_day):
 # the time zones
 # Each entry is a (first_day, last_day, offset) tuples, where offset is in hours
 # Data from other datasets would need to be processed differently
-TIMEZONES = [("2013-06-01", "2013-10-30", 1),
+# NOTE: use average_over_timespan.py with --activation_date set to values around the time changes (British Summer Time)
+# to visually inspect whether there is a timezone difference between different start days
+# and see analyze_start_times.sh
+TIMEZONES = [("2013-06-01", "2013-10-30", 1), # Original cohorts
              ("2013-10-31", "2014-04-03", 0),
              ("2014-04-04", "2014-10-29", 1),
              ("2014-10-30", "2015-04-01", 0),
              ("2015-04-02", "2015-10-28", 1),
-             ("2015-10-29", "2015-12-29", 0)
+             ("2015-10-29", "2015-12-29", 0),
+
+             ("2017-11-01", "2018-03-28", 0), # Seasonal repeats
+             ("2018-03-29", "2018-10-30", 1),
+             ("2018-10-31", "2019-01-31", 0),
              ]
 
 def run(input, output=None, by_day_output=None):
     '''Compute and output activity features'''
     # Load data
-    data = pandas.read_csv(input, parse_dates=[0])
+    print(f"Running with input={input}, output={output}, by_day_output={by_day_output}")
+
+    try:
+        data = pandas.read_csv(input, parse_dates=[0])
+    except (OSError, pandas.errors.EmptyDataError) as e:
+         # Some rare files are bad, we just skip them and return nothing
+        print(f"FAILED to read {input}. Invalid data?")
+        print(e)
+        return
+
     if 'time' not in data:
         print(f"Processed timeseries file {input} has no 'time' index collumn and is being skipped")
         results = {}
@@ -489,7 +506,7 @@ def run(input, output=None, by_day_output=None):
                        pandas.to_datetime(last_day).date() >= start_day):
                 tz = pytz.FixedOffset(60*offset)
         if tz == None:
-            print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {start_day}")
+            print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {repr(start_day)}\nTimezones must be manually annotated in activity_features.py based off the starting time of the recording")
         time = data.time.dt.tz_localize(tz)
         data = data.set_index(time.dt.tz_convert("Europe/London"))
 
