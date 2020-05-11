@@ -117,7 +117,7 @@ rule aggregate_seasonal:
         activity_summary = protected("../processed/activity_summary_aggregate_seasonal.txt"),
         activity_by_day = protected("../processed/activity_by_day_seasonal.txt")
     shell:
-        "./aggregate.py ../processed/acc_analysis/ {output.activity_summary}  --file_suffix _90001_1_0-summary.json  _90001_2_0-summary.json _90001_3_0-summary.json _90001_4_0-summary.json && "
+        "./aggregate.py ../processed/acc_analysis/ {output.activity_summary}  --file_suffix _90001_1_0-summary.json  _90001_2_0-summary.json _90001_3_0-summary.json _90001_4_0-summary.json  --seasonal && "
         "./aggregate.py ../processed/activity_features/seasonal/ {output.activity_features} --file_suffix .json && "
         "./aggregate.py ../processed/activity_features/seasonal/ {output.activity_by_day} --file_suffix .by_day.txt"
 
