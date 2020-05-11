@@ -297,6 +297,80 @@ blood_fields = dict(
     blood_sample_fasting_time = 74,
 )
 
+urine = dict(
+    urine_creatinine = 30510, #Creatinine (enzymatic) in urine
+    urine_creatinine_flag = 30515, #Creatinine (enzymatic) in urine result flag
+    urine_microalbumin = 30500, #Microalbumin in urine
+    urine_microalbumin_flag = 30505, #Microalbumin in urine result flag
+    urine_potassium = 30520, #Potassium in urine
+    urine_potassium_flag = 30525, #Potassium in urine result flag
+    urine_sodium = 30530, #Sodium in urine
+    urine_sodium_flag = 30535, #Sodium in urine result flag
+)
+
+arterial_stiffness = dict(
+    arterial_stiffness_absence_of_notch = 4204,#Absence of notch position in the pulse waveform
+    #arterial_stiffness_pulsewave_id = 4136,#Arterial pulse-wave stiffness device ID
+    #arterial_stiffness_sitffness_id = 4206,#Arterial stiffness device ID
+    arterial_stiffness_position_of_notch = 4199,#Position of pulse wave notch
+    arterial_stiffness_position_of_peak = 4198,#Position of the pulse wave peak
+    arterial_stiffness_position_of_shoulder = 4200,#Position of the shoulder on the pulse waveform
+    arterial_stiffness_pulse_rate = 4194,#Pulse rate
+    arterial_stiffness_arterial_stiffness_index = 21021,#Pulse wave Arterial Stiffness index
+    arterial_stiffness_peak_to_peak_time = 4196,#Pulse wave peak to peak time
+    arterial_stiffness_pressure_versus_time_curve = 4205,#Pulse wave pressure versus time response curve
+    arterial_stiffness_wave_reflection_index = 4195,#Pulse wave reflection index
+    arterial_stiffness_pulse_wave_velocity = 4207,#Pulse wave velocity (manual entry)
+    #arterial_stiffness_skipping_reason = 20051,#Reason for skipping arterial stiffness
+    #arterial_stiffness_method = 4186,#Stiffness method
+)
+
+hearing_test = dict(
+    hearing_test_speech_recognition_threshold_left = 20019,#Speech-reception-threshold (SRT) estimate (left)
+    hearting_test_speech_recognition_threshold_right = 20021,#Speech-reception-threshold (SRT) estimate (right)
+)
+
+impedance = dict(
+    impedance_arm_fat_mass_left = 23124, #Arm fat mass (left)
+    impedance_arm_fat_msas_right = 23120, #Arm fat mass (right)
+    impedance_arm_fat_percent_left = 23123, #Arm fat percentage (left)
+    impedance_arm_fat_percent_right = 23119, #Arm fat percentage (right)
+    impedance_arm_fat_free_mass_left = 23125, #Arm fat-free mass (left)
+    impedance_arm_fat_free_mass_right = 23121, #Arm fat-free mass (right)
+    impedance_arm_mass_left = 23126, #Arm predicted mass (left)
+    impedance_arm_mass_right = 23122, #Arm predicted mass (right)
+    impedance_bassl_metabolic_rate = 23105, #Basal metabolic rate
+    impedance_body_fat_percent = 23099, #Body fat percentage
+    impedance_bmmi = 23104, #Body mass index (BMI)
+    impedance_leg_fat mass_left = 23116, #Leg fat mass (left)
+    impedance_leg_fat_mass_right = 23112, #Leg fat mass (right)
+    impedance_leg_fat_percent_left = 23115, #Leg fat percentage (left)
+    impedance_leg_fat_percent_right = 23111, #Leg fat percentage (right)
+    impedance_leg_fat_free_mass_left = 23117, #Leg fat-free mass (left)
+    impedance_leg_fat_free_mass_right = 23113, #Leg fat-free mass (right)
+    impedance_leg_mass_left = 23118, #Leg predicted mass (left)
+    impedance_leg_mass_right = 23114, #Leg predicted mass (right)
+    impedance_trunk_fat_mass = 23128, #Trunk fat mass
+    impedance_trunk_fat_percent = 23127, #Trunk fat percentage
+    impedance_trunk_fat_free_masss = 23129, #Trunk fat-free mass
+    impedance_trunk_mass = 23130, #Trunk predicted mass
+    impedance_weight = 23098, #Weight
+    impedance_whole_body_fat_mass = 23100, #Whole body fat mass
+    impedance_whole_body_fat_free_mass = 23101, #Whole body fat-free mass
+    impedance_whole_body_water_mass = 23102, #Whole body water mass
+    #43Impedance device ID
+    #23110Impedance of arm (left)
+    #23109Impedance of arm (right)
+    #6222Impedance of arm, manual entry (left)
+    #6221Impedance of arm, manual entry (right)
+    #23108Impedance of leg (left)
+    #23107Impedance of leg (right)
+    #6220Impedance of leg, manual entry (left)
+    #6219Impedance of leg, manual entry (right)
+    #23106Impedance of whole body
+    #6218Impedance of whole body, manual entry
+)
+
 # Infectious disease markers
 def name(line):
     name = line[:line.index(':')]
@@ -484,13 +558,13 @@ self_reported_conditions = dict(
 )
 
 # Collect all the different fields
-field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, infectious_diseases, sleep, full_medications, medications, mental_health_assessment, mood_fields ]
+field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, infectious_diseases, sleep, full_medications, medications, mental_health_assessment, mood_fields, arterial_stiffness, impedance, urine]
 all_fields = dict()
 for group in field_groups:
     all_fields.update(group)
 
 # Just general characteristics, covariates, etc. not specific to any project
-general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields]
+general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields, arterial_stiffness, impedance, urine]
 all_general_fields = dict()
 for group in general_groups:
     all_general_fields.update(group)
