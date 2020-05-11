@@ -4,6 +4,7 @@ parser = argparse.ArgumentParser(description="Aggregate the summary output of ea
 parser.add_argument("input_dir", help="path to input directory of participant accelerometer analyses")
 parser.add_argument("output_path", help="path to the target tab-separated output spreadsheet of aggregated summary data.")
 parser.add_argument("--file_suffix", help="suffix of all files you want to aggregate", default=["_90001_0_0-summary.json"], nargs="+")
+parser.add_argument("--seasonal", help="use seasonal repeats",  action="store_const", const=True, default=False)
 
 args = parser.parse_args()
 
@@ -17,7 +18,12 @@ if suffix.endswith(".json"):
     data = {}
     for file_suffix in args.file_suffix:
         for input_path in pathlib.Path(args.input_dir).glob("*" + file_suffix):
-            ID = input_path.name[:-len(file_suffix)]
+            if args.seasonal:
+                ID = input_path.name.split("_")[0]
+                instance =  input_path.name.split("_")[2]
+                ID = f"{ID}.{instance}"
+            else:
+                ID = input_path.name[:-len(file_suffix)]
             try:
                 with open(input_path) as input_file:
                     data[ID] = json.load(input_file)
