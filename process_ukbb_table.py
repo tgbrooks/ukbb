@@ -129,7 +129,13 @@ for field_name, field in field_group.items():
             print(f"WARNING: failed to find field {field_name}:{field} in data. Skipping.")
             continue
         col = process_field(field, col)
-        categories = coding.Value.astype(int)
+        try:
+            categories = coding.Value.astype(int)
+        except ValueError as e:
+            print(f"WARNING: Skipping field {field} due to non-integer code values")
+            print(e)
+            continue
+
         labels = coding.Meaning
         if len(set(labels)) == len(labels):
             column = pandas.Categorical(data[f"f.{field}.0.0"], categories)
