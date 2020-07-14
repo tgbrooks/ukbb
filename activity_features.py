@@ -3,6 +3,7 @@ import datetime
 import pandas
 import numpy
 import pytz
+import statsmodels.api as sm
 
 SAMPLE_RATE = 30 # in Seconds
 HOURS_TO_COUNTS = 60*60//SAMPLE_RATE
@@ -251,6 +252,29 @@ def IV(activity):
     IV = (hourly_avg.diff(1)**2).mean() / hourly_avg.var(ddof=0)
     return IV
 
+def cosinor(activity):
+    '''
+    Cosine-fit phase, amplitude and mesor for a given measure
+    '''
+
+    time = (activity.index - activity.index[0]).total_seconds() / 60 / 60 / 24
+    cos_term = numpy.cos(time)
+    sin_term = numpy.sin(time)
+    const = numpy.ones(len(activity))
+    exog = numpy.array([const, cos_term, sin_term]).T
+
+    results = sm.OLS(activity.values, exog, missing="drop").fit()
+    reduced = sm.OLS(activity.values, const, missing="drop").fit()
+
+    mesor, alpha, beta = results.params
+    amplitude = numpy.sqrt(alpha**2 + beta**2)
+    phase = numpy.arctan2(beta, alpha) * 24 / (2 * numpy.pi)
+    return {"mesor": mesor,
+            "amplitude": amplitude,
+            "phase":phase,
+            "cosinor_pvalue":results.compare_f_test(reduced)[1],
+            "cosinor_rsquared":results.rsquared}
+
 def activity_features(data):
     ''' return dictionary of result summary values '''
 
@@ -401,6 +425,9 @@ def activity_features(data):
         results.update( {col + "_std": results_by_day[col].std() for col in results_by_day})
     else:
         results_by_day = pandas.DataFrame([])
+
+    # Run cosinor on the activity variables
+    results.update(cosinor(data.acceleration))
 
     # Add RA/IS/IV values for each measure
     for activity in ALL_COLUMNS:
