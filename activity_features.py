@@ -263,8 +263,14 @@ def cosinor(activity):
     const = numpy.ones(len(activity))
     exog = numpy.array([const, cos_term, sin_term]).T
 
-    results = sm.OLS(activity.values, exog, missing="drop").fit()
-    reduced = sm.OLS(activity.values, const, missing="drop").fit()
+    try:
+        results = sm.OLS(activity.values, exog, missing="drop").fit()
+        reduced = sm.OLS(activity.values, const, missing="drop").fit()
+    except Exception as e:
+        if args in globals():
+            print(f"Exception occured on cosinor during {args.input} - skipping cosinor")
+        print(e)
+        return {"mesor":float("NaN"), "amplitude": float("NaN"), "phase":float("NaN"), "cosinor_pvalue":float("NaN"), "cosinor_rsquared": float("NaN")}
 
     mesor, alpha, beta = results.params
     amplitude = numpy.sqrt(alpha**2 + beta**2)
