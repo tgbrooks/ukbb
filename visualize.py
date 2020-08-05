@@ -53,9 +53,11 @@ def visualize(filename, show=True, **kwargs):
                 rect = ax.axvspan(first, last, facecolor=color, alpha=0.5)
 
         # Plot acceleration
-        ax.plot(index.values, day.acceleration.values, c='k')
+        ax.plot(index.values, numpy.log10(day.acceleration.values + 1), c='k')
 
         # Plot cosinor fit
+        #cosinor = numpy.cos((index - results['phase']) * 2 * numpy.pi / 24) * results['amplitude'] + results['mesor']
+        #ax.plot(index.values, numpy.log10(cosinor + 1), c='k', linestyle="--")
         cosinor = numpy.cos((index - results['phase']) * 2 * numpy.pi / 24) * results['amplitude'] + results['mesor']
         ax.plot(index.values, cosinor, c='k', linestyle="--")
 
@@ -69,7 +71,7 @@ def visualize(filename, show=True, **kwargs):
 
         ax.set_yticks([],[])
         ax.set_ylabel(start.strftime("%a") + "\n" + start.strftime("%y-%m-%d"))
-        ax.set_ylim(0,data['acceleration'].max())
+        #ax.set_ylim(0,data['acceleration'].max())
         ax.set_xticks([0,6,12,18,24,30,36,42,48])
 
     axes[0].set_title(filename.name)

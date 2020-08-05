@@ -264,7 +264,8 @@ def cosinor(activity):
     const = numpy.ones(len(activity))
     exog = numpy.array([const, cos_term, sin_term]).T
 
-    values = activity.values
+    #values = activity.values
+    values = numpy.log10(activity.values+1)
     try:
         results = sm.OLS(values, exog, missing="drop").fit()
         reduced = sm.OLS(values, const, missing="drop").fit()

@@ -20,6 +20,9 @@ import pandas
 COHORT = 1
 OUTDIR = f"../global_phewas/cohort{COHORT}/"
 
+### Whether to run all the big computations or attempt to load from disk since already computed
+RECOMPUTE = False
+
 full_activity = pandas.read_csv("../processed/activity_features_aggregate.txt", index_col=0, sep="\t")
 activity_summary = pandas.read_csv("../processed/activity_summary_aggregate.txt", index_col=0, sep="\t")
 ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
@@ -93,7 +96,7 @@ def BH_FDR(ps):
     adjusted[sort_order] = numpy.array(ps)[sort_order]*len(ps)/numpy.arange(1,len(ps)+1)
 
     # Make monotone, skipping NaNs
-    m = 1;
+    m = 1
     for i, r in enumerate(sort_order[::-1]):
         if numpy.isfinite(adjusted[r]):
             m = min(adjusted[r], m)
@@ -106,6 +109,7 @@ icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="
 # Select our cohort from all the entries
 icd10_entries = icd10_entries_all[icd10_entries_all.ID.isin(selected_ids)].copy()
 icd10_entries.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
+icd10_entries = icd10_entries.join(phecode_map.PHECODE, on="ICD10")
 
 # Load the PheCode mappings
 # Downloaded from https://phewascatalog.org/phecodes_icd10
@@ -120,6 +124,7 @@ icd9_entries_all = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t
 # Select our cohort from all the entries
 icd9_entries = icd9_entries_all[icd9_entries_all.ID.isin(selected_ids)].copy()
 icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
+icd9_entries = icd9_entries.join(phecode_map_icd9.PHECODE, on="ICD9")
 
 # and convert to phecodes
 # v1.2 Downloaded from https://phewascatalog.org/phecodes
@@ -173,6 +178,18 @@ phecode_data_self_report = pandas.DataFrame(phecode_data_self_report).set_index(
 phecode_data = pandas.concat([phecode_data_icd10, phecode_data_icd9, phecode_data_self_report]).reset_index().groupby(by="ID").any()
 
 
+## Tally the number of occurances of each phecode (at the lowest level, not just groups)
+phecode_count_details = pandas.concat([
+    icd10_entries[['ID', 'PHECODE']],
+    icd9_entries[['ID', 'PHECODE']],
+    self_reported[['ID', 'phecode']].rename(columns={"phecode":"PHECODE"})
+]).groupby('PHECODE').ID.nunique()
+phecode_count_details = pandas.DataFrame({"count": phecode_count_details})
+phecode_count_details['meaning'] = phecode_count_details.index.map(phecode_info.phenotype)
+phecode_count_details['category'] = phecode_count_details.index.map(phecode_info.category)
+phecode_count_details.to_csv(OUTDIR+"phecode_counts.txt", sep="\t", header=True)
+
+
 # ### Display which sources the cases come from for the top codes
 
 
@@ -191,37 +208,40 @@ for group in phecode_groups:
 
 # Correlate each block-level code with our activity variable
 # Loop through all the activity variables and phecode groups we are interested in
-phecode_tests_list = []
-covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
-for group in phecode_groups:
-    N = data[group].sum()
-    if N < 50:
-        print(f"Skipping {group} - only {N} cases found")
-        continue
-    
-    for activity_variable in activity.columns:
-        fit = smf.ols(f"{activity_variable}~ Q({group}) + sex * ({covariate_formula})",
-                     data=data).fit()
-        reduced_fit = smf.ols(f"{activity_variable} ~ sex * ({covariate_formula})",
-                            data=data).fit()
-        f,p,df = fit.compare_f_test(reduced_fit)
-        coeff = fit.params[f"Q({group})"]
-        std_effect = coeff / data[activity_variable].std()
-        phecode_tests_list.append({"group": group,
-                                "var": activity_variable,
-                                "p": p,
-                                "coeff": coeff,
-                                "std_effect": std_effect,
-                                "N": N,
-                               })
-phecode_tests = pandas.DataFrame(phecode_tests_list)
+if RECOMPUTE:
+    phecode_tests_list = []
+    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    for group in phecode_groups:
+        N = data[group].sum()
+        if N < 50:
+            print(f"Skipping {group} - only {N} cases found")
+            continue
+        
+        for activity_variable in activity.columns:
+            fit = smf.ols(f"{activity_variable}~ Q({group}) + sex * ({covariate_formula})",
+                         data=data).fit()
+            reduced_fit = smf.ols(f"{activity_variable} ~ sex * ({covariate_formula})",
+                                data=data).fit()
+            f,p,df = fit.compare_f_test(reduced_fit)
+            coeff = fit.params[f"Q({group})"]
+            std_effect = coeff / data[activity_variable].std()
+            phecode_tests_list.append({"group": group,
+                                    "var": activity_variable,
+                                    "p": p,
+                                    "coeff": coeff,
+                                    "std_effect": std_effect,
+                                    "N": N,
+                                   })
+    phecode_tests = pandas.DataFrame(phecode_tests_list)
 
-phecode_tests['q'] = BH_FDR(phecode_tests.p)
-phecode_tests["meaning"] = phecode_tests.group.map(phecode_info.phenotype)
-phecode_tests["category"] = phecode_tests.group.map(phecode_info.category)
-phecode_tests.index.rename("phecode", inplace=True)
+    phecode_tests['q'] = BH_FDR(phecode_tests.p)
+    phecode_tests["meaning"] = phecode_tests.group.map(phecode_info.phenotype)
+    phecode_tests["category"] = phecode_tests.group.map(phecode_info.category)
+    phecode_tests.index.rename("phecode", inplace=True)
 
-phecode_tests.to_csv(OUTDIR+f"phecodes.txt", sep="\t")
+    phecode_tests.to_csv(OUTDIR+f"phecodes.txt", sep="\t")
+else:
+    phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t", index_col=0)
 
 # Summarize the phecode test results
 num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
@@ -417,13 +437,18 @@ connections_activity = significance_matrix @ significance_matrix.T
 def plot_heatmap(data, order=True, label=""):
     fig, ax = pylab.subplots()
     if order:
-        dist = scipy.spatial.distance.squareform(1/(data+1), checks=False)
-        linkage = scipy.cluster.hierarchy.linkage(dist, optimal_ordering=True)
-        ordering = scipy.cluster.hierarchy.leaves_list(linkage)
-    else:
-        ordering = numpy.aranage(len(data.index))
+        dist_x = scipy.spatial.distance.squareform(1/(data @ data.T+1), checks=False)
+        linkage_x = scipy.cluster.hierarchy.linkage(dist_x, optimal_ordering=True)
+        ordering_x = scipy.cluster.hierarchy.leaves_list(linkage_x)
 
-    ax.imshow(data.iloc[ordering, ordering])
+        dist_y = scipy.spatial.distance.squareform(1/(data.T @ data+1), checks=False)
+        linkage_y = scipy.cluster.hierarchy.linkage(dist_y, optimal_ordering=True)
+        ordering_y = scipy.cluster.hierarchy.leaves_list(linkage_y)
+    else:
+        ordering_x = numpy.aranage(len(data.index))
+        ordering_y = numpy.aranage(len(data.columns))
+
+    ax.imshow(data.iloc[ordering_x, ordering_y])
 
     if "x" in label:
         ax.set_xticks(numpy.arange(len(data.columns)))
@@ -446,66 +471,69 @@ plot_heatmap(connections_activity, label="xy")
 
 # Correlate each block-level code with our activity variable within each sex
 
-phecode_tests_by_sex_list = []
-sex_covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+if RECOMPUTE:
+    phecode_tests_by_sex_list = []
+    sex_covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
 
-for group in phecode_groups:
-    #TODO: skip any sex-specific phecodes
-    N = data[group].sum()
-    N_male = numpy.sum(data[group].astype(bool) & (data.sex == "Male"))
-    N_female = numpy.sum(data[group].astype(bool) & (data.sex == "Female"))
-    if N_male <= 50 or N_female < 50:
-        print(f"Skipping {group} - only {N_male} M and  {N_female} F cases found")
-        continue
+    for group in phecode_groups:
+        #TODO: skip any sex-specific phecodes
+        N = data[group].sum()
+        N_male = numpy.sum(data[group].astype(bool) & (data.sex == "Male"))
+        N_female = numpy.sum(data[group].astype(bool) & (data.sex == "Female"))
+        if N_male <= 50 or N_female < 50:
+            print(f"Skipping {group} - only {N_male} M and  {N_female} F cases found")
+            continue
+            
+        if False: #phecode_tests.loc[group, "q"] > 0.01:
+            # Skip test, not significant
+            print(f"Skipping {group} since q > 0.01")
+            continue
         
-    if False: #phecode_tests.loc[group, "q"] > 0.01:
-        # Skip test, not significant
-        print(f"Skipping {group} since q > 0.01")
-        continue
-    
-    for activity_variable in activity.columns:
-        fit = smf.ols(f"{activity_variable} ~ 0 + C(sex, Treatment(reference=-1)) : ({sex_covariate_formula} +  Q({group}))",
-                         data=data).fit()
+        for activity_variable in activity.columns:
+            fit = smf.ols(f"{activity_variable} ~ 0 + C(sex, Treatment(reference=-1)) : ({sex_covariate_formula} +  Q({group}))",
+                             data=data).fit()
 
 
-        female_coeff = fit.params[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
-        male_coeff = fit.params[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
-        p_female = fit.pvalues[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
-        p_male = fit.pvalues[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
-        diff_test = fit.t_test(f'C(sex, Treatment(reference=-1))[Male]:Q({group}) = C(sex, Treatment(reference=-1))[Female]:Q({group})')
-        p_diff = diff_test.pvalue
-        conf_ints = fit.conf_int()
-        male_conf_int = conf_ints.loc[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
-        female_conf_int = conf_ints.loc[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
+            female_coeff = fit.params[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
+            male_coeff = fit.params[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
+            p_female = fit.pvalues[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
+            p_male = fit.pvalues[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
+            diff_test = fit.t_test(f'C(sex, Treatment(reference=-1))[Male]:Q({group}) = C(sex, Treatment(reference=-1))[Female]:Q({group})')
+            p_diff = diff_test.pvalue
+            conf_ints = fit.conf_int()
+            male_conf_int = conf_ints.loc[f'C(sex, Treatment(reference=-1))[Male]:Q({group})']
+            female_conf_int = conf_ints.loc[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
 
-        male_std = data.loc[data.sex == "Male", activity_variable].std()
-        female_std = data.loc[data.sex == "Female", activity_variable].std()
-        
-        phecode_tests_by_sex_list.append({
-            "group": group,
-            "var": activity_variable,
-            "male_coeff": float(male_coeff) / male_std,
-            "female_coeff": float(female_coeff) /  female_std,
-            "p_male": float(p_male),
-            "p_female": float(p_female),
-            "p_diff": float(p_diff),
-            "N_male": N_male,
-            "N_female": N_female,
-            "male_coeff_low": float(male_conf_int[0]) / male_std,
-            "male_coeff_high": float(male_conf_int[1]) / male_std,
-            "female_coeff_low": float(female_conf_int[0]) / female_std,
-            "female_coeff_high": float(female_conf_int[1]) / female_std,
-        })
+            male_std = data.loc[data.sex == "Male", activity_variable].std()
+            female_std = data.loc[data.sex == "Female", activity_variable].std()
+            
+            phecode_tests_by_sex_list.append({
+                "group": group,
+                "var": activity_variable,
+                "male_coeff": float(male_coeff) / male_std,
+                "female_coeff": float(female_coeff) /  female_std,
+                "p_male": float(p_male),
+                "p_female": float(p_female),
+                "p_diff": float(p_diff),
+                "N_male": N_male,
+                "N_female": N_female,
+                "male_coeff_low": float(male_conf_int[0]) / male_std,
+                "male_coeff_high": float(male_conf_int[1]) / male_std,
+                "female_coeff_low": float(female_conf_int[0]) / female_std,
+                "female_coeff_high": float(female_conf_int[1]) / female_std,
+            })
 
-phecode_tests_by_sex = pandas.DataFrame(phecode_tests_by_sex_list)
+    phecode_tests_by_sex = pandas.DataFrame(phecode_tests_by_sex_list)
 
-phecode_tests_by_sex["meaning"] = phecode_tests_by_sex.group.map(phecode_info.phenotype)
-phecode_tests_by_sex["category"] = phecode_tests_by_sex.group.map(phecode_info.category)
-phecode_tests_by_sex = phecode_tests_by_sex.join(phecode_tests.q, how="left")
-phecode_tests_by_sex['q_diff'] = BH_FDR(phecode_tests_by_sex.p_diff)
-phecode_tests_by_sex.sort_values(by="p_diff", inplace=True)
+    phecode_tests_by_sex["meaning"] = phecode_tests_by_sex.group.map(phecode_info.phenotype)
+    phecode_tests_by_sex["category"] = phecode_tests_by_sex.group.map(phecode_info.category)
+    phecode_tests_by_sex = phecode_tests_by_sex.join(phecode_tests.q, how="left")
+    phecode_tests_by_sex['q_diff'] = BH_FDR(phecode_tests_by_sex.p_diff)
+    phecode_tests_by_sex.sort_values(by="p_diff", inplace=True)
 
-phecode_tests_by_sex.to_csv(OUTDIR+"/all_phenotypes.by_sex.txt", sep="\t")
+    phecode_tests_by_sex.to_csv(OUTDIR+"/all_phenotypes.by_sex.txt", sep="\t")
+else:
+    phecode_tests_by_sex = pandas.read_csv(OUTDIR+"/all_phenotypes.by_sex.txt", sep="\t", index_col=0)
 
 
 ### Generate summaries of the phecode test by-sex results
@@ -761,30 +789,166 @@ quantitative_vars = [c for block in quantitative_blocks
                         for c in block
                         if (c in data.columns) and (pandas.api.types.is_numeric_dtype(data[c].dtype))]
 
-quantitative_tests_list = []
-covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
-for phenotype in quantitative_vars:
-    N = data[phenotype].count()
-    if N < 50:
-        print(f"Skipping {phenotype} - only {N} cases found")
-        continue
-    
-    for activity_variable in activity.columns:
-        fit = smf.ols(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
-                     data=data).fit()
-        reduced_fit = smf.ols(f"{phenotype} ~ sex * ({covariate_formula})",
-                            data=data).fit()
-        f,p,df = fit.compare_f_test(reduced_fit)
-        coeff = fit.params[activity_variable]
-        std_effect = coeff * data[activity_variable].std() / data[phenotype].std()
-        quantitative_tests_list.append({"phenotype": phenotype,
-                                "activity_var": activity_variable,
-                                "p": p,
-                                "coeff": coeff,
-                                "std_effect": std_effect,
-                                "N": N,
-                               })
-quantitative_tests = pandas.DataFrame(quantitative_tests_list)
-quantitative_tests['q'] = BH_FDR(quantitative_tests.p)
-quantitative_tests['ukbb_field'] = quantitative_tests.phenotype.map(fields_of_interest.all_fields)
-quantitative_tests.to_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
+if RECOMPUTE:
+    quantitative_tests_list = []
+    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    for phenotype in quantitative_vars:
+        N = data[phenotype].count()
+        if N < 50:
+            print(f"Skipping {phenotype} - only {N} cases found")
+            continue
+        
+        for activity_variable in activity.columns:
+            fit = smf.ols(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
+                         data=data).fit()
+            reduced_fit = smf.ols(f"{phenotype} ~ sex * ({covariate_formula})",
+                                data=data).fit()
+            f,p,df = fit.compare_f_test(reduced_fit)
+            coeff = fit.params[activity_variable]
+            std_effect = coeff * data[activity_variable].std() / data[phenotype].std()
+            quantitative_tests_list.append({"phenotype": phenotype,
+                                    "activity_var": activity_variable,
+                                    "p": p,
+                                    "coeff": coeff,
+                                    "std_effect": std_effect,
+                                    "N": N,
+                                   })
+    quantitative_tests = pandas.DataFrame(quantitative_tests_list)
+    quantitative_tests['q'] = BH_FDR(quantitative_tests.p)
+    quantitative_tests['ukbb_field'] = quantitative_tests.phenotype.map(fields_of_interest.all_fields)
+    quantitative_tests.to_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
+else:
+    quantitative_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.txt", sep="\t", index_col=0)
+
+pylab.close('all')
+
+
+## Summarize the quantitative_trait results
+quantitative_bonferonni_cutoff = 0.05 / len(quantitative_tests)
+quantitative_FDR_cutoff = quantitative_tests[quantitative_tests.q < 0.05].p.max()
+
+fig, ax = pylab.subplots(figsize=(8,16))
+for i, trait in enumerate(quantitative_vars):
+    ps = quantitative_tests[quantitative_tests['phenotype'] == trait].p
+    ax.scatter(-numpy.log10(ps),
+                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
+                marker=".", s=1.5)
+ax.set_xlabel("-log10(p-value)")
+ax.set_title("Trait associations")
+ax.set_yticks(range(len(quantitative_vars)))
+ax.set_yticklabels(quantitative_vars)
+ax.set_ylim(-1, len(quantitative_vars))
+ax.axvline( -numpy.log10(quantitative_bonferonni_cutoff), c="k", zorder = -1 )
+ax.axvline( -numpy.log10(quantitative_FDR_cutoff), c="k", linestyle="--", zorder = -1 )
+fig.tight_layout()
+fig.savefig(OUTDIR+"pvalues_by_quantitative_trait.png")
+
+### Network analysis between quantitative traits and a phenotype
+## Connect a quantitative trait to a phenotype if they both associate with the same activity value
+quantitative_tests['q_significant'] = (quantitative_tests.q < 0.05).astype(int)
+quantitative_associations = quantitative_tests.set_index(["phenotype", "activity_var"]).q_significant.unstack()
+phecode_associations = phecode_tests.set_index(["group", "var"]).q_significant.unstack()
+common_associations = phecode_associations @ quantitative_associations.T
+common_associations.index = common_associations.index.map(phecode_info.phenotype)
+
+# Compute the directionality and magnitude of these associations
+# I.e. for each activity variable that associates significantly with both a phenotype and a trait
+# we compute the direction of the common association between the phenotype and trait
+# as the product of the activity variable effects with the two
+# Then we aggregate across all the significant associates to get the dominant direction of association
+# if any. If all point in the same direction, get +/- 1. If directionality varies randomly, get ~0
+quantitative_effects = numpy.sign(quantitative_tests.set_index(["phenotype", "activity_var"]).std_effect.unstack() * quantitative_associations)
+phecode_effects = numpy.sign(phecode_tests.set_index(["group", "var"]).std_effect.unstack() * phecode_associations)
+common_direction = (phecode_effects @ quantitative_effects.T)
+common_direction.index = common_direction.index.map(phecode_info.phenotype)
+common_direction = (common_direction / common_associations).fillna(0)
+
+ax = plot_heatmap(common_associations)
+ax.figure.savefig(OUTDIR+"/common_assocations_heatmap.png")
+
+# Compute the number of expected associations assuming independence
+expected_associations = phecode_associations.mean(axis=1).values.reshape((-1,1)) @ quantitative_associations.mean(axis=1).values.reshape((1,-1))
+expected_associations = pandas.DataFrame(expected_associations,
+                            index = common_associations.index,
+                            columns = common_associations.columns)
+common_associations_ratio = (common_associations / (expected_associations+0.001)).fillna(0)
+ax = plot_heatmap(common_associations_ratio)
+ax.figure.savefig(OUTDIR+"/common_assocations_ratio_heatmap.png")
+
+def plot_connections(associations, directionality = None, **kwargs):
+    fig, ax = pylab.subplots(**kwargs)
+    scale = 1 / associations.max().max()
+    index_heights = numpy.linspace(0,1, len(associations.index))
+    column_heights = numpy.linspace(0,1, len(associations.columns))
+    colormap = pylab.get_cmap("Spectral")
+    for i, a in zip(index_heights, associations.index):
+        ax.text(0, i, a, horizontalalignment='right')
+    for j, b in zip(column_heights, associations.columns):
+        ax.text(1, j, b)
+    for i,a in zip(index_heights, associations.index):
+        for j,b in zip(column_heights, associations.columns):
+            conns = associations.loc[a,b]
+            if conns < 10:
+                continue
+            if directionality is not None:
+                color = colormap((directionality.loc[a,b] + 1)/2)
+            else:
+                color = "k"
+            ax.plot([0,1], [i,j],
+                    alpha= conns * scale,
+                    #linewidth = conns * scale * 10,
+                    c=color)
+    fig.tight_layout()
+    return fig, ax
+selected_associations = common_associations.sum(axis=1) > 50
+fig, ax = plot_connections(common_associations[selected_associations],
+                        common_direction[selected_associations],
+                        figsize=(8,30))
+fig.savefig(OUTDIR+"/common_associations.png")
+
+category_associations = phecode_tests.groupby(["category", "var"]).q_significant.sum().unstack()
+common_category_associations = category_associations @ quantitative_associations.T
+common_category_direction = (phecode_effects @ quantitative_effects.T)
+common_category_direction = common_category_direction.groupby(
+    common_category_direction.index.map(phecode_info.category)
+).apply( lambda x: x.sum(axis=0) / x.abs().sum(axis=0)
+).fillna(0)
+
+fig, ax = plot_connections(common_category_associations, common_category_direction, figsize=(8,20))
+fig.savefig(OUTDIR+"/common_category_associations.png")
+
+
+## heatmap of hypergeometric enrichment test
+## for the phecode - trait associations via activity variables
+common_associations_long = common_associations.unstack().reset_index()
+common_associations_long['category'] = common_associations_long["group"].map(phecode_info.set_index("phenotype").category)
+total_significant = common_associations_long.groupby(["phenotype"]).sum()
+num_tests = common_associations_long[0].sum()
+def hypergeom_enrichment_2(data):
+    print(data.columns)
+    quant_trait = data['phenotype'].iloc[0]
+    phecode_cat = data['category'].iloc[0]
+    k = data.sum()
+    M = num_tests
+    n = total_significant[quant_trait]
+    N = len(data)
+    p =  scipy.stats.hypergeom.sf(k, M, n, N)
+    if n == 0:
+        return 1
+    return p
+common_pvalue_enrichment_stacked = common_associations_long.groupby(["phenotype", "category"]).apply(hypergeom_enrichment_2)
+#pvalue_enrichment = pvalue_enrichment_stacked.unstack()
+#enrichment_qs = BH_FDR(pvalue_enrichment.values.ravel()).reshape(pvalue_enrichment.shape)
+#fig, ax = pylab.subplots(figsize=(9,9))
+#h = ax.imshow(-numpy.log10(enrichment_qs))
+#ax.set_xticks(range(len(pvalue_enrichment.columns)))
+#ax.set_xticklabels(pvalue_enrichment.columns, rotation=90)
+#ax.set_xlim(-0.5, len(pvalue_enrichment.columns)-0.5)
+#ax.set_yticks(range(len(pvalue_enrichment.index)))
+#ax.set_yticklabels(pvalue_enrichment.index)
+#ax.set_ylim(-0.5, len(pvalue_enrichment.index)-0.5)
+#ax.set_title("Enrichment of significant phenotypes within a category")
+#c = fig.colorbar(h)
+#c.ax.set_ylabel("-log10(enrichment q-value)")
+#fig.tight_layout()
+#fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.png")
