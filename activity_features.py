@@ -257,7 +257,8 @@ def cosinor(activity):
     Cosine-fit phase, amplitude and mesor for a given measure
     '''
 
-    time = (activity.index - activity.index[0]).total_seconds() / 60 / 60 / 24
+    start_midnight = activity.index[0].dt.normalize()
+    time = (activity.index - start_midnight).total_seconds() / 60 / 60 / 24
     cos_term = numpy.cos(time)
     sin_term = numpy.sin(time)
     const = numpy.ones(len(activity))
@@ -267,8 +268,8 @@ def cosinor(activity):
         results = sm.OLS(activity.values, exog, missing="drop").fit()
         reduced = sm.OLS(activity.values, const, missing="drop").fit()
     except Exception as e:
-        if args in globals():
-            print(f"Exception occured on cosinor during {args.input} - skipping cosinor")
+        if 'args' in globals():
+            print(f"Exception occured on cosinor during {globals()['args'].input} - skipping cosinor")
         print(e)
         return {"mesor":float("NaN"), "amplitude": float("NaN"), "phase":float("NaN"), "cosinor_pvalue":float("NaN"), "cosinor_rsquared": float("NaN")}
 
