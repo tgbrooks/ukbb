@@ -34,7 +34,7 @@ def visualize(filename, show=True, **kwargs):
         # Start at midnight morning of the day until midnight at night of second day
         # If daylight savings crossover happens then affected days are 1 hour shorter or longer
         # (due to double-plotting this affects two days)
-        start = data.index[0].date() + i * pandas.to_timedelta("1 day")
+        start = pandas.to_datetime(data.index[0].date() + i * pandas.to_timedelta("1 day")).tz_localize(data.index.tz)
         end = start + pandas.to_timedelta("2 day")
         day = data.loc[start:end]
         index = (day.index - day.index[0].normalize()).total_seconds() / (60*60)
@@ -54,6 +54,10 @@ def visualize(filename, show=True, **kwargs):
 
         # Plot acceleration
         ax.plot(index.values, day.acceleration.values, c='k')
+
+        # Plot cosinor fit
+        cosinor = numpy.cos((index - results['phase']) * 2 * numpy.pi / 24) * results['amplitude'] + results['mesor']
+        ax.plot(index.values, cosinor, c='k', linestyle="--")
 
         # Plot light
         ax_light = ax.twinx()
@@ -88,6 +92,8 @@ def visualize(filename, show=True, **kwargs):
     if show:
         pylab.show()
 
+    return data, results
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=f"Visualize an actigraphy data, preferably downsampled to be, say, 1minute intervals")
@@ -95,4 +101,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     for filename in args.filename:
-        visualize(filename)
+        data, results = visualize(filename)
