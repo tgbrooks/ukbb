@@ -564,7 +564,7 @@ for group in field_groups:
     all_fields.update(group)
 
 # Just general characteristics, covariates, etc. not specific to any project
-general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields, arterial_stiffness, impedance, urine]
+general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields, arterial_stiffness, impedance, urine, sleep]
 all_general_fields = dict()
 for group in general_groups:
     all_general_fields.update(group)
