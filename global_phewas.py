@@ -23,13 +23,29 @@ OUTDIR = f"../global_phewas/cohort{COHORT}/"
 ### Whether to run all the big computations or attempt to load from disk since already computed
 RECOMPUTE = False
 
-full_activity = pandas.read_csv("../processed/activity_features_aggregate.txt", index_col=0, sep="\t")
+full_activity = pandas.read_csv("../processed/activity_features_aggregate_seasonal.txt", sep="\t", dtype={'Unnamed: 0': str})
 activity_summary = pandas.read_csv("../processed/activity_summary_aggregate.txt", index_col=0, sep="\t")
 ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
 
 ukbb.columns = ukbb.columns.str.replace("[,:/]","_") # Can't use special characters easily
 
-activity = full_activity.join(activity_summary)
+# Separate out the user ID from the run number (0 = original, 1-4 are seasonal repeats)
+full_activity.rename(columns={"Unnamed: 0": "run_id"}, inplace=True)
+full_activity['id'] = full_activity.run_id.apply(lambda x: int(x.split('.')[0]))
+full_activity['run'] = full_activity.run_id.apply(lambda x: int(x.split('.')[1]))
+activity = full_activity[full_activity.run == 0]
+activity.set_index('id', inplace=True)
+activity = activity.join(activity_summary)
+
+self_report_circadian_variables = [
+    "daytime_dozing",
+    "getting_up_in_morning",
+    "monring_evening_persion",
+    "nap_during_day",
+    "sleep_duration",
+    "sleeplessness",
+    "snoring"
+]
 
 
 ## Select the activity variables that have between-person variance greater than their within-person variance
@@ -45,6 +61,8 @@ print(f"Started with {len(activity.columns.intersection(activity_variance[activi
 activity = activity[activity.columns[activity.columns.isin(activity_variables)]]
 print(f"Selected {len(activity.columns)} after discarding those with poor intra-personal variance")
 
+# Load descriptions + categorization of activity variables
+activity_variable_descriptions = pandas.read_excel("../variable_descriptions.xlsx", index_col="Activity Variable")
 
 # drop activity for people who fail basic QC
 okay = (activity_summary['quality-goodCalibration'].astype(bool)
@@ -104,13 +122,6 @@ def BH_FDR(ps):
 
     return adjusted # the q-values
 
-# ## Load the ICD10/9 code data
-icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t")
-# Select our cohort from all the entries
-icd10_entries = icd10_entries_all[icd10_entries_all.ID.isin(selected_ids)].copy()
-icd10_entries.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
-icd10_entries = icd10_entries.join(phecode_map.PHECODE, on="ICD10")
-
 # Load the PheCode mappings
 # Downloaded from https://phewascatalog.org/phecodes_icd10
 # Has columns:
@@ -119,19 +130,25 @@ phecode_info = pandas.read_csv("../phecode_definitions1.2.csv", index_col=0)
 phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv")
 phecode_map.set_index(phecode_map.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
-### and the ICD9 data
-icd9_entries_all = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
-# Select our cohort from all the entries
-icd9_entries = icd9_entries_all[icd9_entries_all.ID.isin(selected_ids)].copy()
-icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
-icd9_entries = icd9_entries.join(phecode_map_icd9.PHECODE, on="ICD9")
-
 # and convert to phecodes
 # v1.2 Downloaded from https://phewascatalog.org/phecodes
 phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv")
 phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
 phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
 
+# ## Load the ICD10/9 code data
+icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t")
+# Select our cohort from all the entries
+icd10_entries = icd10_entries_all[icd10_entries_all.ID.isin(selected_ids)].copy()
+icd10_entries.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
+icd10_entries = icd10_entries.join(phecode_map.PHECODE, on="ICD10")
+
+### and the ICD9 data
+icd9_entries_all = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
+# Select our cohort from all the entries
+icd9_entries = icd9_entries_all[icd9_entries_all.ID.isin(selected_ids)].copy()
+icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
+icd9_entries = icd9_entries.join(phecode_map_icd9.PHECODE, on="ICD9")
 
 # Self-reported conditions from the interview stage of the UK Biobank
 self_reported_all = pandas.read_csv("../processed/ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
@@ -242,6 +259,8 @@ if RECOMPUTE:
     phecode_tests.to_csv(OUTDIR+f"phecodes.txt", sep="\t")
 else:
     phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t", index_col=0)
+
+phecode_tests['activity_var_category'] = phecode_tests['var'].map(activity_variable_descriptions.Category)
 
 # Summarize the phecode test results
 num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
@@ -395,6 +414,22 @@ c.ax.set_ylabel("-log10(enrichment q-value)")
 fig.tight_layout()
 fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.png")
 
+## Heat of activity-category versus phecode-category p-values
+fig, ax = pylab.subplots(figsize=(9,5))
+pvalue_percent_categories = phecode_tests.groupby(["activity_var_category", "category"]).q_significant.mean().unstack()*100
+h = ax.imshow(pvalue_percent_categories.values)
+ax.set_xticks(range(len(pvalue_percent_categories.columns)))
+ax.set_xticklabels(pvalue_percent_categories.columns, rotation=90)
+ax.set_xlim(-0.5, len(pvalue_percent_categories.columns)-0.5)
+ax.set_yticks(range(len(pvalue_percent_categories.index)))
+ax.set_yticklabels(pvalue_percent_categories.index)
+ax.set_ylim(-0.5, len(pvalue_percent_categories.index)-0.5)
+ax.set_title(f"Percent phenotypes with significant associations\n(q < {FDR_CUTOFF_VALUE})")
+c = fig.colorbar(h)
+c.ax.set_ylabel("Percent of category significant")
+fig.tight_layout()
+fig.savefig(OUTDIR+"pvalue_significance_heatmap.by_activity_var_category.percent.png")
+
 
 ## PCA of the different phenotypes
 # each point is a phenotype and its given the vector of effect sizes relating to the different associations
@@ -445,17 +480,17 @@ def plot_heatmap(data, order=True, label=""):
         linkage_y = scipy.cluster.hierarchy.linkage(dist_y, optimal_ordering=True)
         ordering_y = scipy.cluster.hierarchy.leaves_list(linkage_y)
     else:
-        ordering_x = numpy.aranage(len(data.index))
-        ordering_y = numpy.aranage(len(data.columns))
+        ordering_x = numpy.arange(len(data.index))
+        ordering_y = numpy.arange(len(data.columns))
 
     ax.imshow(data.iloc[ordering_x, ordering_y])
 
     if "x" in label:
         ax.set_xticks(numpy.arange(len(data.columns)))
-        ax.set_xticklabels(data.columns[ordering])
+        ax.set_xticklabels(data.columns[ordering_x])
     if "y" in label:
         ax.set_yticks(numpy.arange(len(data.index)))
-        ax.set_yticklabels(data.index[ordering])
+        ax.set_yticklabels(data.index[ordering_y])
     return ax
 plot_heatmap(connections_phecodes)
 plot_heatmap(connections_activity, label="xy")
@@ -920,23 +955,23 @@ fig.savefig(OUTDIR+"/common_category_associations.png")
 
 ## heatmap of hypergeometric enrichment test
 ## for the phecode - trait associations via activity variables
-common_associations_long = common_associations.unstack().reset_index()
-common_associations_long['category'] = common_associations_long["group"].map(phecode_info.set_index("phenotype").category)
-total_significant = common_associations_long.groupby(["phenotype"]).sum()
-num_tests = common_associations_long[0].sum()
-def hypergeom_enrichment_2(data):
-    print(data.columns)
-    quant_trait = data['phenotype'].iloc[0]
-    phecode_cat = data['category'].iloc[0]
-    k = data.sum()
-    M = num_tests
-    n = total_significant[quant_trait]
-    N = len(data)
-    p =  scipy.stats.hypergeom.sf(k, M, n, N)
-    if n == 0:
-        return 1
-    return p
-common_pvalue_enrichment_stacked = common_associations_long.groupby(["phenotype", "category"]).apply(hypergeom_enrichment_2)
+#common_associations_long = common_associations.unstack().reset_index()
+#common_associations_long['category'] = common_associations_long["group"].map(phecode_info.set_index("phenotype").category)
+#total_significant = common_associations_long.groupby(["phenotype"]).sum()
+#num_tests = common_associations_long[0].sum()
+#def hypergeom_enrichment_2(data):
+#    print(data.columns)
+#    quant_trait = data['phenotype'].iloc[0]
+#    phecode_cat = data['category'].iloc[0]
+#    k = data.sum()
+#    M = num_tests
+#    n = total_significant[quant_trait]
+#    N = len(data)
+#    p =  scipy.stats.hypergeom.sf(k, M, n, N)
+#    if n == 0:
+#        return 1
+#    return p
+#common_pvalue_enrichment_stacked = common_associations_long.groupby(["phenotype", "category"]).apply(hypergeom_enrichment_2)
 #pvalue_enrichment = pvalue_enrichment_stacked.unstack()
 #enrichment_qs = BH_FDR(pvalue_enrichment.values.ravel()).reshape(pvalue_enrichment.shape)
 #fig, ax = pylab.subplots(figsize=(9,9))
