@@ -280,8 +280,8 @@ blood_fields = dict(
     mean_sphered_cell_volume = 30270, #Mean sphered cell volume
     monocyte_count = 30130, #Monocyte count
     monocyte_percent = 30190, #Monocyte percentage
-    neutrophill_count = 30140, #Neutrophill count
-    neutrophill_percent = 30200, #Neutrophill percentage
+    neutrophil_count = 30140, #Neutrophill count
+    neutrophil_percent = 30200, #Neutrophill percentage
     nucleated_red_blood_cell_count = 30170, #Nucleated red blood cell count
     nucleated_red_blood_cell_percent = 30230, #Nucleated red blood cell percentage
     platelet_count = 30080, #Platelet count
@@ -293,7 +293,7 @@ blood_fields = dict(
     reticulocyte_percentage = 30240, #Reticulocyte percentage
     white_blood_cell_count = 30000, #White blood cell (leukocyte) count
 
-    blood_smaple_time_collected = 3166,
+    blood_sample_time_collected = 3166,
     blood_sample_fasting_time = 74,
 )
 
@@ -542,7 +542,7 @@ full_medications = dict(
 sleep = dict(
     daytime_dozing = 1220,
     getting_up_in_morning = 1170,
-    monring_evening_persion = 1180,
+    morning_evening_person = 1180,
     nap_during_day = 1190,
     sleep_duration = 1160,
     sleeplessness = 1200,
@@ -557,14 +557,23 @@ self_reported_conditions = dict(
     condition_code = 20002,
 )
 
+
+# Death records
+death_fields = dict(
+        age_at_death = 40007,
+        date_of_death = 40000,
+        primary_cause_of_death_ICD10 = 40001,
+
+)
+
 # Collect all the different fields
-field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, infectious_diseases, sleep, full_medications, medications, mental_health_assessment, mood_fields, arterial_stiffness, impedance, urine]
+field_groups = [general_fields, general_mental_health_fields, anxiety_dependent_fields, recent_anxiety, depression_dependent_fields, sleep_change_type_fields, recent_depression, mania_fields, mania_dependent_fields, blood_fields, female_specific_fields, employment_fields, covariates, physical_measures, medications, addiction_fields, cannabis_fields, trauma_fields, self_harm_fields, infectious_diseases, sleep, full_medications, medications, mental_health_assessment, mood_fields, arterial_stiffness, impedance, urine, death_fields]
 all_fields = dict()
 for group in field_groups:
     all_fields.update(group)
 
 # Just general characteristics, covariates, etc. not specific to any project
-general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields, arterial_stiffness, impedance, urine, sleep]
+general_groups = [covariates, medications, general_fields,  blood_fields, physical_measures, female_specific_fields, arterial_stiffness, impedance, urine, sleep, death_fields]
 all_general_fields = dict()
 for group in general_groups:
     all_general_fields.update(group)
