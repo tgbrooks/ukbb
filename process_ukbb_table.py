@@ -128,7 +128,16 @@ for field_name, field in field_group.items():
         except KeyError:
             print(f"WARNING: failed to find field {field_name}:{field} in data. Skipping.")
             continue
+
         col = process_field(field, col)
+
+        if field_description.Coding == 19: # ICD10-coded field, such as field 40001
+            # We want to not process this since it is not encoded in integer values
+            # but actually is already in the format we want (like "A00")
+            print(f"Identified field {field} as ICD10-encoded - no processing")
+            output[field_name] = col
+            continue
+
         try:
             categories = coding.Value.astype(int)
         except ValueError as e:
