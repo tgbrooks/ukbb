@@ -12,10 +12,14 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from sklearn.decomposition import PCA
 import seaborn as sns
+import matplotlib
 import matplotlib.patches as mpatches
 from scipy.cluster import hierarchy
 import pylab
 import pandas
+import networkx
+
+pandas.plotting.register_matplotlib_converters()
 
 COHORT = 1
 OUTDIR = f"../global_phewas/cohort{COHORT}/"
@@ -25,6 +29,8 @@ RECOMPUTE = False
 
 full_activity = pandas.read_csv("../processed/activity_features_aggregate_seasonal.txt", sep="\t", dtype={'Unnamed: 0': str})
 activity_summary = pandas.read_csv("../processed/activity_summary_aggregate.txt", index_col=0, sep="\t")
+activity_summary_seasonal = pandas.read_csv("../processed/activity_summary_aggregate_seasonal.txt", index_col=0, sep="\t")
+activity_summary_seasonal["ID"] = activity_summary_seasonal.index.astype(int)
 ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
 
 ukbb.columns = ukbb.columns.str.replace("[,:/]","_") # Can't use special characters easily
@@ -36,16 +42,6 @@ full_activity['run'] = full_activity.run_id.apply(lambda x: int(x.split('.')[1])
 activity = full_activity[full_activity.run == 0]
 activity.set_index('id', inplace=True)
 activity = activity.join(activity_summary)
-
-self_report_circadian_variables = [
-    "daytime_dozing",
-    "getting_up_in_morning",
-    "monring_evening_persion",
-    "nap_during_day",
-    "sleep_duration",
-    "sleeplessness",
-    "snoring"
-]
 
 
 ## Select the activity variables that have between-person variance greater than their within-person variance
@@ -74,6 +70,64 @@ activity.columns = activity.columns.str.replace("-","_") # Can't use special cha
 activity_variables = activity_variables.str.replace("-","_")
 print(f"Dropping {(~okay).sum()} entries out of {len(okay)} due to bad quality or wear-time")
 
+## Process activity variables that need cleaning
+activity.phase = activity.phase % 24
+
+## Add self-reported variables to activity document
+# they need to be converted to 0,1 and NaNs
+self_report_circadian_variables = {
+    "daytime_dozing": {
+        "name": "daytime_dozing",
+        "zeros": ["Never/rarely"],
+        "ones": ["All of the time", "Often"],
+    },
+    "getting_up_in_morning": {
+        "name": "getting_up_in_morning",
+        "zeros": ["Very easy"],
+        "ones": ["Not at all easy"],
+    },
+    "morning_evening_person": {
+        "name": "chronotype",
+        "zeros": ["Definitely a 'morning' person"],
+        "ones": ["Definitely an 'evening' person"],
+    },
+    "nap_during_day": {
+        "name": "nap_during_day",
+        "zeros": ["Never/rarely"],
+        "ones": ["Usually"],
+    },
+    "sleep_duration": {
+        "name": "sleep_duration",
+        "zeros": None, # Sleep duration is quantative
+        "ones": None,
+    },
+    "sleeplessness": {
+        "name": "sleeplessness",
+        "zeros": ["Never/rarely"],
+        "ones": ["Usually"],
+    },
+    "snoring": {
+        "name": "snoring",
+        "zeros": ["No"],
+        "ones": ["Yes"],
+    }
+}
+
+self_report_data = {}
+for variable, var_data in self_report_circadian_variables.items():
+    if var_data['zeros'] is not None:
+        # Binarize
+        zeros = ukbb[variable].isin(var_data['zeros'])
+        ones = ukbb[variable].isin(var_data['ones'])
+        values = ones.astype(int)
+        values[(~zeros) & (~ones)] = float("NaN")
+    else:
+        values = ukbb[variable]
+    self_report_data["self_report_"+var_data['name']] = values
+self_report_data = pandas.DataFrame(self_report_data)
+activity = activity.join(self_report_data)
+activity_variables = activity_variables.append(self_report_data.columns)
+
 # Gather all the data
 data_full = activity.join(ukbb, how="inner")
 print(f"Data starting size: {data_full.shape}")
@@ -100,6 +154,8 @@ cohort_id_ranges = {1: slice(0, 25000),
 selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], replace=False)[cohort_id_ranges[COHORT]]
 data = data_full.loc[selected_ids].copy()
 print(f"Data size after selecting test set: {data.shape}")
+
+data['birth_year_category'] = pandas.cut(data.birth_year, bins=[1930, 1940, 1950, 1960, 1970])
 
 # Q-value utility
 def BH_FDR(ps):
@@ -258,9 +314,50 @@ if RECOMPUTE:
 
     phecode_tests.to_csv(OUTDIR+f"phecodes.txt", sep="\t")
 else:
-    phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t", index_col=0)
+    phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t")
 
 phecode_tests['activity_var_category'] = phecode_tests['var'].map(activity_variable_descriptions.Category)
+
+### Run phase-tests, since phase variables need to be handled differently too
+# Phases are "two-sided" and being at the extreme of either direction could indicate something
+# we measure this by regressing versus absolute-difference-from-mean
+if RECOMPUTE:
+    phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
+    phase_data = data.copy()
+    phase_data[phase_vars] = (phase_data[phase_vars] - phase_data[phase_vars].mean(axis=0)).abs()
+    phase_tests_list = []
+    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    for group in phecode_groups:
+        N = data[group].sum()
+        if N < 50:
+            print(f"Skipping {group} - only {N} cases found")
+            continue
+        
+        for activity_variable in phase_vars:
+            fit = smf.ols(f"{activity_variable}~ Q({group}) + sex * ({covariate_formula})",
+                         data=phase_data).fit()
+            reduced_fit = smf.ols(f"{activity_variable} ~ sex * ({covariate_formula})",
+                                data=phase_data).fit()
+            f,p,df = fit.compare_f_test(reduced_fit)
+            coeff = fit.params[f"Q({group})"]
+            std_effect = coeff / data[activity_variable].std()
+            phase_tests_list.append({"group": group,
+                                    "var": activity_variable,
+                                    "p": p,
+                                    "coeff": coeff,
+                                    "std_effect": std_effect,
+                                    "N": N,
+                                   })
+    phase_tests = pandas.DataFrame(phase_tests_list)
+
+    phase_tests['q'] = BH_FDR(phase_tests.p)
+    phase_tests["meaning"] = phase_tests.group.map(phecode_info.phenotype)
+    phase_tests["category"] = phase_tests.group.map(phecode_info.category)
+    phase_tests.index.rename("phecode", inplace=True)
+
+    phase_tests.to_csv(OUTDIR+f"phase.phecodes.txt", sep="\t")
+else:
+    phase_tests = pandas.read_csv(OUTDIR+"phase.phecodes.txt", sep="\t")
 
 # Summarize the phecode test results
 num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
@@ -318,7 +415,7 @@ phecode_categories = phecode_tests.category.unique()
 for i, category in enumerate(phecode_categories):
     ps = phecode_tests[phecode_tests.category == category].p
     ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
+                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
                 marker=".", s=1.5)
 ax.set_xlabel("-log10(p-value)")
 ax.set_title("Phecode associations\ngrouped by phecode category")
@@ -434,31 +531,31 @@ fig.savefig(OUTDIR+"pvalue_significance_heatmap.by_activity_var_category.percent
 ## PCA of the different phenotypes
 # each point is a phenotype and its given the vector of effect sizes relating to the different associations
 # is there a pattern/clustering to the phenotypes?
-phecode_effect_vectors = phecode_tests.set_index(["group", "var"]).std_effect.unstack()
-pca = PCA(n_components=2)
-pca_coords = pca.fit_transform(phecode_effect_vectors)
-phecode_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=phecode_effect_vectors.index)
-phecode_pca['category'] = phecode_pca.index.map(phecode_info.category)
-
-fig, ax = pylab.subplots(figsize=(8,8))
-for category in phecode_info.category.unique():
-    category_points = phecode_pca.loc[phecode_pca.category == category, [0,1]]
-    ax.scatter(category_points[0], category_points[1], label=category)
-ax.legend()
-ax.set_title("PCA of Phenotypes by Activity Effect Sizes")
+#phecode_effect_vectors = phecode_tests.set_index(["group", "var"]).std_effect.unstack()
+#pca = PCA(n_components=2)
+#pca_coords = pca.fit_transform(phecode_effect_vectors)
+#phecode_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=phecode_effect_vectors.index)
+#phecode_pca['category'] = phecode_pca.index.map(phecode_info.category)
+#
+#fig, ax = pylab.subplots(figsize=(8,8))
+#for category in phecode_info.category.unique():
+#    category_points = phecode_pca.loc[phecode_pca.category == category, [0,1]]
+#    ax.scatter(category_points[0], category_points[1], label=category)
+#ax.legend()
+#ax.set_title("PCA of Phenotypes by Activity Effect Sizes")
 fig.savefig(OUTDIR+"phecode_pca.png")
 
 ## PCA of the different activity variables
-activity_effect_vectors = phecode_tests.set_index(["var", "group"]).std_effect.unstack()
-pca_coords = pca.fit_transform(activity_effect_vectors)
-activity_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=activity_effect_vectors.index)
-fig, ax = pylab.subplots(figsize=(8,8))
-ax.scatter(activity_pca[0], activity_pca[1])
-for i, var in enumerate(activity_effect_vectors.index):
-    ax.annotate(var, (activity_pca.loc[var, 0], activity_pca.loc[var,1]))
-ax.legend()
-ax.set_title("PCA of Activity Variables by Phenotype Effect Sizes")
-fig.savefig(OUTDIR+"activity_variable_pca.png")
+#activity_effect_vectors = phecode_tests.set_index(["var", "group"]).std_effect.unstack()
+#pca_coords = pca.fit_transform(activity_effect_vectors)
+#activity_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=activity_effect_vectors.index)
+#fig, ax = pylab.subplots(figsize=(8,8))
+#ax.scatter(activity_pca[0], activity_pca[1])
+#for i, var in enumerate(activity_effect_vectors.index):
+#    ax.annotate(var, (activity_pca.loc[var, 0], activity_pca.loc[var,1]))
+#ax.legend()
+#ax.set_title("PCA of Activity Variables by Phenotype Effect Sizes")
+#fig.savefig(OUTDIR+"activity_variable_pca.png")
 
 
 ## Connection analysis
@@ -578,7 +675,7 @@ fig, ax = pylab.subplots(figsize=(8,8))
 for i, activity_variable in enumerate(activity_variables):
     ps = phecode_tests_by_sex[phecode_tests_by_sex['var'] == activity_variable].p_diff
     ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
+                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
                 marker=".", s=1.5)
 ax.set_xlabel("-log10(p-value)")
 ax.set_title("Sex-differences\ngrouped by activity variable")
@@ -594,7 +691,7 @@ phecode_categories = phecode_tests_by_sex.category.unique()
 for i, category in enumerate(phecode_categories):
     ps = phecode_tests_by_sex[phecode_tests_by_sex.category == category].p_diff
     ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
+                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
                 marker=".", s=1.5)
 ax.set_xlabel("-log10(p-value)")
 ax.set_title("Sex differences\ngrouped by phecode category")
@@ -788,27 +885,27 @@ fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.by_sex.png")
 
 ## PCA by sex-specific phecodes
 #TODO: use the absolute value of the effect sizes here?
-phecode_effect_vectors_male = phecode_tests_by_sex.set_index(["group", "var"])['male_coeff'].unstack()
-phecode_effect_vectors_female = phecode_tests_by_sex.set_index(["group", "var"])['female_coeff'].unstack()
-pca = PCA(n_components=2)
-pca.fit(pandas.concat([phecode_effect_vectors_male, phecode_effect_vectors_female]))
-pca_coords_male = pca.transform(phecode_effect_vectors_male)
-pca_coords_female = pca.transform(phecode_effect_vectors_female)
-phecode_pca_male = pandas.DataFrame({0: pca_coords_male[:,0], 1: pca_coords_male[:,1]},
-                                        index=phecode_effect_vectors_male.index)
-phecode_pca_female = pandas.DataFrame({0: pca_coords_female[:,0], 1: pca_coords_female[:,1]},
-                                        index=phecode_effect_vectors_female.index)
-fig, ax = pylab.subplots(figsize=(8,8))
-for var in phecode_pca_male.index:
-    ax.plot([phecode_pca_male.loc[var,0], phecode_pca_female.loc[var,0]],
-            [phecode_pca_male.loc[var,1], phecode_pca_female.loc[var,1]],
-            c="k",
-            zorder=-1)
-ax.scatter(phecode_pca_male[0], phecode_pca_male[1], label="male")
-ax.scatter(phecode_pca_female[0], phecode_pca_female[1], label="female")
-ax.legend()
-ax.set_title("PCA of Phenotypes by Activity Effect Sizes by Sex")
-fig.savefig(OUTDIR+"phecode_pca.by_sex.png")
+#phecode_effect_vectors_male = phecode_tests_by_sex.set_index(["group", "var"])['male_coeff'].unstack()
+#phecode_effect_vectors_female = phecode_tests_by_sex.set_index(["group", "var"])['female_coeff'].unstack()
+#pca = PCA(n_components=2)
+#pca.fit(pandas.concat([phecode_effect_vectors_male, phecode_effect_vectors_female]))
+#pca_coords_male = pca.transform(phecode_effect_vectors_male)
+#pca_coords_female = pca.transform(phecode_effect_vectors_female)
+#phecode_pca_male = pandas.DataFrame({0: pca_coords_male[:,0], 1: pca_coords_male[:,1]},
+#                                        index=phecode_effect_vectors_male.index)
+#phecode_pca_female = pandas.DataFrame({0: pca_coords_female[:,0], 1: pca_coords_female[:,1]},
+#                                        index=phecode_effect_vectors_female.index)
+#fig, ax = pylab.subplots(figsize=(8,8))
+#for var in phecode_pca_male.index:
+#    ax.plot([phecode_pca_male.loc[var,0], phecode_pca_female.loc[var,0]],
+#            [phecode_pca_male.loc[var,1], phecode_pca_female.loc[var,1]],
+#            c="k",
+#            zorder=-1)
+#ax.scatter(phecode_pca_male[0], phecode_pca_male[1], label="male")
+#ax.scatter(phecode_pca_female[0], phecode_pca_female[1], label="female")
+#ax.legend()
+#ax.set_title("PCA of Phenotypes by Activity Effect Sizes by Sex")
+#fig.savefig(OUTDIR+"phecode_pca.by_sex.png")
 
 
 ### Associate with quantitiative traits
@@ -820,9 +917,16 @@ quantitative_blocks = [
     fields_of_interest.arterial_stiffness,
     fields_of_interest.physical_measures,
 ]
-quantitative_vars = [c for block in quantitative_blocks
+def find_var(var):
+    for v in [var, var+"_V0"]:
+        if v in data.columns:
+            if pandas.api.types.is_numeric_dtype(data[v].dtype):
+                return v
+    print(var)
+    return None # can't find it
+quantitative_vars = [find_var(c) for block in quantitative_blocks
                         for c in block
-                        if (c in data.columns) and (pandas.api.types.is_numeric_dtype(data[c].dtype))]
+                        if find_var(c) is not None]
 
 if RECOMPUTE:
     quantitative_tests_list = []
@@ -866,7 +970,7 @@ fig, ax = pylab.subplots(figsize=(8,16))
 for i, trait in enumerate(quantitative_vars):
     ps = quantitative_tests[quantitative_tests['phenotype'] == trait].p
     ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
+                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
                 marker=".", s=1.5)
 ax.set_xlabel("-log10(p-value)")
 ax.set_title("Trait associations")
@@ -986,4 +1090,711 @@ fig.savefig(OUTDIR+"/common_category_associations.png")
 #c = fig.colorbar(h)
 #c.ax.set_ylabel("-log10(enrichment q-value)")
 #fig.tight_layout()
-#fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.png")
+
+
+##### Age-associations
+if RECOMPUTE:
+    print("Computing age associations")
+    age_tests_list = []
+    covariate_formula = ' + '.join(c for c in covariates if (c != 'birth_year'))
+    for group in phecode_groups:
+        N = data[group].sum()
+        if N < 200:
+            print(f"Skipping {group} - only {N} cases found")
+            continue
+        
+        for activity_variable in activity.columns:
+            if not phecode_tests[(phecode_tests.group == group)
+                                 & (phecode_tests['var'] == activity_variable)].q_significant.any():
+                continue # Only check for age-effects in significant main-effects variables
+
+            fit = smf.ols(f"{activity_variable} ~ Q({group}) * birth_year + ({covariate_formula})",
+                         data=data).fit()
+            reduced_fit = smf.ols(f"{activity_variable} ~ Q({group}) + birth_year + ({covariate_formula})",
+                                data=data).fit()
+            f,p,df = fit.compare_f_test(reduced_fit)
+            main_coeff = fit.params[f"Q({group})"]
+            age_coeff = fit.params[f"Q({group}):birth_year"]
+            std_effect = age_coeff / data[activity_variable].std()
+            age_tests_list.append({"group": group,
+                                    "var": activity_variable,
+                                    "p": p,
+                                    "main_coeff": main_coeff,
+                                    "age_effect_coeff": age_coeff,
+                                    "std_age_effect": std_effect,
+                                    "N": N,
+                                   })
+    age_tests = pandas.DataFrame(age_tests_list)
+
+    age_tests['q'] = BH_FDR(age_tests.p)
+    age_tests["meaning"] = age_tests.group.map(phecode_info.phenotype)
+    age_tests["category"] = age_tests.group.map(phecode_info.category)
+    age_tests.index.rename("phecode", inplace=True)
+
+    age_tests.to_csv(OUTDIR+f"phecodes.age_effects.txt", sep="\t")
+else:
+    age_tests = pandas.read_csv(OUTDIR+"phecodes.age_effects.txt", sep="\t")
+
+age_tests['activity_var_category'] = age_tests['var'].map(activity_variable_descriptions.Category)
+
+
+
+######## PHENOTYPE-SPECIFIC PLOTS
+
+# Plot config by variables
+plot_config = {
+    "acceleration_RA": {
+        "xbottom": 0.6,
+        "xtop": 1.0,
+        "point_width": 0.01,
+        "bandwidth": 0.15,
+        "label": "RA",
+    },
+    "amplitude": {
+        "xbottom": 0.1,
+        "xtop": 0.9,
+        "point_width": 0.01,
+        "bandwidth": 0.25,
+        "label": "Amplitude",
+    },
+}
+
+# Fancy style plot
+# Only really works for highly abundant phenotypes like hypertension (401)
+def fancy_case_control_plot(data, code, var="acceleration_RA", normalize=False, confidence_interval=False, rescale=True, annotate=False):
+    CONTROL_COLOR = "teal"
+    CASE_COLOR = "orange"
+    UNCERTAIN_COLOR = (0.8, 0.8, 0.8)
+
+    case = data[code] == True
+    config = plot_config[var]
+    xbottom = config['xbottom']
+    xtop = config['xtop']
+    point_width = config['point_width']
+    bandwidth = config['bandwidth']
+    eval_x = numpy.linspace(xbottom, xtop, int(0.5/point_width + 1))
+
+    case_scaling = (case).sum() * point_width if rescale else 1
+    control_scaling = (~case).sum() * point_width if rescale else 1
+    case_avg = data[var][case].mean()
+    control_avg = data[var][~case].mean()
+    total_incidence = case.sum()/len(case)
+
+    def densities_and_incidence(data):
+        case_density = scipy.stats.gaussian_kde(data[var][case], bw_method=bandwidth)(eval_x) * case_scaling
+        control_density = scipy.stats.gaussian_kde(data[var][~case], bw_method=bandwidth)(eval_x) * control_scaling
+        incidence = case_density / (control_density  + case_density)
+        return case_density, control_density, incidence
+    
+    case_density, control_density, incidence = densities_and_incidence(data)
+
+    if confidence_interval:
+        N = 40
+        incidences = numpy.empty((len(eval_x), N))
+        for i in range(N):
+            sample = data.sample(len(data), replace=True)
+            _, _, incidence = densities_and_incidence(sample)
+            incidences[:,i] = incidence
+        incidences = numpy.sort(incidences, axis=1)
+        lower_bound = incidences[:,0]
+        upper_bound = incidences[:,-1]
+        middle = incidences[:,incidences.shape[1]//2]
+
+    fig, (ax1,ax3,ax2) = pylab.subplots(nrows=3, sharex=True,
+                                        gridspec_kw = {"hspace":0.1,
+                                                       "height_ratios":[0.2,0.2,0.6]})
+
+    # Plot the data
+    ax1.fill_between(eval_x, 0, control_density, color=CONTROL_COLOR)
+    ax3.fill_between(eval_x, 0, case_density, color=CASE_COLOR)
+    if confidence_interval:
+        ax2.fill_between(eval_x, lower_bound, middle, color='lightgray')
+        ax2.fill_between(eval_x, middle, upper_bound, color='lightgray')
+    ax2.plot(eval_x, middle, color='k')
+
+    # Plot avgs
+    ax1.axvline(control_avg, c='k', linestyle="--")
+    ax3.axvline(case_avg, c='k', linestyle="--")
+    ax2.axhline(total_incidence, c='k', linestyle="--")
+
+    # Label plot
+    ax1.set_ylabel(f"Controls\nN={(~case).sum()}")
+    ax2.set_ylabel(f"Prevalence\n(overall={total_incidence:0.1%})")
+    ax3.set_ylabel(f"Cases\nN={case.sum()}") 
+    ax2.set_xlabel(config['label'])
+
+    ax1.spines['left'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
+    ax1.tick_params(bottom=False)
+    ax3.tick_params(bottom=False)
+    ax1.yaxis.set_ticks([])
+    #ax2.xaxis.set_ticks_position('none')
+    ax2.yaxis.set_ticks_position('right')
+    if not normalize:
+        ax2.yaxis.set_ticks([0, 0.25, 0.5, 0.75, 1])
+        ax2.yaxis.set_ticklabels(["0%", "25%", "50%", "75%","100%"])
+    else:
+        ax2.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(xmax=1))
+    ax3.spines['left'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
+    ax3.spines['bottom'].set_visible(False)
+    ax3.yaxis.set_ticks([])
+
+    # Set axis limits
+    ax1.set_xlim(xbottom, xtop)
+    if not normalize:
+        max_density = max(numpy.max(case_density), numpy.max(control_density))
+        ax1.set_ylim(0, max_density)
+        ax3.set_ylim(0, max_density)
+        ax2.set_ylim(0, 1)
+    else:
+        ax1.set_ylim(0)
+        ax3.set_ylim(0)
+        ax2.set_ylim(0, numpy.minimum(numpy.max(middle)*1.3, 1.0))
+    ax3.invert_yaxis()
+
+    if annotate:
+        ax1.annotate("Control mean",
+                        xy=(control_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax3.annotate("Case mean",
+                        xy=(case_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax2.annotate("Overall prevalence",
+                        xy=((xtop*0.9 + xbottom*0.1), total_incidence),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"},
+                        )
+        i = len(eval_x)//5
+        ax2.annotate("95% confidence interval",
+                        xy=(eval_x[i], upper_bound[i]),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="center",
+                        va="bottom",
+                        arrowprops={"arrowstyle": "->"},#"-[, lengthB=5.0"},
+                        )
+
+    try:
+        ax1.set_title(phecode_info.loc[code].phenotype + ("\n(normalized)" if normalize else ""))
+    except KeyError:
+        ax1.set_title(code)
+    return fig
+
+def incidence_rate_by_category(data, code, categories, var="acceleration_RA", normalize=False, confidence_interval=False, rescale=False):
+    # Break up individuals by categorical variable (eg: sex, age bins)
+    # and plot the incidence rate of the phecode by the variable
+    case = data[code] == True
+
+    config = plot_config[var]
+    xbottom = config['xbottom']
+    xtop = config['xtop']
+    point_width = config['point_width']
+    bandwidth = config['bandwidth']
+    eval_x = numpy.linspace(xbottom, xtop, int(0.5/point_width + 1))
+
+    case_scaling = (case).sum() * point_width if rescale else  point_width
+    control_scaling = (~case).sum() * point_width if rescale else point_width
+    case_avg = data[var][case].median()
+    control_avg = data[var][~case].median()
+    total_incidence = case.sum()/len(case)
+
+    def densities_and_incidence(data):
+        case_kde = scipy.stats.gaussian_kde(data[var][case], bw_method=bandwidth)
+        case_density = case_kde(eval_x) * case_scaling * case_kde.n
+        control_kde = scipy.stats.gaussian_kde(data[var][~case], bw_method=bandwidth)
+        control_density = control_kde(eval_x) * control_scaling * control_kde.n
+        if not normalize:
+            incidence = case_density / (control_density  + case_density)
+        if normalize:
+            incidence = case_density / total_incidence / 2 / (control_density + case_density / total_incidence / 2)
+        return case_density, control_density, incidence
+
+    lower_bounds = []
+    upper_bounds = []
+    middle_values = []
+    all_categories = data[categories].cat.categories
+    for value in all_categories:
+        category_data = data[data[categories] == value]
+
+        if confidence_interval:
+            N = 40
+        else:
+            N = 1
+        incidences = numpy.empty((len(eval_x), N))
+        for i in range(N):
+            sample = category_data.sample(len(category_data), replace=True)
+            _, _, incidence = densities_and_incidence(sample)
+            incidences[:,i] = incidence
+        incidences = numpy.sort(incidences, axis=1)
+        lower_bound = incidences[:,0]
+        upper_bound = incidences[:,-1]
+        middle = incidences[:,incidences.shape[1]//2]
+
+
+        lower_bounds.append(lower_bound)
+        upper_bounds.append(upper_bound)
+        middle_values.append(middle)
+
+    fig, ax = pylab.subplots()
+
+    # Plot the data
+    for lower_bound, upper_bound, middle, cat in zip(lower_bounds, upper_bounds, middle_values, all_categories):
+        ax.fill_between(eval_x, lower_bound, upper_bound, color='lightgrey', alpha=0.3, label=None)
+        ax.plot(eval_x, middle, label=cat)
+
+    # Plot avgs
+    ax.axhline(total_incidence, c='k', linestyle="--")
+
+    # Label plot
+    ax.set_ylabel(f"Prevalence\n(overall={total_incidence:0.1%})")
+    ax.set_xlabel(config['label'])
+
+    ax.yaxis.set_ticks_position('right')
+    ax.yaxis.set_ticks([0, 0.25, 0.5, 0.75, 1])
+    ax.yaxis.set_ticklabels(["0%", "25%", "50%", "75%","100%"])
+
+    # Set axis limits
+    ax.set_xlim(xbottom, xtop)
+    ax.set_ylim(0, 1)
+    try:
+        ax.set_title(phecode_info.loc[code].phenotype + ("\n(normalized)" if normalize else ""))
+    except KeyError:
+        ax.set_title(code)
+
+    fig.legend()
+    return fig
+
+# Hypertension
+fig = fancy_case_control_plot(data, 401, normalize=False, confidence_interval=True, annotate=True)
+fig.savefig(OUTDIR+"phenotypes.hypertension.png")
+
+fig = incidence_rate_by_category(data, 401, categories="birth_year_category", confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.hypertension.by_age.png")
+
+sns.lmplot("acceleration_RA", "cholesterol", data=data, hue="birth_year_category", markers='.')
+pylab.gcf().savefig(OUTDIR+"phenotypes.LDL.png")
+
+sns.lmplot("acceleration_RA", "hdl_cholesterol", data=data, hue="birth_year_category", markers='.')
+pylab.gcf().savefig(OUTDIR+"phenotypes.HDL.png")
+
+sns.lmplot("acceleration_RA", "systolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
+pylab.gcf().savefig(OUTDIR+"phenotypes.systolic_blood_pressure.png")
+
+sns.lmplot("acceleration_RA", "diastolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
+pylab.gcf().savefig(OUTDIR+"phenotypes.diastolic_blood_pressure.png")
+
+# Diabetes
+fig = fancy_case_control_plot(data, 250, normalize=False, confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.diabetes.png")
+
+fig = incidence_rate_by_category(data, 250, categories="birth_year_category", confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.diabetes.by_age.png")
+
+sns.lmplot("acceleration_RA", "glycated_heamoglobin", data=data, hue="birth_year_category", markers='.')
+pylab.gcf().savefig(OUTDIR+"phenotypes.glycated_heamoglobin.png")
+
+percent_diabetes_with_hypertension = (data[401].astype(bool) & data[250].astype(bool)).mean() / data[250].mean()
+print(f"Percentage of participants with diabetes that also have hypertension: {percent_diabetes_with_hypertension:0.2%}")
+
+# Mood disorders
+#TODO!!
+#fig = fancy_case_control_plot(data, 250, normalize=False, confidence_interval=True)
+#fig.savefig(OUTDIR+"phenotypes.diabetes.png")
+
+# Some more phenotypes:
+fig = fancy_case_control_plot(data, 585, normalize=True, confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.renal_failure.png")
+fig = fancy_case_control_plot(data, 276, normalize=True, confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.disorders_fuild_electrolyte_etc.png")
+fig = fancy_case_control_plot(data, 290, normalize=True, confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
+
+
+### TIMELINE
+# Make a timeline of the study design timing so that readers can easily see when data was collected
+ACTIGRAPHY_COLOR = "#1b998b"
+REPEAT_COLOR = "#c5d86d"
+DIAGNOSIS_COLOR = "#f46036"
+ASSESSMENT_COLOR = "#aaaaaa"
+DEATH_COLOR = "#333333"
+fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(8,6), nrows=3, sharex=True)
+#ax2.yaxis.set_inverted(True)
+ax1.yaxis.set_label_text("Participants per month")
+ax2.yaxis.set_label_text("Diagnoses per month")
+ax3.yaxis.set_label_text("Deaths per month")
+#ax2.xaxis.tick_top()
+ax1.spines["top"].set_visible(False)
+ax1.spines["right"].set_visible(False)
+ax2.spines["top"].set_visible(False)
+ax2.spines["right"].set_visible(False)
+ax3.spines["top"].set_visible(False)
+ax3.spines["right"].set_visible(False)
+bins = pandas.date_range("2000-1-1", "2019-1-1", freq="1M")
+def date_hist(ax, values, bins, **kwargs):
+    # Default histogram for dates doesn't cooperate with being given a list of bins
+    # since the list of bins doesn't get converted to the same numerical values as the values themselves
+    counts, edges = numpy.histogram(values, bins)
+    # Fudge factor fills in odd gaps between boxes
+    ax.bar(edges[:-1], counts, width=(edges[1:]-edges[:-1])*1.05, **kwargs)
+assessment_time = pandas.to_datetime(data.blood_sample_time_collected_V0)
+actigraphy_time = pandas.to_datetime(activity_summary.loc[data.index, 'file-startTime'])
+actigraphy_seasonal_time = pandas.to_datetime(activity_summary_seasonal.loc[activity_summary_seasonal.ID.isin(data.index), 'file-startTime'], cache=False)
+death_time = pandas.to_datetime(data[~data.date_of_death.isna()].date_of_death)
+diagnosis_time = pandas.to_datetime(icd10_entries[icd10_entries.ID.isin(data.index)].first_date)
+date_hist(ax1, assessment_time, color=ASSESSMENT_COLOR, label="assessment", bins=bins)
+date_hist(ax1, actigraphy_time, color=ACTIGRAPHY_COLOR, label="actigraphy", bins=bins)
+date_hist(ax1, actigraphy_seasonal_time, color=REPEAT_COLOR, label="repeat actigraphy", bins=bins)
+date_hist(ax2, diagnosis_time, color=DIAGNOSIS_COLOR, label="Diagnoses", bins=bins)
+date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
+ax1.annotate("Assessment", (assessment_time.mean(), 1250), ha="center")
+ax1.annotate("Actigraphy", (actigraphy_time.mean(), 1250), ha="center")
+ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 1250), ha="center")
+ax2.annotate("Medical Record\nDiagnoses", (diagnosis_time.mean(), 1200), ha="center")
+ax3.annotate("Deaths", (death_time.mean(), 13), ha="center")
+fig.savefig(OUTDIR+"summary_timeline.png")
+
+time_difference = (actigraphy_time - assessment_time).mean()
+print(f"Mean difference between actigraphy time and initial assessment time: {time_difference/pandas.to_timedelta('1Y')} years")
+
+
+### Diagnosis summary
+num_diagnoses = icd10_entries.groupby(pandas.Categorical(icd10_entries.ID, categories=data.index)).size()
+icd10_entries_at_actigraphy = icd10_entries[pandas.to_datetime(icd10_entries.first_date) < pandas.to_datetime(icd10_entries.ID.map(activity_summary['file-startTime']))]
+num_diagnoses_at_actigraphy = icd10_entries_at_actigraphy.groupby(pandas.Categorical(icd10_entries_at_actigraphy.ID, categories=data.index)).size()
+icd10_entries_at_assessment = icd10_entries[pandas.to_datetime(icd10_entries.first_date) < pandas.to_datetime(icd10_entries.ID.map(data['blood_sample_time_collected_V0']))]
+num_diagnoses_at_assessment = icd10_entries_at_assessment.groupby(pandas.Categorical(icd10_entries_at_assessment.ID, categories=data.index)).size()
+ID_without_actigraphy = ukbb.index[ukbb.actigraphy_file.isna()]
+icd10_entries_without_actigraphy = icd10_entries_all[icd10_entries_all.ID.isin(ID_without_actigraphy)]
+num_diagnoses_no_actigraphy = icd10_entries_without_actigraphy.groupby(pandas.Categorical(icd10_entries_without_actigraphy.ID, categories=ID_without_actigraphy)).size()
+fig,ax = pylab.subplots()
+ax.boxplot([num_diagnoses_at_assessment, num_diagnoses_at_actigraphy, num_diagnoses, num_diagnoses_no_actigraphy], showfliers=False)
+ax.set_xticklabels(["At Assessment", "At Actigraphy", "Final", "Without Actigraphy\nFinal"])
+ax.set_ylabel("Medical Record Diagnoses per Participant")
+ax.set_title("Disease Burden")
+fig.savefig(OUTDIR+"summary_disease_burden.png")
+
+print(f"Median number of diagnoses by category:")
+print("At assessment:", num_diagnoses_at_assessment.describe())
+print("At actigraphy:", num_diagnoses_at_actigraphy.describe())
+print("Final:", num_diagnoses.describe())
+print("Final without actigraphy:", num_diagnoses_no_actigraphy.describe())
+
+
+### Death data
+# Survival curves
+start_date = pandas.to_datetime(data.date_of_death).min()
+def survival_curve(data, ax, **kwargs):
+    N = len(data)
+    data = data[~data.date_of_death.isna()]
+    date = pandas.to_datetime(data.date_of_death).sort_values()
+    date_ = pandas.concat((pandas.Series([start_date]), date))
+    ax.step(date_,
+            (1 - numpy.concatenate(([0], numpy.arange(len(data))))/N)*100,
+            where='post',
+            **kwargs)
+
+RA_quintiles = pandas.cut(data.acceleration_RA,
+                          data.acceleration_RA.quantile([0,0.2,0.4,0.6,0.8,1.0]))
+quintile_labels = ["First", "Second", "Third", "Fourth", "Fifth"]
+
+fig, ax = pylab.subplots(figsize=(8,6))
+for quintile, label in list(zip(RA_quintiles.cat.categories, quintile_labels))[::-1]:
+    survival_curve(data[RA_quintiles == quintile], ax, label="RA " + label + " Quintile")
+fig.legend(loc=(0.15,0.15))
+#ax.set_xlabel("Date of Death")
+ax.set_ylabel("Survival Probability")
+ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+ax2 = ax.twinx() # The right-hand side axis label
+scale = len(data)/5
+ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
+ax2.set_ylabel("Participants")
+fig.tight_layout()
+fig.savefig(OUTDIR+"survival.RA.png")
+
+# Survival by phase
+fig, ax = pylab.subplots()
+phase_adjusted = (data.phase - 8) % 24 + 8
+phase_quintiles = pandas.cut(phase_adjusted,
+                              data.phase.quantile([0,0.2,0.4,0.6,0.8,1.0]))
+for quintile, label in list(zip(phase_quintiles.cat.categories, quintile_labels))[::-1]:
+    survival_curve(data[phase_quintiles == quintile], ax, label="phase " + label + " Quintile")
+fig.legend(loc=(0.15,0.15))
+ax.set_ylabel("Survival Probability")
+ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+ax2 = ax.twinx() # The right-hand side axis label
+scale = len(data)/5
+ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
+ax2.set_ylabel("Participants")
+fig.tight_layout()
+fig.savefig(OUTDIR+"survival.phase.png")
+
+# Survival by RA and sex
+fig, axes = pylab.subplots(ncols=2, sharey=True, sharex=True, figsize=(10,5))
+for ax, sex in zip(axes, ["Male", "Female"]):
+    for quintile, label in list(zip(RA_quintiles.cat.categories, quintile_labels))[::-1]:
+        survival_curve(data[(data.sex == sex) & (RA_quintiles == quintile)], ax,
+                        label=("RA " + label + " Quintile" if sex == "Male" else None))
+        ax.set_title(sex)
+ax1, ax2 = axes
+#ax1.xaxis.set_tick_params(labelrotation=45, ha="right")
+#ax2.xaxis.set_tick_params(labelrotation=45, ha="right")
+ax1.xaxis.set_major_locator(matplotlib.dates.YearLocator())
+ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%Y'))
+ax1.set_ylabel("Survival Probability")
+ax1.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+fig.legend()
+fig.savefig(OUTDIR+"survival.RA.by_sex.png")
+
+# Survival summary
+def survival_plot(data, var, ax, **kwargs):
+    quintiles = pandas.qcut(data[var].rank(method="first"), 5)
+    for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
+        survival_curve(data[quintiles == quintile], label=label, ax=ax, **kwargs)
+fig, axes = pylab.subplots(ncols=5, nrows=len(activity_variables)//5+1, figsize=(10,len(activity_variables)//5*3))
+for variable, ax in zip(activity_variables, axes.flatten()):
+    survival_plot(data, variable, ax)
+    ax.set_title(variable)
+    #TODO this is broken!
+    #TODO: sort by the significance? or by category?
+
+### Tests Survival
+# Cox proportional hazards model
+if RECOMPUTE:
+    data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
+    data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
+    data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
+    uncensored = (~data.date_of_death.isna()).astype(int)
+    covariate_formula = ' + '.join(["BMI", "smoking", "birth_year"])
+    survival_tests_data = []
+    for var in activity_variables:
+        formula = f"date_of_death_censored_number ~ {covariate_formula} + sex + {var}"
+        result = smf.phreg(formula=formula,
+                            data=data,
+                            status=uncensored,
+                            ).fit()
+        interaction_formula = f"date_of_death_censored_number ~ {covariate_formula} + sex * {var}"
+        interaction_result = smf.phreg(formula=interaction_formula,
+                            data=data,
+                            status=uncensored,
+                            ).fit()
+        survival_tests_data.append({
+            "activity_var": var,
+            "p": result.pvalues[-1],
+            "log Hazard Ratio": result.params[-1],
+            "sex_difference_p": interaction_result.pvalues[-1],
+        })
+    survival_tests = pandas.DataFrame(survival_tests_data)
+    survival_tests['q'] = BH_FDR(survival_tests.p)
+    survival_tests['sex_difference_q'] = BH_FDR(survival_tests.sex_difference_p)
+    survival_tests = pandas.merge(survival_tests, activity_variable_descriptions[["Category", "Subcategory", "Units"]], left_on="activity_var", right_index=True)
+    survival_tests.to_csv(OUTDIR+"survival.by_activity_variable.txt", sep="\t", index=False)
+else:
+    survival_tests = pandas.read_csv(OUTDIR+"survival.by_activity_variable.txt", sep="\t")
+
+# phase-related survival tests
+# Using the absolute value of difference from mean for phase
+if RECOMPUTE:
+    phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
+    phase_data = data.copy()
+    phase_data[phase_vars] = (phase_data[phase_vars] - phase_data[phase_vars].mean(axis=0)).abs()
+    phase_survival_tests_data = []
+    phase_data['date_of_death_censored'] = pandas.to_datetime(phase_data.date_of_death)
+    phase_data.date_of_death_censored.fillna(phase_data.date_of_death_censored.max(), inplace=True)
+    phase_data['date_of_death_censored_number'] = (phase_data.date_of_death_censored - phase_data.date_of_death_censored.min()).dt.total_seconds()
+    uncensored = (~phase_data.date_of_death.isna()).astype(int)
+    covariate_formula = ' + '.join(["BMI", "smoking", "birth_year"])
+    for var in phase_vars:
+        formula = f"date_of_death_censored_number ~ {covariate_formula} + sex + {var}"
+        result = smf.phreg(formula=formula,
+                            data=phase_data,
+                            status=uncensored,
+                            ).fit()
+        interaction_formula = f"date_of_death_censored_number ~ {covariate_formula} + sex * {var}"
+        interaction_result = smf.phreg(formula=interaction_formula,
+                            data=phase_data,
+                            status=uncensored,
+                            ).fit()
+        phase_survival_tests_data.append({
+            "activity_var": var,
+            "p": result.pvalues[-1],
+            "log Hazard Ratio": result.params[-1],
+            "sex_difference_p": interaction_result.pvalues[-1],
+        })
+        
+    phase_survival_tests = pandas.DataFrame(phase_survival_tests_data)
+    phase_survival_tests['q'] = BH_FDR(phase_survival_tests.p)
+    phase_survival_tests['sex_difference_q'] = BH_FDR(phase_survival_tests.sex_difference_p)
+    phase_survival_tests = pandas.merge(phase_survival_tests, activity_variable_descriptions[["Category", "Subcategory", "Units"]], left_on="activity_var", right_index=True)
+    phase_survival_tests.to_csv(OUTDIR+"survival.by_phase_variable.txt", sep="\t", index=False)
+else:
+    phase_survival_tests = pandas.read_csv(OUTDIR+"survival.by_phase_variable.txt", sep="\t")
+
+###  Connecting actigraphy and quantitative traits
+Q_CUTOFF = 1e-9
+significant_phecode_tests = phecode_tests[phecode_tests.q <= Q_CUTOFF]
+significant_quantitative_tests = quantitative_tests[quantitative_tests.q <= Q_CUTOFF]
+both_significant = significant_phecode_tests[["group", "var"]].set_index("var").join(significant_quantitative_tests[["phenotype", "activity_var"]].set_index("activity_var")).reset_index()
+# drop bogus 'BMI' correlation, since included in the covariates, as well as 'nan'
+both_significant = both_significant.query("phenotype != 'BMI' and phenotype == phenotype")
+
+# Plot all the connected actigraphy <-> quantitative traits
+import itertools
+colormap = matplotlib.cm.get_cmap("Dark2").colors
+def colormap_extended(colormap):
+    i = 1
+    def modify(c):
+        return 1-(1-c)/i**0.7
+    while True:
+        yield from ((modify(c[0]), modify(c[1]), modify(c[2])) for c in colormap)
+        i += 1
+colormap = colormap_extended(colormap)
+activity_var_colors = {var:color for var,color in zip(both_significant['index'].unique(), colormap)}
+max_N = both_significant.groupby(["phenotype", "group"]).count().max()
+max_in_row = 4
+def split_label(label, max_chars):
+    #Split on whitespace then combine, inserting newlines whenever too many characters are reached
+    words = label.split()
+    parts = []
+    line = []
+    for word in words:
+        line.append(word)
+        if sum(len(x) for x in line) >= max_chars:
+            # End line, too long
+            parts.append(' '.join(line))
+            line = []
+    parts.append(' '.join(line))
+    return '\n'.join(parts).strip()
+def plot_interconnections(data):
+    selected_phecodes = data.group.unique()
+    selected_traits = data.phenotype.unique()
+    fig_width = len(selected_phecodes)*0.6 + 3
+    fig, ax = pylab.subplots(figsize=(fig_width,8))
+    for i, phecode in enumerate(selected_phecodes):
+        for j, trait_var in enumerate(selected_traits):
+            d = data[(data['group'] == phecode)
+                                    & (data['phenotype'] == trait_var)]
+            for k, activity_var in enumerate(d['index']):
+                x = i + (k % max_in_row  - 0.5 * min(len(d)-1, max_in_row-1)) / (max_in_row + 1)
+                y = j + (k // max_in_row) / (max_N // max_in_row + 1)
+                ax.plot([x], [y], "o", c=activity_var_colors[activity_var], label=activity_var)
+    ax.set_xticks(numpy.arange(len(selected_phecodes)))
+    ax.set_xticklabels(phecode_info.loc[selected_phecodes].phenotype.apply(lambda x: split_label(x,15)),
+                            rotation=90, ha="center")
+    ax.set_yticks(numpy.arange(len(selected_traits)))
+    ax.set_yticklabels(selected_traits)
+    fig.tight_layout()
+    return fig, ax
+mental_health_phecodes = [327, 296, 300]
+fig, ax = plot_interconnections(both_significant[~both_significant.group.isin(mental_health_phecodes)])
+fig.savefig(OUTDIR+"interconnections.general.png")
+fig, ax = plot_interconnections(both_significant[both_significant.group.isin(mental_health_phecodes)])
+fig.savefig(OUTDIR+"interconnections.mental_health.png")
+
+
+# Draw a legend
+fig, ax = pylab.subplots()
+ax.set_visible(False)
+fig.legend([matplotlib.lines.Line2D([0],[0], linestyle='', marker="o", color=activity_var_colors[var]) for var in activity_var_colors.keys()],
+    activity_var_colors.keys(),
+    loc="center",
+    #bbox_to_anchor=(1.1,1),
+    ncol=2)
+fig.tight_layout()
+fig.savefig(OUTDIR+"interconnections.legend.png")
+
+
+
+### NETWORK ANALYSIS
+
+def weight(p):
+    if p == 0:
+        return 100
+    else:
+        return -numpy.log10(p)
+P_VALUE_CUTOFF = 1e-10
+g_all = networkx.Graph()
+g_all.add_nodes_from(activity_variables, type="activity_var")
+g_all.add_nodes_from(phecode_tests.meaning.unique(), type="phecode")
+g_all.add_nodes_from(quantitative_tests.phenotype.unique(), type="trait")
+g_all.add_edges_from((row['var'], row.meaning, {"p": row.p, "weight": weight(row.p)})
+                    for _, row in phecode_tests.iterrows() if row.p < P_VALUE_CUTOFF)
+g_all.add_edges_from((row.activity_var, row.phenotype, {"p": row.p, "weight": weight(row.p)})
+                    for _, row in quantitative_tests.iterrows() if row.p < P_VALUE_CUTOFF)
+g_all.remove_node('BMI') # Bogus
+# Remove nodes without any edges
+g = g_all.edge_subgraph(g_all.edges)
+
+node_color_dict = {'phecode': '#ef476f', 'activity_var': '#118ab2', 'trait': '#06d6a0'}
+node_colors = [node_color_dict[g.nodes[n]['type']] for n in g.nodes]
+fig, ax = pylab.subplots(figsize=(12,10))
+networkx.draw(g, with_labels=True,
+                  node_color=node_colors,
+                  edge_color="#aaaaaa")
+fig.savefig(OUTDIR+"network.png")
+
+def network_to_table(g, output_prefix):
+    edge_table = pandas.concat([
+            pandas.DataFrame(g.edges).rename(columns={0:"node1", 1:"node2"}),
+            pandas.DataFrame(g.edges.values()),
+        ],
+        axis = 1)
+    node_table = pandas.concat([
+            pandas.DataFrame(g.nodes).rename(columns={0:"node"}),
+            pandas.DataFrame(g.nodes.values()),
+        ],
+        axis = 1)
+    node_table = pandas.merge(
+        node_table,
+        activity_variable_descriptions[["Category", "Subcategory", "Units"]],
+        left_on="node",
+        right_index=True,
+        how="left")
+    node_table = pandas.merge(
+        node_table,
+        numpy.log10(survival_tests.set_index('activity_var')[["p"]]).rename(columns=lambda x: "survival_log10" + x),
+        left_on="node",
+        right_on="activity_var",
+        how="left")
+    edge_table.to_csv(OUTDIR+output_prefix+".edges.txt", index=False, sep="\t")
+    node_table.to_csv(OUTDIR+output_prefix+".nodes.txt", index=False, sep="\t")
+network_to_table(g, "network")
+
+
+g_min = networkx.empty_graph([n for n in g.nodes if n in activity_variables])
+def weights_between(n1, n2):
+    common_neighbors = set(g.adj[n1]).intersection(g.adj[n2])
+    return sum(g.adj[n1][nbr]['weight'] * g.adj[n2][nbr]['weight']
+                for nbr in common_neighbors)
+g_min.add_edges_from((n1, n2, {'weight': weights_between(n1, n2)})
+                        for n1 in g_min.nodes
+                        for n2 in g_min.nodes)
+g_min.remove_edges_from(edge for edge, data in g_min.edges.items() if data['weight'] < 100)
+fig, ax = pylab.subplots(figsize=(12,10))
+networkx.draw(g_min, with_labels=True, edge_color="#aaaaaa")
+#fig.savefig(OUTDIR+"network.just_activity_vars.png")
+
+# graphs by just the activity variable type
+fig, axes = pylab.subplots(nrows=2,ncols=3, figsize=(15,15))
+for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.unique()):
+    category = activity_variable_descriptions.index[activity_variable_descriptions.Category == cat]
+    g_cat = g.edge_subgraph([e for e in g.edges
+                                if (e[0] in category or e[1] in category)])
+    networkx.draw(g_cat,
+                    ax=ax,
+                    with_labels=True,
+                    edge_color="#aaaaaa",
+                    node_color=[node_color_dict[g_cat.nodes[n]['type']] for n in g_cat.nodes])
+    ax.set_title(cat)
