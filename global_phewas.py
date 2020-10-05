@@ -73,6 +73,13 @@ print(f"Dropping {(~okay).sum()} entries out of {len(okay)} due to bad quality o
 ## Process activity variables that need cleaning
 activity.phase = activity.phase % 24
 
+# Create absolute deviation variables from phase variables
+# since both extreme low and high phase are expected to be correlated with outcomes
+phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
+for var in phase_vars:
+    activity[var + "_abs_dev"] = (activity[var] - activity[var].mean(axis=0)).abs()
+activity_variables = activity_variables.union([var + "_abs_dev" for var in phase_vars])
+
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
 self_report_circadian_variables = {
