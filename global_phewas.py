@@ -1433,7 +1433,8 @@ fig = fancy_case_control_plot(data, 276, normalize=True, confidence_interval=Tru
 fig.savefig(OUTDIR+"phenotypes.disorders_fuild_electrolyte_etc.png")
 fig = fancy_case_control_plot(data, 290, normalize=True, confidence_interval=True)
 fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
-
+fig = fancy_case_control_plot(data, 332, normalize=True, confidence_interval=True)
+fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
 
 ### TIMELINE
 # Make a timeline of the study design timing so that readers can easily see when data was collected
@@ -1522,35 +1523,43 @@ RA_quintiles = pandas.cut(data.acceleration_RA,
                           data.acceleration_RA.quantile([0,0.2,0.4,0.6,0.8,1.0]))
 quintile_labels = ["First", "Second", "Third", "Fourth", "Fifth"]
 
-fig, ax = pylab.subplots(figsize=(8,6))
-for quintile, label in list(zip(RA_quintiles.cat.categories, quintile_labels))[::-1]:
-    survival_curve(data[RA_quintiles == quintile], ax, label="RA " + label + " Quintile")
-fig.legend(loc=(0.15,0.15))
-#ax.set_xlabel("Date of Death")
-ax.set_ylabel("Survival Probability")
-ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
-ax2 = ax.twinx() # The right-hand side axis label
-scale = len(data)/5
-ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
-ax2.set_ylabel("Participants")
-fig.tight_layout()
+def quintile_survival_plot(data, var, var_label=None):
+    if var_label is None:
+        var_label = var
+    quintiles = pandas.qcut(data[var], 5)
+    fig, ax = pylab.subplots(figsize=(8,6))
+    for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
+        survival_curve(data[quintiles == quintile], ax, label= var_label + " " + label + " Quintile")
+    fig.legend(loc=(0.15,0.15))
+    ax.set_ylabel("Survival Probability")
+    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+    ax2 = ax.twinx() # The right-hand side axis label
+    scale = len(data)/5
+    ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
+    ax2.set_ylabel("Participants")
+    fig.tight_layout()
+    return fig
+
+# Survival by RA
+fig = quintile_survival_plot(data, "acceleration_RA", "RA")
 fig.savefig(OUTDIR+"survival.RA.png")
+
+# Survival by main_sleep_offset_avg
+fig = quintile_survival_plot(data, "main_sleep_offset_avg", "Sleep Offset")
+fig.savefig(OUTDIR+"survival.main_sleep_offset_avg.png")
+
+# Survival by MVPA_overall_avg
+fig = quintile_survival_plot(data, "MVPA_overall_avg", "MVPA Mean")
+fig.savefig(OUTDIR+"survival.MVPA_overall_avg.png")
+
+# Survival by MVPA_overall_avg
+fig = quintile_survival_plot(data, "MVPA_overall_sd", "MVPA Std Dev")
+fig.savefig(OUTDIR+"survival.MVPA_overall_sd.png")
 
 # Survival by phase
 fig, ax = pylab.subplots()
-phase_adjusted = (data.phase - 8) % 24 + 8
-phase_quintiles = pandas.cut(phase_adjusted,
-                              data.phase.quantile([0,0.2,0.4,0.6,0.8,1.0]))
-for quintile, label in list(zip(phase_quintiles.cat.categories, quintile_labels))[::-1]:
-    survival_curve(data[phase_quintiles == quintile], ax, label="phase " + label + " Quintile")
-fig.legend(loc=(0.15,0.15))
-ax.set_ylabel("Survival Probability")
-ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
-ax2 = ax.twinx() # The right-hand side axis label
-scale = len(data)/5
-ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
-ax2.set_ylabel("Participants")
-fig.tight_layout()
+data['phase_adjusted'] = (data.phase - 8) % 24 + 8
+fig = quintile_survival_plot(data, "phase_adjusted", "phase")
 fig.savefig(OUTDIR+"survival.phase.png")
 
 # Survival by RA and sex
