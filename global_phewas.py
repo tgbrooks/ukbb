@@ -1179,6 +1179,9 @@ def fancy_case_control_plot(data, code, var="acceleration_RA", normalize=False, 
     xtop = config['xtop']
     point_width = config['point_width']
     bandwidth = config['bandwidth']
+    if numpy.sum(case) < 200:
+        # Small numbers of cases need to be averaged across a wider band
+        bandwidth *= 2
     eval_x = numpy.linspace(xbottom, xtop, int(0.5/point_width + 1))
 
     case_scaling = (case).sum() * point_width if rescale else 1
@@ -1295,7 +1298,7 @@ def fancy_case_control_plot(data, code, var="acceleration_RA", normalize=False, 
                         )
 
     try:
-        ax1.set_title(phecode_info.loc[code].phenotype + ("\n(normalized)" if normalize else ""))
+        ax1.set_title(phecode_info.loc[code].phenotype)
     except KeyError:
         ax1.set_title(code)
     return fig
