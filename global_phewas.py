@@ -70,6 +70,8 @@ activity.columns = activity.columns.str.replace("-","_") # Can't use special cha
 activity_variables = activity_variables.str.replace("-","_")
 print(f"Dropping {(~okay).sum()} entries out of {len(okay)} due to bad quality or wear-time")
 
+activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characters easily
+
 ## Process activity variables that need cleaning
 activity.phase = activity.phase % 24
 
@@ -1582,11 +1584,11 @@ for variable, ax in zip(activity_variables, axes.flatten()):
 
 ### Tests Survival
 # Cox proportional hazards model
+data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
+data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
+data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
+uncensored = (~data.date_of_death.isna()).astype(int)
 if RECOMPUTE:
-    data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
-    data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
-    data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
-    uncensored = (~data.date_of_death.isna()).astype(int)
     covariate_formula = ' + '.join(["BMI", "smoking", "birth_year"])
     survival_tests_data = []
     for var in activity_variables:
@@ -1604,6 +1606,7 @@ if RECOMPUTE:
             "activity_var": var,
             "p": result.pvalues[-1],
             "log Hazard Ratio": result.params[-1],
+            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
             "sex_difference_p": interaction_result.pvalues[-1],
         })
     survival_tests = pandas.DataFrame(survival_tests_data)
@@ -1641,6 +1644,7 @@ if RECOMPUTE:
             "activity_var": var,
             "p": result.pvalues[-1],
             "log Hazard Ratio": result.params[-1],
+            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
             "sex_difference_p": interaction_result.pvalues[-1],
         })
         
@@ -1808,3 +1812,101 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
                     edge_color="#aaaaaa",
                     node_color=[node_color_dict[g_cat.nodes[n]['type']] for n in g_cat.nodes])
     ax.set_title(cat)
+
+
+
+#TODO: the below two sections look at _sd variables, but those are not what we thought!
+### Assess variability versus average values for MVPA
+# P-values show that MVPA_overall_sd associates more strongly with many phenotypes than MVPA_overall_avg does
+# but the two are very strongly correlated. We need to test if there really is a significant difference between them
+results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + MVPA_overall_avg + MVPA_overall_sd", data=data).fit()
+print("Comparing physical activity variability to averages:")
+print("(In hypertension)")
+print(results.summary())
+print(f"p-value that MVPA_overall_sd contributes above and beyond MVPA_overall_avg: p = {results.pvalues['MVPA_overall_sd']}")
+
+formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + MVPA_overall_avg + MVPA_overall_sd"
+results = smf.phreg(formula=formula,
+                    data=data,
+                    status=uncensored,
+                    ).fit()
+print(formula)
+print(results.summary())
+print(f"p-value that MVPA_overall_sd contributes above and beyond MVPA_overall_avg: p = {results.pvalues[-1]}")
+
+
+### Assess variability versus average values for acc
+# P-values show that acc_overall_sd associates more strongly with many phenotypes than acc_overall_avg does
+# but the two are very strongly correlated. We need to test if there really is a significant difference between them
+results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + acc_overall_avg + acc_overall_sd", data=data).fit()
+print("Comparing physical activity variability to averages:")
+print("(In hypertension)")
+print(results.summary())
+print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues['acc_overall_sd']}")
+
+formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + acc_overall_avg + acc_overall_sd"
+results = smf.phreg(formula=formula,
+                    data=data,
+                    status=uncensored,
+                    ).fit()
+print(formula)
+print(results.summary())
+print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues[-1]}")
+
+
+### Assess the repeatability of some variables
+#full_repeat_data = pandas.read_hdf("../processed/repeat.ukbb_data_table.h5")
+#repeat_data = full_repeat_data[full_repeat_data.index.isin(data.index)]
+#
+#for key in self_report_circadian_variables.keys():
+#    question_data = data[[key]].join(repeat_data[repeat_data.columns[repeat_data.columns.str.contains(key)]])
+
+
+### Plot survival assocations versus inter/intra personal variance for validation
+fig, ax = pylab.subplots()
+ax.scatter(-numpy.log10(survival_tests.p),
+            survival_tests.activity_var.map(activity_variance.normalized),
+            c='k')
+ax.set_xlabel("Survival Association -log10(p)")
+ax.set_ylabel("Within-person variation / Between-person variation")
+ax.set_ylim(0,1)
+for indx, row in survival_tests.sort_values(by="p").head(5).iterrows():
+    # Label the top points
+    ax.annotate(
+        row.activity_var,
+        (-numpy.log10(row.p), activity_variance.loc[row.activity_var].normalized),
+        xytext=(0,15),
+        textcoords="offset pixels",
+        arrowprops={'arrowstyle':"->"})
+fig.tight_layout()
+fig.savefig(OUTDIR+"survival_versus_variation.svg")
+
+
+
+### Assess what variables add to acceleration_RA the most
+if RECOMPUTE:
+    beyond_RA_tests_list = []
+    for var in activity_variables:
+        if var == "acceleration_RA":
+            continue
+        formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + acceleration_RA + {var}"
+        try:
+            results = smf.phreg(formula=formula,
+                                data=data,
+                                status=uncensored,
+                                ).fit()
+        except numpy.linalg.LinAlgError:
+            print(f"Failed regression on {var} - skipping")
+            continue
+        beyond_RA_tests_list.append({
+            "activity_var": var,
+            "p": results.pvalues[-1],
+            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
+        })
+    beyond_RA_tests = pandas.DataFrame(beyond_RA_tests_list)
+    beyond_RA_tests = pandas.merge(beyond_RA_tests, activity_variable_descriptions[["Category", "Subcategory"]],
+                            left_on="activity_var",
+                            right_index=True)
+    beyond_RA_tests.to_csv(OUTDIR+"beyond_RA_tests.txt", sep="\t", index=False)
+else:
+    beyond_RA_tests = pandas.read_csv(OUTDIR+"beyond_RA_tests.txt", sep="\t")
