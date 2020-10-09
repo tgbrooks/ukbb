@@ -300,7 +300,7 @@ def detailed_M10_L5(activity):
     '''
 
     # Timezone
-    TZ = pandas.activity.index[0].tz
+    TZ = activity.index[0].tz
 
     # Number of days of data
     num_days = int((activity.index[-1] - activity.index[0]) / pandas.to_timedelta("1D")) + 1
@@ -367,9 +367,9 @@ def activity_features(data):
         # this is done with the "base=0.5" parameter, offsets the 1day samples by 12 hours
         # min_periods=1 so that we essentially ignore NaNs
         stretches = data.rolling(SLEEP_PERIOD, center=True, win_type="gaussian", min_periods=1).mean(std=SLEEP_PERIOD)
-        sleep_peak_time = stretches.resample("1D", base=0.5).sleep.idxmax()
+        sleep_peak_time = stretches.resample("1D", offset="12H").sleep.idxmax()
         sleep_peak_time.index = sleep_peak_time.index.normalize()
-        sleep_peak_quality = stretches.sleep.resample("1D", base=0.5).max()
+        sleep_peak_quality = stretches.sleep.resample("1D", offset="12H").max()
         sleep_peak_quality.index = sleep_peak_quality.index.normalize()
 
 
@@ -378,9 +378,9 @@ def activity_features(data):
         # the use of the ML classifier and so may be more robust
         activity = data[['acceleration']].fillna(0)
         activity_avg = activity.rolling(SLEEP_PERIOD, center=True, win_type="gaussian", min_periods=1*HOURS_TO_COUNTS).mean(std=SLEEP_PERIOD/2)
-        inactivity_peak_time = activity_avg.resample("1D", base=0.5).acceleration.idxmin()
+        inactivity_peak_time = activity_avg.resample("1D", offset="12H").acceleration.idxmin()
         inactivity_peak_time.set_axis(inactivity_peak_time.index.normalize(), inplace=True, axis=0)
-        inactivity_peak_value = activity_avg.resample("1D", base=0.5).acceleration.min()
+        inactivity_peak_value = activity_avg.resample("1D", offset="12H").acceleration.min()
         inactivity_peak_value.set_axis(inactivity_peak_value.index.normalize(), inplace=True, axis=0)
 
         # Find peak times for each feature type based off when the value maximizes in each noon-noon day
@@ -389,7 +389,7 @@ def activity_features(data):
         feature_peak_values = {}
         # fillna(0) to make the imputed stretches become 0's
         window = data.fillna(0).rolling(ACTIVITY_WINDOW, center=True, win_type="gaussian", min_periods=1).mean(std=ACTIVITY_WINDOW_STD)
-        peak_values = window.resample("1D", base=0.0).max()
+        peak_values = window.resample("1D", offset="0H").max()
         for feature in ALL_COLUMNS:
             if feature == 'sleep':
                 # Skip 'sleep' since it is done separately above
@@ -397,7 +397,7 @@ def activity_features(data):
                 continue
             # For some reason, cannot do idxmax except on resampled DataFrame
             try:
-                peak_time = window.resample("1D", base=0.0)[feature].idxmax()
+                peak_time = window.resample("1D", offset="0H")[feature].idxmax()
                 peak_value = peak_values[feature]
             except KeyError:
                 # Lacking MET probably
@@ -443,7 +443,7 @@ def activity_features(data):
 
         # For computing 'other' times, we want the data to be for a midnight-to-midnight day
         # not the noon-to-noon day that we use for sleep periods
-        by_midnight_day = data.resample("1D", base=0.0)
+        by_midnight_day = data.resample("1D", offset="0H")
 
         results_by_day['other_sleep'] = by_midnight_day.other_sleep.sum() / HOURS_TO_COUNTS
         results_by_day['main_sleep_duration'] = results_by_day.offset - results_by_day.onset
@@ -461,7 +461,7 @@ def activity_features(data):
         results_by_day['temp_90th'] = by_midnight_day.temp.quantile(0.9)
         results_by_day['temp_10th'] = by_midnight_day.temp.quantile(0.1)
 
-        while_sleep = data[data.main_sleep].resample("1D", base=0.5)
+        while_sleep = data[data.main_sleep].resample("1D", offset="12H")
         light_while_main_sleep = while_sleep.light.mean()
         light_while_main_sleep.set_axis(light_while_main_sleep.index.normalize(), axis=0, inplace=True)
         results_by_day['light_while_main_sleep'] = light_while_main_sleep
