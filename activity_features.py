@@ -284,6 +284,72 @@ def cosinor(activity):
             "cosinor_pvalue":results.compare_f_test(reduced)[1],
             "cosinor_rsquared":results.rsquared}
 
+def detailed_M10_L5(activity):
+    ''' M10/L5 and related variables
+
+    The M10/L5 windows are the 10 (resp. 5) contiguous hours of a day during which
+    the average movement is highest (resp. lowest).
+    From these, we define:
+    overall_M10 = mean activity during M10 window, across all days
+    hourly_SD_M10 = standard deviation across hourly binned activity in the M10 window of all days
+    within_day_SD_M10 = mean across days of the standard deviation across hourly binned activity in the M10 window
+    between_day_SD_M10 = standard deviation across days of the mean across hourly binned activity in the M10 window
+    M10_time = midpoint the M10 window
+    (And analogously for L5.)
+    RA = (overall_M10 - overall_L5)/(overall_M10 + overall_L5),
+    '''
+
+    # Number of days of data
+    num_days = int((activity.index[-1] - activity.index[0]) / pandas.to_timedelta("1D")) + 1
+    # Midnight of first day
+    begin = pandas.to_datetime(activity.index[0].date())
+
+    # Average over all days of the activity at a specific time-of-day
+    time_since_midnight = activity.index - pandas.to_datetime(activity.index.date)
+    average = activity.groupby(time_since_midnight).mean()
+    # Pad so that the rolling average can 'wrap around' midnights
+    average = pandas.concat([average, average, average], axis=0)
+
+    # Times of the M10/L5 windows
+    # We subtract 1 millisecond from end times since pandas uses CLOSED intervals
+    # when selecting a range of time-series but we want open (on right) intervals
+    M10_end = average.rolling(10 * HOURS_TO_COUNTS).sum().idxmax() - pandas.to_timedelta("1ms")
+    M10_start = M10_end - pandas.to_timedelta("10H")
+    L5_end = average.rolling(5 * HOURS_TO_COUNTS).sum().idxmin() - pandas.to_timedelta("1ms")
+    L5_start = L5_end - pandas.to_timedelta("5H")
+
+    def range_statistics(start, end):
+        day_std = []
+        day_mean = []
+        hourly = []
+        for day in range(-1,num_days+1):
+            interval = activity[begin + start + day * pandas.to_timedelta("24H"):
+                                begin + end + day * pandas.to_timedelta("24H")]
+            by_hour = interval.resample("1H", origin="start").mean() 
+            day_std.append(by_hour.std())
+            day_mean.append(by_hour.mean())
+            hourly.append(by_hour)
+        hourly = pandas.concat(hourly)
+        day_std = pandas.Series(day_std)
+        day_mean = pandas.Series(day_mean)
+        return numpy.mean(day_mean), hourly.std(), numpy.mean(day_std), numpy.std(day_mean),
+
+    overall_M10, hourly_SD_M10, within_day_SD_M10, between_day_SD_M10 = range_statistics(M10_start, M10_end)
+    overall_L5, hourly_SD_L5, within_day_SD_L5, between_day_SD_L5 = range_statistics(L5_start, L5_end)
+    return {
+        "overall_M10": overall_M10,
+        "hourly_SD_M10": hourly_SD_M10,
+        "within_day_SD_M10": within_day_SD_M10,
+        "between_day_SD_M10": between_day_SD_M10,
+        "M10_time": (M10_start + pandas.to_timedelta("5H")) / pandas.to_timedelta("1H"),
+        "overall_L5": overall_L5,
+        "hourly_SD_L5": hourly_SD_L5,
+        "within_day_SD_L5": within_day_SD_L5,
+        "between_day_SD_L5": between_day_SD_L5,
+        "L5_time": (L5_start + pandas.to_timedelta("2.5H")) / pandas.to_timedelta("1H"),
+        "RA": (overall_M10 - overall_L5)/(overall_M10 + overall_L5),
+    }
+
 def activity_features(data):
     ''' return dictionary of result summary values '''
 
@@ -440,17 +506,17 @@ def activity_features(data):
 
     # Add RA/IS/IV values for each measure
     for activity in ALL_COLUMNS:
-        try:
-            results.update({
-                activity + "_RA": RA(data[activity]),
-                activity + "_IS": IS(data[activity]),
-                activity + "_IV": IV(data[activity]),
-            })
-        except KeyError:
+        if activity in data:
             #Some datasets do not have MET or other columns
             #so we just drop them here
             #these will end up as NaNs in the aggregated spreadsheet
-            continue
+            stats = detailed_M10_L5(data[activity])
+            stats = {activity+"_"+key: value for key,value in stats.items()} # append acitivity name to key
+            results.update(stats)
+            results.update({
+                activity + "_IS": IS(data[activity]),
+                activity + "_IV": IV(data[activity]),
+            })
 
     return results, results_by_day
 
