@@ -299,13 +299,16 @@ def detailed_M10_L5(activity):
     RA = (overall_M10 - overall_L5)/(overall_M10 + overall_L5),
     '''
 
+    # Timezone
+    TZ = pandas.activity.index[0].tz
+
     # Number of days of data
     num_days = int((activity.index[-1] - activity.index[0]) / pandas.to_timedelta("1D")) + 1
     # Midnight of first day
-    begin = pandas.to_datetime(activity.index[0].date())
+    begin = pandas.to_datetime(activity.index[0].date()).tz_localize(TZ)
 
     # Average over all days of the activity at a specific time-of-day
-    time_since_midnight = activity.index - pandas.to_datetime(activity.index.date)
+    time_since_midnight = activity.index - pandas.to_datetime(activity.index.date).tz_localize(TZ)
     average = activity.groupby(time_since_midnight).mean()
     # Pad so that the rolling average can 'wrap around' midnights
     average = pandas.concat([average, average, average], axis=0)
