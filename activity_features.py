@@ -11,7 +11,7 @@ COUNTS_PER_DAY = 24*HOURS_TO_COUNTS
 SLEEP_PERIOD = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW = 8*HOURS_TO_COUNTS
 ACTIVITY_WINDOW_STD = 1*HOURS_TO_COUNTS
-ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks-light', 'MET', 'temp', 'light']
+ALL_COLUMNS = ['sleep', 'walking', 'sedentary', 'moderate', 'acceleration', 'tasks_light', 'MET', 'temp', 'light', 'MVPA', 'VPA']
 LONGEST_IMPUTED_STRETCH = 1.75 * HOURS_TO_COUNTS
 
 JUMP_RATIO = 0.5 # Length of longest gap to jump over as a ratio of the size of the adjacent sleep periods
@@ -284,8 +284,8 @@ def cosinor(activity):
             "cosinor_pvalue":results.compare_f_test(reduced)[1],
             "cosinor_rsquared":results.rsquared}
 
-def detailed_M10_L5(activity):
-    ''' M10/L5 and related variables
+def detailed_stats(activity):
+    '''  Gives detailed statistics on variability by day and by hour and with M10/L5 periods
 
     The M10/L5 windows are the 10 (resp. 5) contiguous hours of a day during which
     the average movement is highest (resp. lowest).
@@ -296,6 +296,8 @@ def detailed_M10_L5(activity):
     between_day_SD_M10 = standard deviation across days of the mean across hourly binned activity in the M10 window
     M10_time = midpoint the M10 window
     (And analogously for L5.)
+    The same set of variables are also computed for the entire day interval, not just the M10/L5 intervals
+    And finally,
     RA = (overall_M10 - overall_L5)/(overall_M10 + overall_L5),
     '''
 
@@ -322,12 +324,16 @@ def detailed_M10_L5(activity):
     L5_start = L5_end - pandas.to_timedelta("5H")
 
     def range_statistics(start, end):
+        ''' compute statistics for a range of times (relative to midnight) '''
         day_std = []
         day_mean = []
         hourly = []
         for day in range(-1,num_days+1):
             interval = activity[begin + start + day * pandas.to_timedelta("24H"):
                                 begin + end + day * pandas.to_timedelta("24H")]
+            if interval.count() < 0.5 * (start - end) / pandas.to_timedelta("1H") * HOURS_TO_COUNTS:
+                # Throw out any intervals with less than half the data present
+                continue
             by_hour = interval.resample("1H", origin="start").mean() 
             day_std.append(by_hour.std())
             day_mean.append(by_hour.mean())
@@ -339,7 +345,13 @@ def detailed_M10_L5(activity):
 
     overall_M10, hourly_SD_M10, within_day_SD_M10, between_day_SD_M10 = range_statistics(M10_start, M10_end)
     overall_L5, hourly_SD_L5, within_day_SD_L5, between_day_SD_L5 = range_statistics(L5_start, L5_end)
+    overall, hourly_SD, within_day_SD, between_day_SD = range_statistics(pandas.to_timedelta("0H"),
+                                                                         pandas.to_timedelta("24H"))
     return {
+        "overall": overall,
+        "hourly_SD": hourly_SD,
+        "within_day_SD": within_day_SD,
+        "between_day_SD": between_day_SD,
         "overall_M10": overall_M10,
         "hourly_SD_M10": hourly_SD_M10,
         "within_day_SD_M10": within_day_SD_M10,
@@ -499,27 +511,33 @@ def activity_features(data):
         results_by_day.set_axis(results_by_day.index.date, axis=0, inplace=True)
 
         # Collect summary level results, across all days
-        results.update( {col + "_avg": results_by_day[col].mean() for col in results_by_day})
-        results.update( {col + "_std": results_by_day[col].std() for col in results_by_day})
+        results.update( {col + "_mean": results_by_day[col].mean() for col in results_by_day})
+        results.update( {col + "_SD": results_by_day[col].std() for col in results_by_day})
     else:
         results_by_day = pandas.DataFrame([])
 
     # Run cosinor on the activity variables
     results.update(cosinor(data.acceleration))
 
+    # Compute the MVPA and VPA columns from MET
+    if 'MET' in data.columns:
+        data['MVPA'] = (data['MET'] >= 3) & (data['MET'] < 6)
+        data['VPA'] = data['MET'] >= 6
+
     # Add RA/IS/IV values for each measure
     for activity in ALL_COLUMNS:
-        if activity in data:
+        if activity not in data.columns:
             #Some datasets do not have MET or other columns
-            #so we just drop them here
             #these will end up as NaNs in the aggregated spreadsheet
-            stats = detailed_M10_L5(data[activity])
-            stats = {activity+"_"+key: value for key,value in stats.items()} # append acitivity name to key
-            results.update(stats)
-            results.update({
-                activity + "_IS": IS(data[activity]),
-                activity + "_IV": IV(data[activity]),
-            })
+            print(f"Skipping {activity} - no data column of that name")
+            continue
+        stats = detailed_stats(data[activity])
+        stats = {activity+"_"+key: value for key,value in stats.items()} # append acitivity name to key
+        results.update(stats)
+        results.update({
+            activity + "_IS": IS(data[activity]),
+            activity + "_IV": IV(data[activity]),
+        })
 
     return results, results_by_day
 
@@ -618,6 +636,8 @@ def run(input, output=None, by_day_output=None):
         # Rename for convenience - this column name contains redundant information we don't need
         data.rename(columns={data.columns[1]: "acceleration"}, inplace=True)
         data.drop(columns=["time"], inplace=True)
+        # Replace hyphen with underscore for consistency
+        data.rename(columns={"tasks-light": "tasks_light"}, inplace=True)
 
         # Remove data when imputed. We don't like that very much
         imputed = data.imputed.copy()
