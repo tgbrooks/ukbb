@@ -24,7 +24,7 @@ def visualize(filename, show=True, **kwargs):
     day_avg = grouped.mean()
 
     #### Make figures
-    activities = ['main_sleep', 'other_sleep', 'sedentary', 'walking', 'tasks-light', 'moderate', 'imputed']
+    activities = ['main_sleep', 'other_sleep', 'sedentary', 'walking', 'tasks_light', 'moderate', 'imputed']
     activity_colors = ["b", "c", "r", "g", "y", "m", "k"]
 
     # stacked days, double-plotted
