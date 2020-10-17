@@ -284,11 +284,13 @@ def cosinor(activity):
             "cosinor_pvalue":results.compare_f_test(reduced)[1],
             "cosinor_rsquared":results.rsquared}
 
-def detailed_stats(activity):
+def detailed_stats(activity, M10_time=None, L5_time=None):
     '''  Gives detailed statistics on variability by day and by hour and with M10/L5 periods
 
-    The M10/L5 windows are the 10 (resp. 5) contiguous hours of a day during which
-    the average movement is highest (resp. lowest).
+    If M10/L5 times (mid-points) are not provided, then:
+    M10/L5 windows are the 10 (resp. 5) contiguous hours of a day during which
+    the average activity value is highest (resp. lowest).
+
     From these, we define:
     overall_M10 = mean activity during M10 window, across all days
     hourly_SD_M10 = standard deviation across hourly binned activity in the M10 window of all days
@@ -318,10 +320,16 @@ def detailed_stats(activity):
     # Times of the M10/L5 windows
     # We subtract 1 millisecond from end times since pandas uses CLOSED intervals
     # when selecting a range of time-series but we want open (on right) intervals
-    M10_end = average.rolling(10 * HOURS_TO_COUNTS).sum().idxmax() - pandas.to_timedelta("1ms")
-    M10_start = M10_end - pandas.to_timedelta("10H")
-    L5_end = average.rolling(5 * HOURS_TO_COUNTS).sum().idxmin() - pandas.to_timedelta("1ms")
-    L5_start = L5_end - pandas.to_timedelta("5H")
+    if M10_time is None or L5_time is None:
+        M10_end = average.rolling(10 * HOURS_TO_COUNTS).sum().idxmax() - pandas.to_timedelta("1ms")
+        M10_start = M10_end - pandas.to_timedelta("10H")
+        L5_end = average.rolling(5 * HOURS_TO_COUNTS).sum().idxmin() - pandas.to_timedelta("1ms")
+        L5_start = L5_end - pandas.to_timedelta("5H")
+    else:
+        M10_start = M10_time * pandas.to_timedelta('1H') - pandas.to_timedelta('5H')
+        M10_end = M10_time * pandas.to_timedelta('1H') + pandas.to_timedelta('5H')
+        L5_start = L5_time * pandas.to_timedelta('1H') - pandas.to_timedelta('2.5H')
+        L5_end = L5_time * pandas.to_timedelta('1H') + pandas.to_timedelta('2.5H')
 
     def range_statistics(start, end):
         ''' compute statistics for a range of times (relative to midnight) '''
@@ -525,14 +533,26 @@ def activity_features(data):
         data['VPA'] = data['MET'] >= 6
 
     # Add RA/IS/IV values for each measure
+    acc_stats = detailed_stats(data.acceleration)
+    M10_time, L5_time = acc_stats['M10_time'], acc_stats['L5_time']
+    acc_stats = {"acceleration_" + key: value for key,value in acc_stats.items()}
+    results.update(acc_stats)
+    results.update({
+        "acceleration_IS": IS(data.acceleration),
+        "acceleration_IV": IV(data.acceleration),
+    })
     for activity in ALL_COLUMNS:
+        if activity == 'acceleration':
+            continue
         if activity not in data.columns:
             #Some datasets do not have MET or other columns
             #these will end up as NaNs in the aggregated spreadsheet
             print(f"Skipping {activity} - no data column of that name")
             continue
-        stats = detailed_stats(data[activity])
-        stats = {activity+"_"+key: value for key,value in stats.items()} # append acitivity name to key
+        stats = detailed_stats(data[activity], M10_time=M10_time, L5_time=L5_time)
+        # append acitivity name to key, and remove redundant L5/M10 times (same for every variable)
+        stats = {activity+"_"+key: value for key,value in stats.items()
+                        if key not in ["L5_time", "M10_time"]}
         results.update(stats)
         results.update({
             activity + "_IS": IS(data[activity]),
