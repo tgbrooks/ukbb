@@ -82,7 +82,7 @@ for field_name, field in field_group.items():
     entries = range(field_description.Array)
     instances = range(field_description.Instances)
 
-    for instance in range(instances):
+    for instance in instances:
         output = {}
         type = field_description.ValueType
         if type in ["Integer", "Date", "Text", "Continuous", "Time"]:
@@ -217,6 +217,6 @@ elif args.output.endswith("h5"):
 # Output the repeated instances of the data
 repeat_output = pandas.DataFrame(repeat_output)
 if args.output.endswith("txt"):
-    output.to_csv("repeat." + args.output, sep="\t")
+    repeat_output.to_csv("repeat." + args.output, sep="\t")
 elif args.output.endswith("h5"):
-    output.to_hdf("repeat." + args.output, key="data", sep="\t", mode="w", format="table")
+    repeat_output.to_hdf("repeat." + args.output, key="data", sep="\t", mode="w", format="table")
