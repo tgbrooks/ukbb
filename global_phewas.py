@@ -27,6 +27,24 @@ OUTDIR = f"../global_phewas/cohort{COHORT}/"
 ### Whether to run all the big computations or attempt to load from disk since already computed
 RECOMPUTE = False
 
+# Point at which to call FDR q values significant
+FDR_CUTOFF_VALUE = 0.05
+
+# OLS method is either 'svd' or 'qr'
+# Using 'qr' since intermittent problems wtih SVD convergence
+OLS_METHOD = 'qr'
+def OLS(*args, **kwargs):
+    for i in range(100):
+        try:
+            return smf.ols(*args, **kwargs).fit()#method=OLS_METHOD)
+        except numpy.linalg.LinAlgError:
+            print("Failed regression:")
+            print(args)
+            print(kwargs)
+            print("Attempt number {i}")
+            continue
+    raise numpy.linalg.LinAlgError
+
 full_activity = pandas.read_csv("../processed/activity_features_aggregate_seasonal.txt", sep="\t", dtype={'Unnamed: 0': str})
 activity_summary = pandas.read_csv("../processed/activity_summary_aggregate.txt", index_col=0, sep="\t")
 activity_summary_seasonal = pandas.read_csv("../processed/activity_summary_aggregate_seasonal.txt", index_col=0, sep="\t")
@@ -41,7 +59,6 @@ full_activity['id'] = full_activity.run_id.apply(lambda x: int(x.split('.')[0]))
 full_activity['run'] = full_activity.run_id.apply(lambda x: int(x.split('.')[1]))
 activity = full_activity[full_activity.run == 0]
 activity.set_index('id', inplace=True)
-activity = activity.join(activity_summary)
 
 
 ## Select the activity variables that have between-person variance greater than their within-person variance
@@ -79,8 +96,9 @@ activity.phase = activity.phase % 24
 # since both extreme low and high phase are expected to be correlated with outcomes
 phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
 for var in phase_vars:
-    activity[var + "_abs_dev"] = (activity[var] - activity[var].mean(axis=0)).abs()
-activity_variables = activity_variables.union([var + "_abs_dev" for var in phase_vars])
+    if '_abs_dev' in var:
+        base_var = var[:-8]
+        activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
 
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
@@ -294,17 +312,16 @@ if RECOMPUTE:
     phecode_tests_list = []
     covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
     for group in phecode_groups:
+        print(group, )
         N = data[group].sum()
         if N < 50:
             print(f"Skipping {group} - only {N} cases found")
             continue
         
         for activity_variable in activity.columns:
-            fit = smf.ols(f"{activity_variable}~ Q({group}) + sex * ({covariate_formula})",
-                         data=data).fit()
-            reduced_fit = smf.ols(f"{activity_variable} ~ sex * ({covariate_formula})",
-                                data=data).fit()
-            f,p,df = fit.compare_f_test(reduced_fit)
+            fit = OLS(f"{activity_variable} ~ Q({group}) + sex * ({covariate_formula})",
+                         data=data)
+            p = fit.pvalues[f"Q({group})"]
             coeff = fit.params[f"Q({group})"]
             std_effect = coeff / data[activity_variable].std()
             phecode_tests_list.append({"group": group,
@@ -326,47 +343,7 @@ else:
     phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t")
 
 phecode_tests['activity_var_category'] = phecode_tests['var'].map(activity_variable_descriptions.Category)
-
-### Run phase-tests, since phase variables need to be handled differently too
-# Phases are "two-sided" and being at the extreme of either direction could indicate something
-# we measure this by regressing versus absolute-difference-from-mean
-if RECOMPUTE:
-    phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
-    phase_data = data.copy()
-    phase_data[phase_vars] = (phase_data[phase_vars] - phase_data[phase_vars].mean(axis=0)).abs()
-    phase_tests_list = []
-    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
-    for group in phecode_groups:
-        N = data[group].sum()
-        if N < 50:
-            print(f"Skipping {group} - only {N} cases found")
-            continue
-        
-        for activity_variable in phase_vars:
-            fit = smf.ols(f"{activity_variable}~ Q({group}) + sex * ({covariate_formula})",
-                         data=phase_data).fit()
-            reduced_fit = smf.ols(f"{activity_variable} ~ sex * ({covariate_formula})",
-                                data=phase_data).fit()
-            f,p,df = fit.compare_f_test(reduced_fit)
-            coeff = fit.params[f"Q({group})"]
-            std_effect = coeff / data[activity_variable].std()
-            phase_tests_list.append({"group": group,
-                                    "var": activity_variable,
-                                    "p": p,
-                                    "coeff": coeff,
-                                    "std_effect": std_effect,
-                                    "N": N,
-                                   })
-    phase_tests = pandas.DataFrame(phase_tests_list)
-
-    phase_tests['q'] = BH_FDR(phase_tests.p)
-    phase_tests["meaning"] = phase_tests.group.map(phecode_info.phenotype)
-    phase_tests["category"] = phase_tests.group.map(phecode_info.category)
-    phase_tests.index.rename("phecode", inplace=True)
-
-    phase_tests.to_csv(OUTDIR+f"phase.phecodes.txt", sep="\t")
-else:
-    phase_tests = pandas.read_csv(OUTDIR+"phase.phecodes.txt", sep="\t")
+phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
 
 # Summarize the phecode test results
 num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
@@ -457,7 +434,6 @@ fig.savefig(OUTDIR+"effect_size_by_variance.png")
 ## heatmap of phenotype-activity relationships
 fig, ax = pylab.subplots(figsize=(9,9))
 FDR_CUTOFF_VALUE = 0.05
-phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
 pvalue_counts = phecode_tests.groupby(["var", "category"]).q_significant.sum().unstack()
 h = ax.imshow(pvalue_counts.values)
 ax.set_xticks(range(len(pvalue_counts.columns)))
@@ -631,8 +607,8 @@ if RECOMPUTE:
             continue
         
         for activity_variable in activity.columns:
-            fit = smf.ols(f"{activity_variable} ~ 0 + C(sex, Treatment(reference=-1)) : ({sex_covariate_formula} +  Q({group}))",
-                             data=data).fit()
+            fit = OLS(f"{activity_variable} ~ 0 + C(sex, Treatment(reference=-1)) : ({sex_covariate_formula} +  Q({group}))",
+                             data=data)
 
 
             female_coeff = fit.params[f'C(sex, Treatment(reference=-1))[Female]:Q({group})']
@@ -941,16 +917,20 @@ if RECOMPUTE:
     quantitative_tests_list = []
     covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
     for phenotype in quantitative_vars:
+        if phenotype in covariates:
+            # Can't regress a variable that is also a exogenous variable (namely, BMI)
+            continue
+
         N = data[phenotype].count()
         if N < 50:
             print(f"Skipping {phenotype} - only {N} cases found")
             continue
         
         for activity_variable in activity.columns:
-            fit = smf.ols(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
-                         data=data).fit()
-            reduced_fit = smf.ols(f"{phenotype} ~ sex * ({covariate_formula})",
-                                data=data).fit()
+            fit = OLS(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
+                         data=data)
+            reduced_fit = OLS(f"{phenotype} ~ sex * ({covariate_formula})",
+                                data=data)
             f,p,df = fit.compare_f_test(reduced_fit)
             coeff = fit.params[activity_variable]
             std_effect = coeff * data[activity_variable].std() / data[phenotype].std()
@@ -1117,10 +1097,10 @@ if RECOMPUTE:
                                  & (phecode_tests['var'] == activity_variable)].q_significant.any():
                 continue # Only check for age-effects in significant main-effects variables
 
-            fit = smf.ols(f"{activity_variable} ~ Q({group}) * birth_year + ({covariate_formula})",
-                         data=data).fit()
-            reduced_fit = smf.ols(f"{activity_variable} ~ Q({group}) + birth_year + ({covariate_formula})",
-                                data=data).fit()
+            fit = OLS(f"{activity_variable} ~ Q({group}) * birth_year + ({covariate_formula})",
+                         data=data)
+            reduced_fit = OLS(f"{activity_variable} ~ Q({group}) + birth_year + ({covariate_formula})",
+                                data=data)
             f,p,df = fit.compare_f_test(reduced_fit)
             main_coeff = fit.params[f"Q({group})"]
             age_coeff = fit.params[f"Q({group}):birth_year"]
@@ -1545,16 +1525,16 @@ fig = quintile_survival_plot(data, "acceleration_RA", "RA")
 fig.savefig(OUTDIR+"survival.RA.png")
 
 # Survival by main_sleep_offset_avg
-fig = quintile_survival_plot(data, "main_sleep_offset_avg", "Sleep Offset")
-fig.savefig(OUTDIR+"survival.main_sleep_offset_avg.png")
+fig = quintile_survival_plot(data, "main_sleep_offset_mean", "Sleep Offset")
+fig.savefig(OUTDIR+"survival.main_sleep_offset_mean.png")
 
 # Survival by MVPA_overall_avg
-fig = quintile_survival_plot(data, "MVPA_overall_avg", "MVPA Mean")
-fig.savefig(OUTDIR+"survival.MVPA_overall_avg.png")
+fig = quintile_survival_plot(data, "MVPA_overall", "MVPA Mean")
+fig.savefig(OUTDIR+"survival.MVPA_overall.png")
 
 # Survival by MVPA_overall_avg
-fig = quintile_survival_plot(data, "MVPA_overall_sd", "MVPA Std Dev")
-fig.savefig(OUTDIR+"survival.MVPA_overall_sd.png")
+fig = quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA Std Dev")
+fig.savefig(OUTDIR+"survival.MVPA_hourly_SD.png")
 
 # Survival by phase
 fig, ax = pylab.subplots()
@@ -1578,7 +1558,6 @@ ax1.set_ylabel("Survival Probability")
 ax1.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
 fig.legend()
 fig.savefig(OUTDIR+"survival.RA.by_sex.png")
-
 # Survival summary
 def survival_plot(data, var, ax, **kwargs):
     quintiles = pandas.qcut(data[var].rank(method="first"), 5)
@@ -1625,45 +1604,6 @@ if RECOMPUTE:
     survival_tests.to_csv(OUTDIR+"survival.by_activity_variable.txt", sep="\t", index=False)
 else:
     survival_tests = pandas.read_csv(OUTDIR+"survival.by_activity_variable.txt", sep="\t")
-
-# phase-related survival tests
-# Using the absolute value of difference from mean for phase
-if RECOMPUTE:
-    phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
-    phase_data = data.copy()
-    phase_data[phase_vars] = (phase_data[phase_vars] - phase_data[phase_vars].mean(axis=0)).abs()
-    phase_survival_tests_data = []
-    phase_data['date_of_death_censored'] = pandas.to_datetime(phase_data.date_of_death)
-    phase_data.date_of_death_censored.fillna(phase_data.date_of_death_censored.max(), inplace=True)
-    phase_data['date_of_death_censored_number'] = (phase_data.date_of_death_censored - phase_data.date_of_death_censored.min()).dt.total_seconds()
-    uncensored = (~phase_data.date_of_death.isna()).astype(int)
-    covariate_formula = ' + '.join(["BMI", "smoking", "birth_year"])
-    for var in phase_vars:
-        formula = f"date_of_death_censored_number ~ {covariate_formula} + sex + {var}"
-        result = smf.phreg(formula=formula,
-                            data=phase_data,
-                            status=uncensored,
-                            ).fit()
-        interaction_formula = f"date_of_death_censored_number ~ {covariate_formula} + sex * {var}"
-        interaction_result = smf.phreg(formula=interaction_formula,
-                            data=phase_data,
-                            status=uncensored,
-                            ).fit()
-        phase_survival_tests_data.append({
-            "activity_var": var,
-            "p": result.pvalues[-1],
-            "log Hazard Ratio": result.params[-1],
-            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
-            "sex_difference_p": interaction_result.pvalues[-1],
-        })
-        
-    phase_survival_tests = pandas.DataFrame(phase_survival_tests_data)
-    phase_survival_tests['q'] = BH_FDR(phase_survival_tests.p)
-    phase_survival_tests['sex_difference_q'] = BH_FDR(phase_survival_tests.sex_difference_p)
-    phase_survival_tests = pandas.merge(phase_survival_tests, activity_variable_descriptions[["Category", "Subcategory", "Units"]], left_on="activity_var", right_index=True)
-    phase_survival_tests.to_csv(OUTDIR+"survival.by_phase_variable.txt", sep="\t", index=False)
-else:
-    phase_survival_tests = pandas.read_csv(OUTDIR+"survival.by_phase_variable.txt", sep="\t")
 
 ###  Connecting actigraphy and quantitative traits
 Q_CUTOFF = 1e-9
@@ -1824,43 +1764,23 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
 
 
 
-#TODO: the below two sections look at _sd variables, but those are not what we thought!
-### Assess variability versus average values for MVPA
-# P-values show that MVPA_overall_sd associates more strongly with many phenotypes than MVPA_overall_avg does
-# but the two are very strongly correlated. We need to test if there really is a significant difference between them
-results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + MVPA_overall_avg + MVPA_overall_sd", data=data).fit()
-print("Comparing physical activity variability to averages:")
-print("(In hypertension)")
-print(results.summary())
-print(f"p-value that MVPA_overall_sd contributes above and beyond MVPA_overall_avg: p = {results.pvalues['MVPA_overall_sd']}")
-
-formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + MVPA_overall_avg + MVPA_overall_sd"
-results = smf.phreg(formula=formula,
-                    data=data,
-                    status=uncensored,
-                    ).fit()
-print(formula)
-print(results.summary())
-print(f"p-value that MVPA_overall_sd contributes above and beyond MVPA_overall_avg: p = {results.pvalues[-1]}")
-
-
 ### Assess variability versus average values for acc
 # P-values show that acc_overall_sd associates more strongly with many phenotypes than acc_overall_avg does
 # but the two are very strongly correlated. We need to test if there really is a significant difference between them
-results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + acc_overall_avg + acc_overall_sd", data=data).fit()
-print("Comparing physical activity variability to averages:")
-print("(In hypertension)")
-print(results.summary())
-print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues['acc_overall_sd']}")
-
-formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + acc_overall_avg + acc_overall_sd"
-results = smf.phreg(formula=formula,
-                    data=data,
-                    status=uncensored,
-                    ).fit()
-print(formula)
-print(results.summary())
-print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues[-1]}")
+#results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + acc_overall + acc_overall_sd", data=data).fit()
+#print("Comparing physical activity variability to averages:")
+#print("(In hypertension)")
+#print(results.summary())
+#print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues['acc_overall_sd']}")
+#
+#formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + acc_overall_avg + acc_overall_sd"
+#results = smf.phreg(formula=formula,
+#                    data=data,
+#                    status=uncensored,
+#                    ).fit()
+#print(formula)
+#print(results.summary())
+#print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues[-1]}")
 
 
 ### Assess the repeatability of some variables
@@ -1889,6 +1809,24 @@ for indx, row in survival_tests.sort_values(by="p").head(5).iterrows():
         arrowprops={'arrowstyle':"->"})
 fig.tight_layout()
 fig.savefig(OUTDIR+"survival_versus_variation.svg")
+
+### Correlation plot of top survival variables
+top_survival_vars = survival_tests.sort_values(by="p").activity_var.head(20)
+def matrix_plot(data, **kwargs):
+    fig, ax = pylab.subplots(figsize=(10,10))
+    h = ax.imshow(data, **kwargs)
+    ax.set_xticks(range(len(data.columns)))
+    ax.set_xticklabels(data.columns, rotation=90)
+    ax.set_xlim(-0.5, len(data.index)-0.5)
+    ax.set_yticks(range(len(data.index)))
+    ax.set_yticklabels(data.index)
+    ax.set_ylim(-0.5, len(data.index)-0.5)
+    c = fig.colorbar(h)
+    fig.tight_layout()
+    return fig, ax
+fig, ax = matrix_plot(data[top_survival_vars].corr(), vmin=-1, vmax=1, cmap="bwr")
+fig.savefig(OUTDIR+"correlation.top_survival_activity_vars.png")
+
 
 
 
