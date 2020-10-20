@@ -707,12 +707,10 @@ yerr = (d["std_female_coeff_high"] - d["std_female_coeff_low"])/2 #/ (d.N_female
 #            fmt = "o",
 #            label = "phenotypes")
 ax.scatter(numpy.abs(x), numpy.abs(y), label="phenotypes")
-
 # Diagonal y=x line
 diag = numpy.array([ numpy.min([ax.get_xlim(), ax.get_ylim()]),
                     numpy.max([ax.get_xlim(), ax.get_ylim()]) ])
 ax.plot(diag, diag, c='k', zorder=-1, label="diagonal")
-
 # The regression line through the points
 # Linear Deming/Orthogonal-distance regression since error in both variables
 def deming(x, y, xerr, yerr):
@@ -728,13 +726,11 @@ def deming(x, y, xerr, yerr):
 odr = deming(x, y, xerr, yerr)
 intercept, coeff = odr.beta
 ax.plot(diag, diag * coeff + intercept, label="regression")
-
 ax.set_title("Effect sizes by sex\nAmong signifcant associations")
 ax.set_xlabel("Effect size in males (absolute value)")
 ax.set_ylabel("Effect size in females (absolute value)")
 ax.set_aspect("equal")
 ax.legend()
-
 fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
 
@@ -765,7 +761,7 @@ for i in range(1):
         d = phecode_tests_by_sex[selected].sample(len(phecode_tests_by_sex),replace=True)
     else:
         d = phecode_tests_by_sex[selected]
-    
+
     male_smooth = sm.nonparametric.lowess(
                         d.std_male_coeff.abs(),
                         numpy.log10(d.N_male),
@@ -780,7 +776,7 @@ for i in range(1):
                         frac=0.6,
                         it=0)
     ax.plot(female_smooth[:,0], female_smooth[:,1], c="b", alpha=1, linewidth=5)
-    
+
 ax.legend()
 ax.set_xlabel("Number of Cases (log10)")
 ax.set_ylabel("Standardized Effect Size")
@@ -930,9 +926,7 @@ if RECOMPUTE:
         for activity_variable in activity.columns:
             fit = OLS(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
                          data=data)
-            reduced_fit = OLS(f"{phenotype} ~ sex * ({covariate_formula})",
-                                data=data)
-            f,p,df = fit.compare_f_test(reduced_fit)
+            p = fit.pvalues[activity_variable]
             coeff = fit.params[activity_variable]
             std_effect = coeff * data[activity_variable].std() / data[phenotype].std()
             quantitative_tests_list.append({"phenotype": phenotype,
