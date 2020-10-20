@@ -1100,9 +1100,7 @@ if RECOMPUTE:
 
             fit = OLS(f"{activity_variable} ~ Q({group}) * birth_year + ({covariate_formula})",
                          data=data)
-            reduced_fit = OLS(f"{activity_variable} ~ Q({group}) + birth_year + ({covariate_formula})",
-                                data=data)
-            f,p,df = fit.compare_f_test(reduced_fit)
+            p = fit.pvalues[f"Q({group}):birth_year"]
             main_coeff = fit.params[f"Q({group})"]
             age_coeff = fit.params[f"Q({group}):birth_year"]
             std_effect = age_coeff / data[activity_variable].std()
