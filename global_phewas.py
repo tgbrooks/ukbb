@@ -691,25 +691,27 @@ fig.savefig(OUTDIR+"pvalues_by_phecode_category.by_sex.png")
 fig, ax = pylab.subplots(figsize=(9,9))
 num_male = (data.sex == "Male").sum()
 num_female = (data.sex == "Female").sum()
-
-d = phecode_tests_by_sex[(phecode_tests_by_sex.q < FDR_CUTOFF_VALUE)
-                        & (phecode_tests_by_sex.N_male > 5)
-                        & (phecode_tests_by_sex.N_female > 5)]
+color_by_phecode_cat = {cat:color for cat, color in
+                            zip(phecode_tests_by_sex.phecode_category.unique(),
+                                [pylab.get_cmap("tab20")(i) for i in range(20)])}
+d = phecode_tests_by_sex[(phecode_tests_by_sex.q < 0.01 )
+                        & (phecode_tests_by_sex.N_male > 100)
+                        & (phecode_tests_by_sex.N_female > 100)]
 x = d["std_male_coeff"] # / (d["N_male"] / num_male)
 y = d["std_female_coeff"] # / (d["N_female"] / num_female)
 xerr = (d["std_male_coeff_high"] - d["std_male_coeff_low"])/2 #/ (d.N_male / num_male)
 yerr = (d["std_female_coeff_high"] - d["std_female_coeff_low"])/2 #/ (d.N_female / num_female)
 # The points
-#ax.errorbar(x = x,
-#            y =y,
-#            xerr = xerr,
-#            yerr = yerr,
-#            fmt = "o",
-#            label = "phenotypes")
-ax.scatter(numpy.abs(x), numpy.abs(y), label="phenotypes")
+ax.scatter(
+    x,
+    y,
+    label="phenotypes",
+    s=-numpy.log10(d.p_diff)*10,
+    c=[color_by_phecode_cat[c] for c in d.phecode_category])
 # Diagonal y=x line
-diag = numpy.array([ numpy.min([ax.get_xlim(), ax.get_ylim()]),
-                    numpy.max([ax.get_xlim(), ax.get_ylim()]) ])
+bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
+            numpy.max([ax.get_xlim(), ax.get_ylim()]))
+diag = numpy.array([-bound, bound])
 ax.plot(diag, diag, c='k', zorder=-1, label="diagonal")
 # The regression line through the points
 # Linear Deming/Orthogonal-distance regression since error in both variables
@@ -721,16 +723,33 @@ def deming(x, y, xerr, yerr):
     est = [0,1]
     m = Model(linfit)
     odr = ODR(d, m, beta0=est).run()
-    odr.pprint()
+    #odr.pprint()
     return odr
+for i in range(20):
+    selected = numpy.random.randint(len(x), size=len(x))
+    odr = deming(x.iloc[selected],y.iloc[selected], xerr.iloc[selected], yerr.iloc[selected])
+    intercept, coeff = odr.beta
+    ax.plot(diag, diag * coeff + intercept, c="b", alpha=0.1, label=None)
 odr = deming(x, y, xerr, yerr)
 intercept, coeff = odr.beta
 ax.plot(diag, diag * coeff + intercept, label="regression")
 ax.set_title("Effect sizes by sex\nAmong signifcant associations")
-ax.set_xlabel("Effect size in males (absolute value)")
-ax.set_ylabel("Effect size in females (absolute value)")
+ax.spines['bottom'].set_color(None)
+ax.spines['top'].set_color(None)
+ax.spines['left'].set_color(None)
+ax.spines['right'].set_color(None)
+ax.axvline(c="k", lw=1)
+ax.axhline(c="k", lw=1)
+ax.set_xlabel("Effect size in males")
+ax.set_ylabel("Effect size in females")
 ax.set_aspect("equal")
-ax.legend()
+legend_elts = [matplotlib.lines.Line2D(
+                        [0],[0],
+                        marker="o", markerfacecolor=c, markersize=10,
+                        label=cat if not pandas.isna(cat) else "NA",
+                        c=c, lw=0)
+                    for cat, c in color_by_phecode_cat.items()]
+ax.legend(handles=legend_elts, ncol=2, loc="lower right", fontsize="small")
 fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
 
