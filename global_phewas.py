@@ -938,7 +938,12 @@ if RECOMPUTE:
                                    })
     quantitative_tests = pandas.DataFrame(quantitative_tests_list)
     quantitative_tests['q'] = BH_FDR(quantitative_tests.p)
-    quantitative_tests['ukbb_field'] = quantitative_tests.phenotype.map(fields_of_interest.all_fields)
+    def base_name(x):
+        if "_V" in x:
+            return x.split("_V")[0]
+        return x
+    base_variable_name = quantitative_tests.phenotype.apply(base_name)
+    quantitative_tests['ukbb_field'] = base_variable_name.map(fields_of_interest.all_fields)
     quantitative_tests.to_csv(OUTDIR+"/quantitative_traits.txt", sep="\t", index=False)
 else:
     quantitative_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
