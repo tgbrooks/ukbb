@@ -137,7 +137,12 @@ self_report_circadian_variables = {
         "name": "snoring",
         "zeros": ["No"],
         "ones": ["Yes"],
-    }
+    },
+    "IPAQ_activity_group": {
+        "name": "IPAQ_activity_group",
+        "zeros": ['low'],
+        "ones": ['high'],
+    },
 }
 
 self_report_data = {}
