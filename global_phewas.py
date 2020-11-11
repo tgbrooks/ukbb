@@ -333,12 +333,17 @@ if RECOMPUTE:
             p = fit.pvalues[f"Q({group})"]
             coeff = fit.params[f"Q({group})"]
             std_effect = coeff / data[activity_variable].std()
+            if activity_variable.startswith("self_report"):
+                # May contain NaNs, need to drop all NaNs and count accurately
+                N_cases = data.loc[~data[activity_variable].isna(), group].sum()
+            else:
+                N_cases = N
             phecode_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
                                     "p": p,
                                     "coeff": coeff,
                                     "std_effect": std_effect,
-                                    "N_cases": N,
+                                    "N_cases": N_cases,
                                    })
     phecode_tests = pandas.DataFrame(phecode_tests_list)
 
