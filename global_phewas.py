@@ -2065,6 +2065,63 @@ else:
     beyond_RA_tests = pandas.read_csv(OUTDIR+"beyond_RA_tests.txt", sep="\t")
 
 
+### Assess the correlations of the various measures
+base_vars = ["acceleration", "moderate", "walking", "sleep", "sedentary", "tasks_light", "MET", "MVPA"]
+additions = ["_overall", "_hourly_SD", "_within_day_SD", "_between_day_SD", "_peak_value_mean", "_RA", "_IV"]
+results = {}
+for base_var in base_vars:
+    def corr(v1,v2):
+        try:
+            #return numpy.corrcoef(data[v1], data[v2])[0,1]
+            return scipy.stats.spearmanr(data[v1], data[v2], nan_policy="omit")[0]
+        except Exception as e:
+            print(e)
+            return float("NaN")
+    row = {(a1,a2): corr(base_var + a1, base_var + a2)
+            for a1 in additions
+            for a2 in additions
+            if a1 != a2}
+    results[base_var] = row
+correlations = pandas.DataFrame(results)
+
+# Investigate using a subset of the activity variables for clarity
+# by removing highly correlated variables (> 0.9)
+selected_activity_variables = []
+correlations = data[activity_variables].corr()
+ordered_activity_variables = survival_tests.sort_values(by="p").activity_var
+for var in ordered_activity_variables:
+    corrs = correlations.loc[var][selected_activity_variables]
+    if (corrs.abs() < 0.9).all():
+        selected_activity_variables.append(var)
+    else:
+        print(f"Dropping {var} due to {corrs.abs().idxmax()}")
+
+### Overall disease burden (number of phecodes) versus RA
+fig, ax = pylab.subplots()
+num_phecodes = data[phecode_groups].sum(axis=1)
+phecode_ranges = pandas.cut(num_phecodes, [0,1,2,4,8,16,32,num_phecodes.max()+1])
+xticklabels = []
+for i, (phecode_range, group) in enumerate(data.groupby(phecode_ranges)):
+    ax.boxplot(group.acceleration_RA.values, positions=[i], showfliers=False, widths=0.8)
+    if phecode_range.right == phecode_range.left+1:
+        xticklabels.append(f"{int(phecode_range.left)}")
+    else:
+        xticklabels.append(f"{int(phecode_range.left)}-{int(phecode_range.right-1)}")
+ax.set_xticks(range(len(xticklabels)))
+ax.set_xticklabels(xticklabels)
+ax.set_xlabel("Number of unique diagnoses")
+ax.set_ylabel("RA")
+fig.savefig(OUTDIR+"num_phecodes.RA.png")
+
+#### Investigate medications
+medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t")
+medication_codings
+metformin_code = 1140884600
+metformin = (medications.medication_code == metformin_code).groupby(medications.ID).any()
+data['metformin'] = (data.index.map(metformin) == True)
+print("Metformin analysis:")
+print( data.groupby("metformin").phase.describe())
+
 #### Combine all tables into the summary with the header file
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
 import openpyxl
