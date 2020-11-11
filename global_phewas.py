@@ -1693,6 +1693,19 @@ def quintile_survival_plot(data, var, var_label=None):
     fig.tight_layout()
     return fig
 
+def categorical_survival_plot(data, var, var_label=None):
+    if var_label is None:
+        var_label = var
+    fig, ax = pylab.subplots(figsize=(8,6))
+    for cat in data[var].cat.categories:
+        d = data[data[var] == cat]
+        survival_curve(d, ax, label= cat)
+    fig.legend(loc=(0.15,0.15))
+    ax.set_ylabel("Survival Probability")
+    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+    fig.tight_layout()
+    return fig
+
 # Survival by RA
 fig = quintile_survival_plot(data, "acceleration_RA", "RA")
 fig.savefig(OUTDIR+"survival.RA.png")
@@ -1749,26 +1762,44 @@ data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
 data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
 data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
 uncensored = (~data.date_of_death.isna()).astype(int)
+birth_year = pandas.to_datetime(data.birth_year.astype(int).astype(str) + "-01-01")
+data['age_at_death_censored'] = (pandas.to_datetime(data.date_of_death) - birth_year) / pandas.to_timedelta("1Y")
+entry_age = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
+data.age_at_death_censored.fillna(data.age_at_death_censored.max(), inplace=True)
+
 if RECOMPUTE:
-    covariate_formula = ' + '.join(["BMI", "smoking", "birth_year"])
+    covariate_formula = ' + '.join(["BMI", "smoking"])
     survival_tests_data = []
     for var in activity_variables:
-        formula = f"date_of_death_censored_number ~ {covariate_formula} + sex + {var}"
-        result = smf.phreg(formula=formula,
-                            data=data,
-                            status=uncensored,
-                            ).fit()
-        interaction_formula = f"date_of_death_censored_number ~ {covariate_formula} + sex * {var}"
-        interaction_result = smf.phreg(formula=interaction_formula,
-                            data=data,
-                            status=uncensored,
-                            ).fit()
+        print(var)
+        for method in ['newton', 'cg']:# Try two convergence methods - some work for only one method
+            try:
+                formula = f"age_at_death_censored ~ {var} + sex + {covariate_formula}"
+                result = smf.phreg(formula=formula,
+                                    data=data,
+                                    status=uncensored,
+                                    entry=entry_age,
+                                    ).fit(method=method)
+                print('.')
+                interaction_formula = f"age_at_death_censored ~ {var} * sex + {covariate_formula}"
+                interaction_result = smf.phreg(formula=interaction_formula,
+                                    data=data,
+                                    status=uncensored,
+                                    entry=entry_age,
+                                    ).fit(method=method)
+            except numpy.linalg.LinAlgError:
+                print(f"MLE fit method {method} failed, trying alternative")
+                continue
+            break
+        pvalues = pandas.Series(result.pvalues, index=result.model.exog_names)
+        params = pandas.Series(result.params, index=result.model.exog_names)
+        interaction_pvalues = pandas.Series(interaction_result.pvalues, index=interaction_result.model.exog_names)
         survival_tests_data.append({
             "activity_var": var,
-            "p": result.pvalues[-1],
-            "log Hazard Ratio": result.params[-1],
-            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
-            "sex_difference_p": interaction_result.pvalues[-1],
+            "p": pvalues[var],
+            "log Hazard Ratio": params[var],
+            "standardized log Hazard Ratio": params[var] * data[var].std(),
+            "sex_difference_p": interaction_pvalues[f"{var}:sex[T.Male]"],
         })
     survival_tests = pandas.DataFrame(survival_tests_data)
     survival_tests['q'] = BH_FDR(survival_tests.p)
@@ -1967,7 +1998,7 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
 
 
 ### Plot survival assocations versus inter/intra personal variance for validation
-fig, ax = pylab.subplots()
+fig, ax = pylab.subplots(figsize=(8,6))
 ax.scatter(-numpy.log10(survival_tests.p),
             survival_tests.activity_var.map(activity_variance.normalized),
             c='k')
