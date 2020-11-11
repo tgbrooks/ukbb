@@ -75,7 +75,7 @@ activity = activity[activity.columns[activity.columns.isin(activity_variables)]]
 print(f"Selected {len(activity.columns)} after discarding those with poor intra-personal variance")
 
 # Load descriptions + categorization of activity variables
-activity_variable_descriptions = pandas.read_excel("../variable_descriptions.xlsx", index_col="Activity Variable")
+activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
 
 # drop activity for people who fail basic QC
 okay = (activity_summary['quality-goodCalibration'].astype(bool)
@@ -1883,11 +1883,19 @@ else:
 
 
 #### Combine all tables into the summary with the header file
-import shutil
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
-shutil.copy("../table_header.xlsx", OUTDIR+"results.xlsx")
+import openpyxl
+workbook = openpyxl.load_workbook("../table_header.xlsx")
+descriptions = workbook['Variables']
+column = len(list(descriptions.tables.values())[0].tableColumns) + 1
+descriptions.cell(1,column, "Standard Deviations")
+stds = data[activity_variable_descriptions.index].std()
+for i, value in enumerate(stds.values):
+    descriptions.cell(i+2,column, value)
+workbook.save(OUTDIR+"results.xlsx")
 with pandas.ExcelWriter(OUTDIR+"results.xlsx", mode="a") as writer:
-    survival_tests_raw.to_excel(writer, sheet_name="Survival Associations", index=False)
-    phecode_tests_raw.to_excel(writer, sheet_name="Phecode Associations", index=False)
-    quantitative_tests_raw.to_excel(writer, sheet_name="Quantitative Associations", index=False)
-    phecode_tests_by_sex_raw.to_excel(writer, sheet_name="Sex-specific Associations", index=False)
+    survival_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
+    phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Phecode Associations", index=False)
+    quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
+    phecode_tests_by_sex_raw.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
+    age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
