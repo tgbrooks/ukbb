@@ -187,7 +187,11 @@ selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], rep
 data = data_full.loc[selected_ids].copy()
 print(f"Data size after selecting test set: {data.shape}")
 
+# Age/birth year processing
 data['birth_year_category'] = pandas.cut(data.birth_year, bins=[1930, 1940, 1950, 1960, 1970])
+data['actigraphy_start_date'] = data.index.map(pandas.to_datetime(activity_summary['file-startTime']))
+birth_year = pandas.to_datetime(data.birth_year.astype(int).astype(str) + "-01-01") # As datetime
+data['age_at_actigraphy'] = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
 
 # Q-value utility
 def BH_FDR(ps):
@@ -697,7 +701,7 @@ fig, ax = pylab.subplots(figsize=(9,9))
 num_male = (data.sex == "Male").sum()
 num_female = (data.sex == "Female").sum()
 color_by_phecode_cat = {cat:color for cat, color in
-                            zip(phecode_tests_by_sex.phecode_category.unique(),
+                            zip(phecode_tests.phecode_category.unique(),
                                 [pylab.get_cmap("tab20")(i) for i in range(20)])}
 d = phecode_tests_by_sex[(phecode_tests_by_sex.q < 0.05 )
                         & (phecode_tests_by_sex.N_male > 100)
@@ -783,34 +787,30 @@ ax.scatter(numpy.log10(d.N_male),
 ax.scatter(numpy.log10(d.N_female),
             d.std_female_coeff.abs(),
             c="b", label="Female", marker='.')
-
 for i in range(1):
     if i > 0:
         d = phecode_tests_by_sex[selected].sample(len(phecode_tests_by_sex),replace=True)
     else:
         d = phecode_tests_by_sex[selected]
-
     male_smooth = sm.nonparametric.lowess(
                         d.std_male_coeff.abs(),
                         numpy.log10(d.N_male),
                         return_sorted=True,
-                        frac=0.6,
+                        frac=0.4,
                         it=0)
     ax.plot(male_smooth[:,0], male_smooth[:,1], c="r", alpha=1, linewidth=5)
     female_smooth = sm.nonparametric.lowess(
                         d.std_female_coeff.abs(),
                         numpy.log10(d.N_female),
                         return_sorted=True,
-                        frac=0.6,
+                        frac=0.4,
                         it=0)
     ax.plot(female_smooth[:,0], female_smooth[:,1], c="b", alpha=1, linewidth=5)
-
 ax.legend()
 ax.set_xlabel("Number of Cases (log10)")
 ax.set_ylabel("Standardized Effect Size")
 ax.set_title("Phenotype-Rhythmicity association by incidence rate")
 #ax.set_ylim(-0.04,0.00)
-
 fig.savefig(OUTDIR+"/all_phenotypes.by_incidence_rate.png")
 
 ## Do an "enrichment" study of the set of phenotypes associating in males and females
@@ -1122,15 +1122,15 @@ if RECOMPUTE:
             continue
         
         for activity_variable in activity.columns:
-            if not phecode_tests[(phecode_tests.phecode == group)
-                                 & (phecode_tests.activity_var == activity_variable)].q_significant.any():
-                continue # Only check for age-effects in significant main-effects variables
+            #if not phecode_tests[(phecode_tests.phecode == group)
+            #                     & (phecode_tests.activity_var == activity_variable)].q_significant.any():
+            #    continue # Only check for age-effects in significant main-effects variables
 
-            fit = OLS(f"{activity_variable} ~ Q({group}) * birth_year + ({covariate_formula})",
+            fit = OLS(f"{activity_variable} ~ Q({group}) * age_at_actigraphy + ({covariate_formula})",
                          data=data)
-            p = fit.pvalues[f"Q({group}):birth_year"]
+            p = fit.pvalues[f"Q({group}):age_at_actigraphy"]
             main_coeff = fit.params[f"Q({group})"]
-            age_coeff = fit.params[f"Q({group}):birth_year"]
+            age_coeff = fit.params[f"Q({group}):age_at_actigraphy"]
             std_effect = age_coeff / data[activity_variable].std()
             age_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
@@ -1152,6 +1152,83 @@ else:
 
 age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
 
+
+## Plot summary of age tests
+mean_age = data.age_at_actigraphy.mean()
+young_offset = 55 - mean_age
+old_offset = 70 - mean_age
+d = pandas.merge(
+        age_tests,
+        phecode_tests[['phecode', 'activity_var', 'std_effect', 'p', 'q']],
+        suffixes=["_age", "_overall"],
+        on=["activity_var", "phecode"]).reset_index()
+d = d[d.N_cases > 500]
+d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
+d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
+
+def age_plot(d, legend=True, annotate=True, color_by="phecode_category"):
+    fig, ax = pylab.subplots(figsize=(9,9))
+    if color_by == "phecode_category":
+        colormap = color_by_phecode_cat
+    else:
+        colormap = {cat:color for cat, color in
+                            zip(d[color_by].unique(),
+                                [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+    color = [colormap[c] for c in d[color_by]]
+    # The points
+    ax.scatter(
+        d.age_55_effect,
+        d.age_75_effect,
+        s=-numpy.log10(numpy.minimum(d.p_overall, d.p_age))*3,
+        c=color)
+    ax.set_title("Effect sizes by age\nAmong signifcant associations")
+    ax.spines['bottom'].set_color(None)
+    ax.spines['top'].set_color(None)
+    ax.spines['left'].set_color(None)
+    ax.spines['right'].set_color(None)
+    ax.axvline(c="k", lw=1)
+    ax.axhline(c="k", lw=1)
+    ax.set_xlabel("Effect size at 55")
+    ax.set_ylabel("Effect size at 70")
+    ax.set_xlim(-0.45,0.45)
+    ax.set_ylim(-0.45,0.45)
+    ax.set_xticks(numpy.linspace(-0.4,0.4,11))
+    ax.set_yticks(numpy.linspace(-0.4,0.4,11))
+    # Diagonal y=x line
+    bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
+                numpy.max([ax.get_xlim(), ax.get_ylim()]))
+    diag = numpy.array([-bound, bound])
+    ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal", linewidth=1)
+    ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal", linewidth=1)
+    ax.set_aspect("equal")
+    if annotate:
+        bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
+        ax.annotate("Age 55 Effect Larger", xy=(0.3,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 55 Effect Larger", xy=(-0.3,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 70 Effect Larger", xy=(0,0.15), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 70 Effect Larger", xy=(0,-0.30), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Equal Effects", xy=(0.3,0.3), ha="center", va="center", bbox=bbox, zorder=3, rotation=45)
+        ax.annotate("Opposite Effects", xy=(0.3,-0.3), ha="center", va="center", bbox=bbox, zorder=3, rotation=-45)
+    if legend:
+        legend_elts = [matplotlib.lines.Line2D(
+                                [0],[0],
+                                marker="o", markerfacecolor=c, markersize=10,
+                                label=cat if not pandas.isna(cat) else "NA",
+                                c=c, lw=0)
+                            for cat, c in colormap.items()]
+        ax.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+    return fig,ax
+fig, ax = age_plot(d)
+fig.savefig(f"{OUTDIR}/age_effects.png")
+
+fig, ax = age_plot(d[d.phecode_category == 'mental disorders'], annotate=False, color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
+fig, ax = age_plot(d[d.phecode_category == 'circulatory system'], annotate=False, color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/age_effects.circulatory.png")
+fig, ax = age_plot(d[d.phecode_category == 'endocrine/metabolic'], annotate=False, color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/age_effects.endorcine.png")
+fig, ax = age_plot(d[d.phecode_category == 'genitourinary'], annotate=False, color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
 
 
 ######## PHENOTYPE-SPECIFIC PLOTS
@@ -1395,6 +1472,42 @@ def incidence_rate_by_category(data, code, categories, var="acceleration_RA", no
     fig.legend()
     return fig
 
+# By-age plots
+def age_plot(data, var, phecode, difference=False):
+    CONTROL_COLOR = "teal"
+    CASE_COLOR = "orange"
+    fig, ax = pylab.subplots()
+    age_at_actigraphy = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
+    eval_x = numpy.arange(numpy.floor(numpy.min(age_at_actigraphy)), numpy.ceil(numpy.max(age_at_actigraphy))+1, 3)
+    cases = (data[phecode] == 1)
+    controls = (data[phecode] == 0)
+    def reg_with_conf_interval(subset):
+        main = local_regression(age_at_actigraphy.iloc[subset], data.iloc[subset][var], eval_x, bw=3.0)
+        samples = []
+        for i in range(40):
+            s = numpy.random.choice(subset, size=len(subset))
+            samples.append(local_regression(age_at_actigraphy.iloc[s], data.iloc[s][var], eval_x, bw=3.0))
+        samples = numpy.array(samples)
+        samples = numpy.sort(samples, axis=0)
+        bottom = samples[0,:]
+        top = samples[-1,:]
+        return main, bottom, top
+    case_mid, case_bottom, case_top = reg_with_conf_interval(numpy.where(cases)[0])
+    control_mid, control_bottom, control_top = reg_with_conf_interval(numpy.where(controls)[0])
+    if difference == False:
+        ax.plot(eval_x, case_mid, label="cases", c=CASE_COLOR)
+        ax.plot(eval_x, control_mid, label="controls", c=CONTROL_COLOR)
+        ax.fill_between(eval_x, case_bottom, case_top, color=CASE_COLOR, alpha=0.5)
+        ax.fill_between(eval_x, control_bottom, control_top, color=CONTROL_COLOR, alpha=0.5)
+    else:
+        ax.plot(eval_x, case_mid - control_mid, c="k")
+        ax.fill_between(eval_x, case_bottom - control_mid, case_top - case_bottom, color="k", alpha=0.5)
+    ax.set_xlabel("Age")
+    ax.set_ylabel(var)
+    ax.set_title(phecode_info.loc[phecode].phenotype)
+    fig.legend()
+    return fig, ax
+
 # Hypertension
 fig = fancy_case_control_plot(data, 401, normalize=False, confidence_interval=True, annotate=True)
 fig.savefig(OUTDIR+"phenotypes.hypertension.png")
@@ -1413,6 +1526,12 @@ pylab.gcf().savefig(OUTDIR+"phenotypes.systolic_blood_pressure.png")
 
 sns.lmplot("acceleration_RA", "diastolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
 pylab.gcf().savefig(OUTDIR+"phenotypes.diastolic_blood_pressure.png")
+
+fig, ax = age_plot(data, "amplitude", 401)
+fig.savefig(OUTDIR+"phenotypes.hypertension.amplitude_age_effect.png")
+
+fig, ax = age_plot(data, "cosinor_rsquared", 401)
+fig.savefig(OUTDIR+"phenotypes.hypertension.cosinor_rsquared_age_effect.png")
 
 # Diabetes
 fig = fancy_case_control_plot(data, 250, normalize=False, confidence_interval=True)
@@ -1441,6 +1560,29 @@ fig = fancy_case_control_plot(data, 290, normalize=True, confidence_interval=Tru
 fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
 fig = fancy_case_control_plot(data, 332, normalize=True, confidence_interval=True)
 fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
+
+#### Age trajectories plot
+#TODO: finalize these plots - are they of any value?
+fig, (ax1, ax2) = pylab.subplots(nrows=2)
+age_at_actigraphy = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
+eval_x = numpy.arange(numpy.floor(numpy.min(age_at_actigraphy)), numpy.ceil(numpy.max(age_at_actigraphy))+1)
+for _, row in phecode_tests.sort_values(by="p").head(300).iterrows():
+    if row.N_cases < 1500:
+        continue
+    cases = (data[row.phecode] == 1)
+    controls = (data[row.phecode] == 0)
+    bandwidth = 2
+    case_value = local_regression(age_at_actigraphy[cases], data[cases][row.activity_var], eval_x, bw=bandwidth)
+    control_value = local_regression(age_at_actigraphy[controls], data[controls][row.activity_var], eval_x, bw=bandwidth)
+    midpoint = len(eval_x)//2
+    if case_value[midpoint] - control_value[midpoint] > 0:
+        ax = ax1
+    else:
+        ax = ax2
+    ax.plot(eval_x, (case_value - control_value) / data[row.activity_var].std(), c="k", alpha=0.2)
+ax.set_xlabel("Age")
+ax.set_ylabel("Case-control difference in standard deviations")
+fig.savefig(OUTDIR+"age_trajectories.png")
 
 ### TIMELINE
 # Make a timeline of the study design timing so that readers can easily see when data was collected
