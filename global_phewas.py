@@ -702,75 +702,77 @@ fig.tight_layout()
 fig.savefig(OUTDIR+"pvalues_by_phecode_category.by_sex.png")
 
 # Plot the regression coefficients for each of the phenotypes
-fig, ax = pylab.subplots(figsize=(9,9))
 num_male = (data.sex == "Male").sum()
 num_female = (data.sex == "Female").sum()
 color_by_phecode_cat = {cat:color for cat, color in
                             zip(phecode_tests.phecode_category.unique(),
                                 [pylab.get_cmap("tab20")(i) for i in range(20)])}
-d = phecode_tests_by_sex[(phecode_tests_by_sex.q < 0.05 )
-                        & (phecode_tests_by_sex.N_male > 100)
-                        & (phecode_tests_by_sex.N_female > 100)]
-x = (d["std_male_coeff"]) # / (d["N_male"] / num_male)
-y = (d["std_female_coeff"]) # / (d["N_female"] / num_female)
-xerr = (d["std_male_coeff_high"] - d["std_male_coeff_low"])/2 #/ (d.N_male / num_male)
-yerr = (d["std_female_coeff_high"] - d["std_female_coeff_low"])/2 #/ (d.N_female / num_female)
-# The points
-ax.scatter(
-    x,
-    y,
-    label="phenotypes",
-    s=-numpy.log10(d.p_diff)*10,
-    c=[color_by_phecode_cat[c] for c in d.phecode_category])
-# Diagonal y=x line
-bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
-            numpy.max([ax.get_xlim(), ax.get_ylim()]))
-diag = numpy.array([-bound, bound])
-ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
-ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal")
-# The regression line through the points
-# Linear Deming/Orthogonal-distance regression since error in both variables
-#def deming(x, y, xerr, yerr):
-#    from scipy.odr import ODR, RealData, Model
-#    d = RealData(x,y, sy=yerr, sx=xerr)
-#    def linfit(args,x):
-#        return args[0] + args[1]*x
-#    est = [0,1]
-#    m = Model(linfit)
-#    odr = ODR(d, m, beta0=est).run()
-#    return odr
-#for i in range(20):
-#    selected = numpy.random.randint(len(x), size=len(x))
-#    odr = deming(x.iloc[selected],y.iloc[selected], xerr.iloc[selected], yerr.iloc[selected])
-#    intercept, coeff = odr.beta
-#    ax.plot(diag, diag * coeff + intercept, c="b", alpha=0.1, label=None)
-#odr = deming(x, y, xerr, yerr)
-#intercept, coeff = odr.beta
-#ax.plot(diag, diag * coeff + intercept, label="regression")
-ax.set_title("Effect sizes by sex\nAmong signifcant associations")
-ax.spines['bottom'].set_color(None)
-ax.spines['top'].set_color(None)
-ax.spines['left'].set_color(None)
-ax.spines['right'].set_color(None)
-ax.axvline(c="k", lw=1)
-ax.axhline(c="k", lw=1)
-ax.set_xlabel("Effect size in males")
-ax.set_ylabel("Effect size in females")
-ax.set_aspect("equal")
-bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
-ax.annotate("Male Effect Larger", xy=(0.4,0), ha="center", bbox=bbox, zorder=3)
-ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
-ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
-ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
-legend_elts = [matplotlib.lines.Line2D(
-                        [0],[0],
-                        marker="o", markerfacecolor=c, markersize=10,
-                        label=cat if not pandas.isna(cat) else "NA",
-                        c=c, lw=0)
-                    for cat, c in color_by_phecode_cat.items()]
-ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
+                        & (phecode_tests_by_sex.N_male > 300)
+                        & (phecode_tests_by_sex.N_female > 300)]
+d['male_effect'] = (d["std_male_coeff"]) # / (d["N_male"] / num_male)
+d['female_effect'] = (d["std_female_coeff"]) # / (d["N_female"] / num_female)
+def sex_difference_plot(d, color_by="phecode_category"):
+    if color_by == "phecode_category":
+        colormap = color_by_phecode_cat
+    else:
+        colormap = {cat:color for cat, color in
+                            zip(d[color_by].unique(),
+                                [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+    color = [colormap[c] for c in d[color_by]]
+    fig, ax = pylab.subplots(figsize=(9,9))
+    # The points
+    ax.scatter(
+        d.male_effect,
+        d.female_effect,
+        label="phenotypes",
+        #s=-numpy.log10(d.p_diff)*10,
+        s=-numpy.log10(numpy.minimum(d.p_male, d.p_female))*4,
+        c=color)
+    ax.set_title("Effect sizes by sex\nAmong signifcant associations")
+    ax.spines['bottom'].set_color(None)
+    ax.spines['top'].set_color(None)
+    ax.spines['left'].set_color(None)
+    ax.spines['right'].set_color(None)
+    ax.axvline(c="k", lw=1)
+    ax.axhline(c="k", lw=1)
+    ax.set_xlabel("Effect size in males")
+    ax.set_ylabel("Effect size in females")
+    ax.set_aspect("equal")
+    ax.set_xlim(-0.5,0.5)
+    ax.set_ylim(-0.5,0.5)
+    # Diagonal y=x line
+    bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
+                numpy.max([ax.get_xlim(), ax.get_ylim()]))
+    diag = numpy.array([-bound, bound])
+    ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+    ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+    bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
+    ax.annotate("Male Effect Larger", xy=(0.4,0), ha="center", bbox=bbox, zorder=3)
+    ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
+    ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
+    ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
+    legend_elts = [matplotlib.lines.Line2D(
+                            [0],[0],
+                            marker="o", markerfacecolor=c, markersize=10,
+                            label=cat if not pandas.isna(cat) else "NA",
+                            c=c, lw=0)
+                        for cat, c in colormap.items()]
+    ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+    return fig, ax
+fig, ax = sex_difference_plot(d)
 fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
+fig, ax = sex_difference_plot(d[d.phecode_category == 'circulatory system'], color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/sex_differences.circulatory.png")
+fig, ax = sex_difference_plot(d[d.phecode_category == 'mental disorders'], color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/sex_differences.mental_disorders.png")
+fig, ax = sex_difference_plot(d[d.phecode_category == 'endocrine/metabolic'], color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/sex_differences.endocrine.png")
+fig, ax = sex_difference_plot(d[d.phecode_category == 'infectious diseases'], color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/sex_differences.infections.png")
+fig, ax = sex_difference_plot(d[d.phecode_category == 'respiratory'], color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/sex_differences.respiratory.png")
 
 def local_regression(x,y, out_x, bw=0.05):
     # Preform a local regression y ~ x and evaluate it at the provided points `out_x`
@@ -1171,7 +1173,7 @@ d = d[d.N_cases > 500]
 d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
 d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
 
-def age_plot(d, legend=True, annotate=True, color_by="phecode_category"):
+def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category"):
     fig, ax = pylab.subplots(figsize=(9,9))
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
@@ -1223,16 +1225,16 @@ def age_plot(d, legend=True, annotate=True, color_by="phecode_category"):
                             for cat, c in colormap.items()]
         ax.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
     return fig,ax
-fig, ax = age_plot(d)
+fig, ax = age_effect_plot(d)
 fig.savefig(f"{OUTDIR}/age_effects.png")
 
-fig, ax = age_plot(d[d.phecode_category == 'mental disorders'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'mental disorders'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
-fig, ax = age_plot(d[d.phecode_category == 'circulatory system'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'circulatory system'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.circulatory.png")
-fig, ax = age_plot(d[d.phecode_category == 'endocrine/metabolic'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'endocrine/metabolic'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.endorcine.png")
-fig, ax = age_plot(d[d.phecode_category == 'genitourinary'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'genitourinary'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
 
 
@@ -2113,25 +2115,98 @@ ax.set_xlabel("Number of unique diagnoses")
 ax.set_ylabel("RA")
 fig.savefig(OUTDIR+"num_phecodes.RA.png")
 
+### Relative Risks
+# Create interpretable risks from the phecode associations
+def invlogit(s):
+    return numpy.exp(s)/(1 + numpy.exp(s))
+if RECOMPUTE:
+    d = phecode_tests[(phecode_tests.q < 0.01)].copy()
+    covariate_formula = 'sex + age_at_actigraphy + BMI'
+    #covariate_formula = ' + '.join(covariates)
+    risk_quantification_data = []
+    for _, row in d.iterrows():
+        #results = smf.logit(f"Q({row.phecode}) ~ {row.activity_var} + {covariate_formula}", data=data).fit()
+        #risk_quantification_data.append({
+        #    "p": results.pvalues[row.activity_var],
+        #    "coef": results.params[row.activity_var],
+        #    "converged": results.mle_retvals['converged'],
+        #})
+        data_ = data[[row.phecode, row.activity_var] + covariates +['age_at_actigraphy']].copy()
+        if row.activity_var.startswith("self_report"):
+            data_['high_low'] = data_[row.activity_var].astype(float)
+        else:
+            bottom_quintile = data_[row.activity_var].quantile(0.2)
+            top_quintile = data_[row.activity_var].quantile(0.8)
+            data_['high_low'] = 0
+            data_.loc[(data_[row.activity_var] > bottom_quintile), 'high_low'] = float("NaN")
+            data_.loc[(data_[row.activity_var] > top_quintile), 'high_low'] = 1
+        results = smf.ols(f"Q({row.phecode}) ~ high_low + {covariate_formula}", data=data_).fit()
+        mean_person = pandas.Series(numpy.mean(results.model.exog, axis=0), index=results.model.exog_names)
+        mean_person['high_low'] = 0
+        incidence = (data_[~data_.high_low.isna()][row.phecode].mean())
+        effect_size = results.params['high_low']
+        try:
+            results_logit = smf.logit(f"Q({row.phecode}) ~ {row.activity_var} + {covariate_formula}", data=data_).fit()
+            marginal_effect = results_logit.get_margeff().summary_frame().loc[row.activity_var, 'dy/dx']
+        except numpy.linalg.LinAlgError:
+            marginal_effect = float("NaN")
+        risk_quantification_data.append({
+            "activity_var": row.activity_var,
+            "phecode": row.phecode,
+            "phecode_meaning": row.phecode_meaning,
+            "phecode_category": row.phecode_category,
+            "effect_size": effect_size,
+            "incidence": incidence,
+            "relative_risk": (incidence - effect_size/2) / (incidence + effect_size/2),
+            "relative_risk_pred": high_prediction/low_prediction,
+            'raw_low_incidence': data_.loc[data_.high_low == 0, row.phecode].mean(),
+            'raw_high_incidence': data_.loc[data_.high_low == 1, row.phecode].mean(),
+            "marginal_effect": marginal_effect,
+            "p": results.pvalues['high_low'],
+            "N_cases": data_.loc[~data_.high_low.isna(), row.phecode].sum(),
+        })
+    risk_quantification = pandas.DataFrame(risk_quantification_data)
+    risk_quantification.to_csv(OUTDIR+"relative_risks.txt", sep="\t", index=False)
+else:
+    risk_quantification = pandas.read_csv(OUTDIR+"relative_risks.txt", ,sep="\t")
+
+## Plot relative risks
+fig, ax = pylab.subplots(figsize=(9,9))
+#color = risk_quantification.phecode_category.map(color_by_phecode_cat)
+colorby = risk_quantification.activity_var.map(activity_variable_descriptions.Subcategory)
+colormap = {cat:color for cat, color in
+                    zip(colorby.unique(),
+                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+color = colorby.map(colormap)
+ax.scatter(
+    numpy.log10(risk_quantification.relative_risk),
+    #numpy.log10(risk_quantification.raw_low_incidence/risk_quantification.raw_high_incidence),
+    -numpy.log10(risk_quantification.p),
+    s = risk_quantification.N_cases/60,
+    c = color)
+ax.set_xlabel("log10 relative risk")
+ax.set_ylabel("-log10 p-value")
+
 #### Investigate medications
 medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t")
-medication_codings
 metformin_code = 1140884600
 metformin = (medications.medication_code == metformin_code).groupby(medications.ID).any()
 data['metformin'] = (data.index.map(metformin) == True)
 print("Metformin analysis:")
 print( data.groupby("metformin").phase.describe())
+#TODO: metformin analysis in more detail
 
 #### Combine all tables into the summary with the header file
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
 import openpyxl
 workbook = openpyxl.load_workbook("../table_header.xlsx")
 descriptions = workbook['Variables']
-column = len(list(descriptions.tables.values())[0].tableColumns) + 1
-descriptions.cell(1,column, "Standard Deviations")
-stds = data[activity_variable_descriptions.index].std()
-for i, value in enumerate(stds.values):
-    descriptions.cell(i+2,column, value)
+start_column = len(list(descriptions.tables.values())[0].tableColumns) + 1
+var_stats = data[activity_variable_descriptions.index].describe(percentiles=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]).T
+for i, col in enumerate(var_stats.columns):
+    descriptions.cell(1, start_column + i, col)
+    for j, value in enumerate(var_stats[col].values):
+        descriptions.cell(j+2, start_column + i, value)
 workbook.save(OUTDIR+"results.xlsx")
 with pandas.ExcelWriter(OUTDIR+"results.xlsx", mode="a") as writer:
     survival_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
