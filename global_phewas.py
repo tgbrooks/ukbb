@@ -177,7 +177,6 @@ covariates = [
                'education_NVQ_or_HND_or_HNC_or_equivalent',
                'education_Other_professional_qualifications_eg__nursing__teaching',
                 ]
-
 # Down sample for testing
 numpy.random.seed(0)
 # Note: total 92331, half is 46164
@@ -192,6 +191,16 @@ data['birth_year_category'] = pandas.cut(data.birth_year, bins=[1930, 1940, 1950
 data['actigraphy_start_date'] = data.index.map(pandas.to_datetime(activity_summary['file-startTime']))
 birth_year = pandas.to_datetime(data.birth_year.astype(int).astype(str) + "-01-01") # As datetime
 data['age_at_actigraphy'] = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
+
+# Create simplified versions of the categorical covarites
+# This is necessary for convergence of the logistic models
+data['ethnicity_white'] = data.ethnicity.isin(["British", "any other white background", "Irish", "White"])
+data['overall_health_good'] = data.overall_health.isin(["Good", "Excellent"])
+data.loc[data.overall_health.isin(['Do not know', 'Prefer not to answer']), 'overall_health_good'] = float("NaN")
+data['smoking_ever'] = data.smoking.isin(['Previous', 'Current'])
+data.loc[data.smoking == 'Prefer not to answer', 'smoking_ever'] = float("NaN")
+data['high_income'] = data.household_income.isin(['52,000 to 100,000', 'Greater than 100,000'])
+data.loc[data.income == 'Do not know', 'high_income'] = float("NaN")
 
 # Q-value utility
 def BH_FDR(ps):
@@ -333,11 +342,7 @@ if RECOMPUTE:
             p = fit.pvalues[f"Q({group})"]
             coeff = fit.params[f"Q({group})"]
             std_effect = coeff / data[activity_variable].std()
-            if activity_variable.startswith("self_report"):
-                # May contain NaNs, need to drop all NaNs and count accurately
-                N_cases = data.loc[~data[activity_variable].isna(), group].sum()
-            else:
-                N_cases = N
+            N_cases = data.loc[~data[activity_variable].isna(), group].sum()
             phecode_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
                                     "p": p,
@@ -710,8 +715,6 @@ color_by_phecode_cat = {cat:color for cat, color in
 d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
                         & (phecode_tests_by_sex.N_male > 300)
                         & (phecode_tests_by_sex.N_female > 300)]
-d['male_effect'] = (d["std_male_coeff"]) # / (d["N_male"] / num_male)
-d['female_effect'] = (d["std_female_coeff"]) # / (d["N_female"] / num_female)
 def sex_difference_plot(d, color_by="phecode_category"):
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
@@ -723,8 +726,8 @@ def sex_difference_plot(d, color_by="phecode_category"):
     fig, ax = pylab.subplots(figsize=(9,9))
     # The points
     ax.scatter(
-        d.male_effect,
-        d.female_effect,
+        d.std_male_coeff,
+        d.std_female_coeff,
         label="phenotypes",
         #s=-numpy.log10(d.p_diff)*10,
         s=-numpy.log10(numpy.minimum(d.p_male, d.p_female))*4,
@@ -1236,6 +1239,8 @@ fig, ax = age_effect_plot(d[d.phecode_category == 'endocrine/metabolic'], annota
 fig.savefig(f"{OUTDIR}/age_effects.endorcine.png")
 fig, ax = age_effect_plot(d[d.phecode_category == 'genitourinary'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
+fig, ax = age_effect_plot(d[d.phecode_category == 'respiratory'], annotate=False, color_by="phecode_meaning")
+fig.savefig(f"{OUTDIR}/age_effects.respiratory.png")
 
 
 ######## PHENOTYPE-SPECIFIC PLOTS
@@ -1598,7 +1603,7 @@ REPEAT_COLOR = "#c5d86d"
 DIAGNOSIS_COLOR = "#f46036"
 ASSESSMENT_COLOR = "#aaaaaa"
 DEATH_COLOR = "#333333"
-fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(8,6), nrows=3, sharex=True)
+fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(8,6), nrows=3)
 #ax2.yaxis.set_inverted(True)
 ax1.yaxis.set_label_text("Participants per month")
 ax2.yaxis.set_label_text("Diagnoses per month")
@@ -1688,6 +1693,7 @@ def quintile_survival_plot(data, var, var_label=None):
     fig.legend(loc=(0.15,0.15))
     ax.set_ylabel("Survival Probability")
     ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
     ax2 = ax.twinx() # The right-hand side axis label
     scale = len(data)/5
     ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
@@ -1738,25 +1744,13 @@ for ax, sex in zip(axes, ["Male", "Female"]):
                         label=("RA " + label + " Quintile" if sex == "Male" else None))
         ax.set_title(sex)
 ax1, ax2 = axes
-#ax1.xaxis.set_tick_params(labelrotation=45, ha="right")
-#ax2.xaxis.set_tick_params(labelrotation=45, ha="right")
 ax1.xaxis.set_major_locator(matplotlib.dates.YearLocator())
 ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%Y'))
 ax1.set_ylabel("Survival Probability")
 ax1.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
 fig.legend()
 fig.savefig(OUTDIR+"survival.RA.by_sex.png")
-# Survival summary
-def survival_plot(data, var, ax, **kwargs):
-    quintiles = pandas.qcut(data[var].rank(method="first"), 5)
-    for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
-        survival_curve(data[quintiles == quintile], label=label, ax=ax, **kwargs)
-fig, axes = pylab.subplots(ncols=5, nrows=len(activity_variables)//5+1, figsize=(10,len(activity_variables)//5*3))
-for variable, ax in zip(activity_variables, axes.flatten()):
-    survival_plot(data, variable, ax)
-    ax.set_title(variable)
-    #TODO this is broken!
-    #TODO: sort by the significance? or by category?
+
 
 ### Tests Survival
 # Cox proportional hazards model
@@ -1796,12 +1790,15 @@ if RECOMPUTE:
         pvalues = pandas.Series(result.pvalues, index=result.model.exog_names)
         params = pandas.Series(result.params, index=result.model.exog_names)
         interaction_pvalues = pandas.Series(interaction_result.pvalues, index=interaction_result.model.exog_names)
+        interaction_params = pandas.Series(interaction_result.params, index=interaction_result.model.exog_names)
         survival_tests_data.append({
             "activity_var": var,
             "p": pvalues[var],
             "log Hazard Ratio": params[var],
             "standardized log Hazard Ratio": params[var] * data[var].std(),
             "sex_difference_p": interaction_pvalues[f"{var}:sex[T.Male]"],
+            "male_logHR": interaction_params[f"{var}:sex[T.Male]"] + interaction_params[f"{var}"],
+            "female_logHR": interaction_params[f"{var}"],
         })
     survival_tests = pandas.DataFrame(survival_tests_data)
     survival_tests['q'] = BH_FDR(survival_tests.p)
@@ -2001,13 +1998,18 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
 
 ### Plot survival assocations versus inter/intra personal variance for validation
 fig, ax = pylab.subplots(figsize=(8,6))
+colorby = survival_tests.activity_var.map(activity_variable_descriptions.Category)
+colormap = {cat:color for cat, color in
+                    zip(["Sleep", "Circadianness", "Physical activity"],
+                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+color = colorby.map(colormap)
 ax.scatter(-numpy.log10(survival_tests.p),
             survival_tests.activity_var.map(activity_variance.normalized),
-            c='k')
+            c=color)
 ax.set_xlabel("Survival Association -log10(p)")
 ax.set_ylabel("Within-person variation / Between-person variation")
 ax.set_ylim(0,1)
-for indx, row in survival_tests.sort_values(by="p").head(5).iterrows():
+for indx, row in survival_tests.sort_values(by="p").head(10).iterrows():
     # Label the top points
     ax.annotate(
         row.activity_var,
@@ -2015,6 +2017,13 @@ for indx, row in survival_tests.sort_values(by="p").head(5).iterrows():
         xytext=(0,15),
         textcoords="offset pixels",
         arrowprops={'arrowstyle':"->"})
+legend_elts = [matplotlib.lines.Line2D(
+                        [0],[0],
+                        marker="o", markerfacecolor=c, markersize=10,
+                        label=cat if not pandas.isna(cat) else "NA",
+                        c=c, lw=0)
+                    for cat, c in colormap.items()]
+fig.legend(handles=legend_elts, ncol=2, fontsize="small")
 fig.tight_layout()
 fig.savefig(OUTDIR+"survival_versus_variation.svg")
 
@@ -2121,49 +2130,27 @@ def invlogit(s):
     return numpy.exp(s)/(1 + numpy.exp(s))
 if RECOMPUTE:
     d = phecode_tests[(phecode_tests.q < 0.01)].copy()
-    covariate_formula = 'sex + age_at_actigraphy + BMI'
+    covariate_formula = 'sex + age_at_actigraphy + BMI + smoking_ever + health_good + ethnicity_white + education_College_or_University_degree + high_income'
     #covariate_formula = ' + '.join(covariates)
     risk_quantification_data = []
     for _, row in d.iterrows():
-        #results = smf.logit(f"Q({row.phecode}) ~ {row.activity_var} + {covariate_formula}", data=data).fit()
-        #risk_quantification_data.append({
-        #    "p": results.pvalues[row.activity_var],
-        #    "coef": results.params[row.activity_var],
-        #    "converged": results.mle_retvals['converged'],
-        #})
-        data_ = data[[row.phecode, row.activity_var] + covariates +['age_at_actigraphy']].copy()
-        if row.activity_var.startswith("self_report"):
-            data_['high_low'] = data_[row.activity_var].astype(float)
-        else:
-            bottom_quintile = data_[row.activity_var].quantile(0.2)
-            top_quintile = data_[row.activity_var].quantile(0.8)
-            data_['high_low'] = 0
-            data_.loc[(data_[row.activity_var] > bottom_quintile), 'high_low'] = float("NaN")
-            data_.loc[(data_[row.activity_var] > top_quintile), 'high_low'] = 1
-        results = smf.ols(f"Q({row.phecode}) ~ high_low + {covariate_formula}", data=data_).fit()
-        mean_person = pandas.Series(numpy.mean(results.model.exog, axis=0), index=results.model.exog_names)
-        mean_person['high_low'] = 0
-        incidence = (data_[~data_.high_low.isna()][row.phecode].mean())
-        effect_size = results.params['high_low']
         try:
-            results_logit = smf.logit(f"Q({row.phecode}) ~ {row.activity_var} + {covariate_formula}", data=data_).fit()
-            marginal_effect = results_logit.get_margeff().summary_frame().loc[row.activity_var, 'dy/dx']
+            results = smf.logit(f"Q({row.phecode}) ~ {row.activity_var} + {covariate_formula}", data=data).fit()
+            marginal_effect = results.get_margeff().summary_frame().loc[row.activity_var, 'dy/dx']
+            p = results.pvalues[row.activity_var]
         except numpy.linalg.LinAlgError:
             marginal_effect = float("NaN")
+            p = float("NaN")
+        incidence = data[row.phecode].mean()
         risk_quantification_data.append({
             "activity_var": row.activity_var,
             "phecode": row.phecode,
             "phecode_meaning": row.phecode_meaning,
             "phecode_category": row.phecode_category,
-            "effect_size": effect_size,
             "incidence": incidence,
-            "relative_risk": (incidence - effect_size/2) / (incidence + effect_size/2),
-            "relative_risk_pred": high_prediction/low_prediction,
-            'raw_low_incidence': data_.loc[data_.high_low == 0, row.phecode].mean(),
-            'raw_high_incidence': data_.loc[data_.high_low == 1, row.phecode].mean(),
             "marginal_effect": marginal_effect,
-            "p": results.pvalues['high_low'],
-            "N_cases": data_.loc[~data_.high_low.isna(), row.phecode].sum(),
+            "std_marginal_effect": marginal_effect * data[row.activity_var].std(),
+            "p": p,
         })
     risk_quantification = pandas.DataFrame(risk_quantification_data)
     risk_quantification.to_csv(OUTDIR+"relative_risks.txt", sep="\t", index=False)
@@ -2173,19 +2160,28 @@ else:
 ## Plot relative risks
 fig, ax = pylab.subplots(figsize=(9,9))
 #color = risk_quantification.phecode_category.map(color_by_phecode_cat)
-colorby = risk_quantification.activity_var.map(activity_variable_descriptions.Subcategory)
-colormap = {cat:color for cat, color in
-                    zip(colorby.unique(),
-                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-color = colorby.map(colormap)
+#colorby = risk_quantification.activity_var.map(activity_variable_descriptions.Subcategory)
+#colormap = {cat:color for cat, color in
+#                    zip(colorby.unique(),
+#                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+#color = colorby.map(colormap)
+colormap = color_by_phecode_cat
+color = risk_quantification.phecode_category.map(colormap)
 ax.scatter(
-    numpy.log10(risk_quantification.relative_risk),
-    #numpy.log10(risk_quantification.raw_low_incidence/risk_quantification.raw_high_incidence),
+    risk_quantification.std_marginal_effect / risk_quantification.incidence,
     -numpy.log10(risk_quantification.p),
-    s = risk_quantification.N_cases/60,
-    c = color)
-ax.set_xlabel("log10 relative risk")
+    c = color,
+    marker="+")
+ax.set_xlabel("Standardized Marginal Effect / Incidence")
 ax.set_ylabel("-log10 p-value")
+legend_elts = [matplotlib.lines.Line2D(
+                        [0],[0],
+                        marker="o", markerfacecolor=c, markersize=10,
+                        label=cat if not pandas.isna(cat) else "NA",
+                        c=c, lw=0)
+                    for cat, c in colormap.items()]
+fig.legend(handles=legend_elts, ncol=2, fontsize="small")
+fig.savefig(OUTDIR+"marginal_effect.volcano_plot.png")
 
 #### Investigate medications
 medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t")
