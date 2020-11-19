@@ -2192,6 +2192,59 @@ print("Metformin analysis:")
 print( data.groupby("metformin").phase.describe())
 #TODO: metformin analysis in more detail
 
+### Sex-difference survival plot
+def sex_difference_survival_plot(d, color_by="activity_var_category"):
+    colormap = {cat:color for cat, color in
+                        zip(d[color_by].unique(),
+                            [pylab.get_cmap("Set3")(i) for i in range(20)])}
+    color = [colormap[c] for c in d[color_by]]
+    fig, ax = pylab.subplots(figsize=(9,9))
+    # The points
+    ax.scatter(
+        d.std_male_logHR,
+        d.std_female_logHR,
+        label="phenotypes",
+        #s=-numpy.log10(d.p)*10,
+        c=color)
+    ax.set_title("Survival associations by sex")
+    ax.spines['bottom'].set_color(None)
+    ax.spines['top'].set_color(None)
+    ax.spines['left'].set_color(None)
+    ax.spines['right'].set_color(None)
+    ax.axvline(c="k", lw=1)
+    ax.axhline(c="k", lw=1)
+    ax.set_xlabel("log HR in males")
+    ax.set_ylabel("log HR in females")
+    ax.set_aspect("equal")
+    #ax.set_xlim(-0.5,0.5)
+    #ax.set_ylim(-0.5,0.5)
+    # Diagonal y=x line
+    bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
+                numpy.max([ax.get_xlim(), ax.get_ylim()]))
+    diag = numpy.array([-bound, bound])
+    ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+    ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+    bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
+    #ax.annotate("Male Effect Larger", xy=(0.4,0), ha="center", bbox=bbox, zorder=3)
+    #ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
+    #ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
+    #ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
+    legend_elts = [matplotlib.lines.Line2D(
+                            [0],[0],
+                            marker="o", markerfacecolor=c, markersize=10,
+                            label=cat if not pandas.isna(cat) else "NA",
+                            c=c, lw=0)
+                        for cat, c in colormap.items()]
+    ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+    return fig, ax
+d = survival_tests.copy()
+activity_var_stds = data[activity_variables].std() #TODO: should we separate male/female stds?
+d['std_male_logHR'] = d.activity_var.map(activity_var_stds) * d['male_logHR']
+d['std_female_logHR'] = d.activity_var.map(activity_var_stds) * d['female_logHR']
+d['activity_var_category'] = d.activity_var.map(activity_variable_descriptions.Subcategory)
+fig, ax = sex_difference_survival_plot(d)
+fig.savefig(OUTDIR+"survival.by_sex.png")
+
 #### Combine all tables into the summary with the header file
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
 import openpyxl
