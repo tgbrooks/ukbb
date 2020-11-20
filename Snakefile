@@ -13,10 +13,11 @@ ACTIVITY_FEATURES_BATCH_SIZE = 1000
 activity_features_batches = [target_eids[i:i+ACTIVITY_FEATURES_BATCH_SIZE] for i in range(0, len(target_eids), ACTIVITY_FEATURES_BATCH_SIZE)]
 
 print(f"Found {len(batched_eids)} batches to consider")
+print(f"Found {len(activity_features_batches)} activity feature batches to consider")
 
 rule all:
     input:
-        #"../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
+        "../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
         "../processed/activity_features_aggregate_seasonal.txt", #NOTE: slow, as above
         "../processed/ukbb_mental_health.h5",
         "../processed/ukbb_employment.h5",
@@ -123,9 +124,9 @@ rule aggregate_seasonal:
 
 rule process_ukbb_table:
     input:
-        "../data/ukb32828.tab",
         "../data/ukb34939.tab",
         "../data/ukb41264.tab",
+        "../data/ukb44535.tab",
         "../Data_Dictionary_Showcase.csv",
         "../Codings_Showcase.csv",
     output:
@@ -139,9 +140,9 @@ rule process_ukbb_table:
 
 rule process_ukbb_table_general:
     input:
-        "../data/ukb32828.tab",
         "../data/ukb34939.tab",
         "../data/ukb41264.tab",
+        "../data/ukb44535.tab",
         "../Data_Dictionary_Showcase.csv",
         "../Codings_Showcase.csv",
     output:
