@@ -6,6 +6,7 @@ parser.add_argument("-t", "--tables", help="table of UKBB data", nargs="+", requ
 parser.add_argument("-o", "--output", help="file to output table to", required=True)
 parser.add_argument("-f", "--filter", help="Field number to filter by: we only output participants who do not have a missing value in this field", default=None)
 parser.add_argument("-s", "--set", help="Set of fields to extract, as defined in fields_of_interest.py", default="all_fields")
+parser.add_argument("-N", "--Nrows", help="Number of rows to read, for testing purposes (default uses all)", type=int, default=None)
 
 args = parser.parse_args()
 
@@ -54,7 +55,7 @@ def is_of_interest(field_name):
         return interest
     return False
 
-data_tables = [pandas.read_csv(table, index_col=0, sep="\t", usecols = is_of_interest)
+data_tables = [pandas.read_csv(table, index_col=0, sep="\t", usecols = is_of_interest, nrows=args.Nrows)
                     for table in args.tables]
 data_tables_unique = [table[~table.index.duplicated(keep="first")]
                             for table in data_tables]
