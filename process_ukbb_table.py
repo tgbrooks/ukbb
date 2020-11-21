@@ -213,11 +213,11 @@ output = pandas.DataFrame(base_output)
 if args.output.endswith("txt"):
     output.to_csv(args.output, sep="\t")
 elif args.output.endswith("h5"):
-    output.to_hdf(args.output, key="data", sep="\t", mode="w", format="table")
+    output.to_hdf(args.output, key="data", mode="w", format="table")
 
 # Output the repeated instances of the data
 repeat_output = pandas.DataFrame(repeat_output)
 if args.output.endswith("txt"):
     repeat_output.to_csv("repeat." + args.output, sep="\t")
 elif args.output.endswith("h5"):
-    repeat_output.to_hdf("repeat." + args.output, key="data", sep="\t", mode="w", format="table")
+    repeat_output.to_hdf("repeat." + args.output, key="data", mode="w", format="table")
