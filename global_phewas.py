@@ -63,10 +63,10 @@ activity.set_index('id', inplace=True)
 
 ## Select the activity variables that have between-person variance greater than their within-person variance
 # and for the summary variables, use only those that are overall summary variables
-activity_variance = pandas.read_csv("../processed/inter_intra_personal_variance.txt", sep="\t", index_col=0)
+activity_variance = pandas.read_csv("../processed/inter_intra_personal_variance.seasonal_correction.txt", sep="\t", index_col=0)
 activity_variance['summary_var'] = activity_variance.index.isin(activity_summary.columns)
 activity_variance['use'] = (~activity_variance.summary_var) | activity_variance.index.str.contains("overall-")
-good_variance = (activity_variance.normalized < 1)
+good_variance = (activity_variance.corrected_intra_personal_normalized < 1)
 activity_variables = activity_variance.index[good_variance & activity_variance.use]
 activity_variables = activity_variables.intersection(activity.columns)
 
@@ -84,7 +84,6 @@ okay = (activity_summary['quality-goodCalibration'].astype(bool)
        )
 activity = activity[okay]
 activity.columns = activity.columns.str.replace("-","_") # Can't use special characters easily
-activity_variables = activity_variables.str.replace("-","_")
 print(f"Dropping {(~okay).sum()} entries out of {len(okay)} due to bad quality or wear-time")
 
 activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characters easily
@@ -92,13 +91,19 @@ activity_variance.index = activity_variance.index.str.replace("-","_") # Can't u
 ## Process activity variables that need cleaning
 activity.phase = activity.phase % 24
 
-# Create absolute deviation variables from phase variables
-# since both extreme low and high phase are expected to be correlated with outcomes
-phase_vars = activity_variable_descriptions.index[activity_variable_descriptions.Subcategory == "Phase"]
-for var in phase_vars:
-    if '_abs_dev' in var:
-        base_var = var[:-8]
-        activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
+## Correct activity measures based off of seasonality
+# compute the 'fraction of year' value (0 = January 1st, 1 = December 31st)
+actigraphy_start_date = activity.index.map(pandas.to_datetime(activity_summary['file-startTime']))
+year_start = pandas.to_datetime(actigraphy_start_date.year.astype(str) + "-01-01")
+year_fraction = (actigraphy_start_date - year_start) / (pandas.to_timedelta("1Y"))
+cos_year_fraction = numpy.cos(year_fraction*2*numpy.pi)
+sin_year_fraction = numpy.sin(year_fraction*2*numpy.pi)
+
+for var in activity_variables:
+    if var.startswith("self_report"):
+        continue
+    activity[var] = activity[var] - cos_year_fraction * activity_variance.loc[var].cos - sin_year_fraction * activity_variance.loc[var].sin
+
 
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
@@ -158,7 +163,17 @@ for variable, var_data in self_report_circadian_variables.items():
     self_report_data["self_report_"+var_data['name']] = values
 self_report_data = pandas.DataFrame(self_report_data)
 activity = activity.join(self_report_data)
-activity_variables = activity_variables.append(self_report_data.columns)
+
+# Create absolute deviation variables from phase variables
+# since both extreme low and high phase are expected to be correlated with outcomes
+# and we do the same for sleep duration measures
+for var in activity_variable_descriptions.index:
+    if var.endswith('_abs_dev'):
+        base_var = var[:-8]
+        activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
+
+# List the activity variables
+activity_variables = activity.columns
 
 # Gather all the data
 data_full = activity.join(ukbb, how="inner")
@@ -189,7 +204,12 @@ print(f"Data size after selecting test set: {data.shape}")
 # Age/birth year processing
 data['birth_year_category'] = pandas.cut(data.birth_year, bins=[1930, 1940, 1950, 1960, 1970])
 data['actigraphy_start_date'] = data.index.map(pandas.to_datetime(activity_summary['file-startTime']))
-birth_year = pandas.to_datetime(data.birth_year.astype(int).astype(str) + "-01-01") # As datetime
+def year_to_jan_first(year):
+    if year != year:
+        return float("NaN")
+    else:
+        return str(int(year)) + "-01-01"
+birth_year = pandas.to_datetime(data.birth_year.apply(year_to_jan_first)) # As datetime
 data['age_at_actigraphy'] = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
 
 # Create simplified versions of the categorical covarites
@@ -200,7 +220,13 @@ data.loc[data.overall_health.isin(['Do not know', 'Prefer not to answer']), 'ove
 data['smoking_ever'] = data.smoking.isin(['Previous', 'Current'])
 data.loc[data.smoking == 'Prefer not to answer', 'smoking_ever'] = float("NaN")
 data['high_income'] = data.household_income.isin(['52,000 to 100,000', 'Greater than 100,000'])
-data.loc[data.income == 'Do not know', 'high_income'] = float("NaN")
+data.loc[data.high_income == 'Do not know', 'high_income'] = float("NaN")
+data['college_education'] = data['education_College_or_University_degree']
+
+# List of covariates we will controll for in the linear model
+covariates = [
+              "sex", "ethnicity_white", "overall_health_good", "high_income", "smoking_ever", "age_at_actigraphy", "BMI", "college_education"
+                ]
 
 # Q-value utility
 def BH_FDR(ps):
@@ -397,7 +423,7 @@ fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
 ### Generate summaries of the phecode test results
 
-## Display the p-values of each actiivty variable
+## Display the p-values of each activity variable
 fig, ax = pylab.subplots(figsize=(8,8))
 for i, activity_variable in enumerate(activity_variables):
     ps = phecode_tests[phecode_tests['activity_var'] == activity_variable].p
@@ -434,7 +460,7 @@ fig.savefig(OUTDIR+"pvalues_by_phecode_category.png")
 
 ## Display p-values by the inter-intra personal variance ratio
 fig, ax = pylab.subplots(figsize=(8,8))
-ax.scatter(phecode_tests['activity_var'].map(activity_variance.normalized),
+ax.scatter(phecode_tests['activity_var'].map(activity_variance.corrected_intra_personal_normalized),
             -numpy.log10(phecode_tests.p))
 ax.set_xlabel("Ratio of intra- to inter-personal variance")
 ax.set_ylabel("-log10(p-value)")
@@ -443,7 +469,7 @@ fig.savefig(OUTDIR+"pvalues_by_variance.png")
 
 ## Display effect sizes by the inter-intra personal variance ratio
 fig, ax = pylab.subplots(figsize=(8,8))
-ax.scatter(phecode_tests['activity_var'].map(activity_variance.normalized),
+ax.scatter(phecode_tests['activity_var'].map(activity_variance.corrected_intra_personal_normalized),
             phecode_tests.std_effect.abs())
 ax.set_xlabel("Ratio of intra- to inter-personal variance")
 ax.set_ylabel("Standardized Effect Size")
@@ -819,7 +845,7 @@ for i in range(1):
 ax.legend()
 ax.set_xlabel("Number of Cases (log10)")
 ax.set_ylabel("Standardized Effect Size")
-ax.set_title("Phenotype-Rhythmicity association by incidence rate")
+ax.set_title("Phenotype-Rhythmicity association by prevalnce rate")
 #ax.set_ylim(-0.04,0.00)
 fig.savefig(OUTDIR+"/all_phenotypes.by_incidence_rate.png")
 
@@ -1615,7 +1641,7 @@ ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
 ax3.spines["top"].set_visible(False)
 ax3.spines["right"].set_visible(False)
-bins = pandas.date_range("2000-1-1", "2019-1-1", freq="1M")
+bins = pandas.date_range("2000-1-1", "2020-6-1", freq="1M")
 def date_hist(ax, values, bins, **kwargs):
     # Default histogram for dates doesn't cooperate with being given a list of bins
     # since the list of bins doesn't get converted to the same numerical values as the values themselves
@@ -1694,19 +1720,22 @@ def quintile_survival_plot(data, var, var_label=None):
     ax.set_ylabel("Survival Probability")
     ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
-    ax2 = ax.twinx() # The right-hand side axis label
-    scale = len(data)/5
-    ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
-    ax2.set_ylabel("Participants")
+    #ax2 = ax.twinx() # The right-hand side axis label
+    #scale = len(data)/5
+    #ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
+    #ax2.set_ylabel("Participants")
     fig.tight_layout()
     return fig
 
-def categorical_survival_plot(data, var, var_label=None):
+def categorical_survival_plot(data, var, var_label=None, min_N=None):
     if var_label is None:
         var_label = var
     fig, ax = pylab.subplots(figsize=(8,6))
-    for cat in data[var].cat.categories:
-        d = data[data[var] == cat]
+    value = data[var].astype("category")
+    for cat in value.cat.categories:
+        d = data[value == cat]
+        if min_N is not None and len(d) < min_N:
+            continue # Skip this category
         survival_curve(d, ax, label= cat)
     fig.legend(loc=(0.15,0.15))
     ax.set_ylabel("Survival Probability")
@@ -1758,13 +1787,12 @@ data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
 data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
 data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
 uncensored = (~data.date_of_death.isna()).astype(int)
-birth_year = pandas.to_datetime(data.birth_year.astype(int).astype(str) + "-01-01")
 data['age_at_death_censored'] = (pandas.to_datetime(data.date_of_death) - birth_year) / pandas.to_timedelta("1Y")
 entry_age = (data.actigraphy_start_date - birth_year) / pandas.to_timedelta("1Y")
 data.age_at_death_censored.fillna(data.age_at_death_censored.max(), inplace=True)
 
 if RECOMPUTE:
-    covariate_formula = ' + '.join(["BMI", "smoking"])
+    covariate_formula = ' + '.join(["BMI", "smoking_ever"])
     survival_tests_data = []
     for var in activity_variables:
         print(var)
@@ -1906,7 +1934,7 @@ if 'BMI' in g_all:
 g = g_all.edge_subgraph(g_all.edges)
 
 node_color_dict = {'phecode': '#ef476f', 'activity_var': '#118ab2', 'trait': '#06d6a0'}
-node_colors = [node_color_dict[g.nodes[n]['type']] for n in g.nodes]
+node_colors = [node_color_dict[node['type']] for node in g.nodes.values()]
 fig, ax = pylab.subplots(figsize=(12,10))
 networkx.draw(g, with_labels=True,
                   node_color=node_colors,
@@ -2003,17 +2031,32 @@ colormap = {cat:color for cat, color in
                     zip(["Sleep", "Circadianness", "Physical activity"],
                         [pylab.get_cmap("Dark2")(i) for i in range(20)])}
 color = colorby.map(colormap)
-ax.scatter(-numpy.log10(survival_tests.p),
-            survival_tests.activity_var.map(activity_variance.normalized),
+def get_variance_ratio(var):
+    if var.endswith("_abs_dev"):
+        var = var[:-8]
+    try:
+        return activity_variance.normalized.loc[var]
+    except KeyError:
+        print(var)
+        return float("NaN")
+variance_ratio = survival_tests.activity_var.apply(get_variance_ratio)
+variance_ratio.index = survival_tests.activity_var
+ax.scatter(#-numpy.log10(survival_tests.p),
+            survival_tests['standardized log Hazard Ratio'],
+            variance_ratio,
+            s=1-numpy.log10(survival_tests.p)*3,
             c=color)
-ax.set_xlabel("Survival Association -log10(p)")
+ax.set_xlabel("Standardized log Hazard Ratio")
 ax.set_ylabel("Within-person variation / Between-person variation")
 ax.set_ylim(0,1)
-for indx, row in survival_tests.sort_values(by="p").head(10).iterrows():
+ax.axvline(0, c='k')
+for indx, row in survival_tests.sort_values(by="p").head(20).iterrows():
     # Label the top points
     ax.annotate(
         row.activity_var,
-        (-numpy.log10(row.p), activity_variance.loc[row.activity_var].normalized),
+        (#-numpy.log10(row.p),
+         row['standardized log Hazard Ratio'],
+         variance_ratio.loc[row.activity_var]),
         xytext=(0,15),
         textcoords="offset pixels",
         arrowprops={'arrowstyle':"->"})
@@ -2024,7 +2067,7 @@ legend_elts = [matplotlib.lines.Line2D(
                         c=c, lw=0)
                     for cat, c in colormap.items()]
 fig.legend(handles=legend_elts, ncol=2, fontsize="small")
-fig.tight_layout()
+#fig.tight_layout()
 fig.savefig(OUTDIR+"survival_versus_variation.svg")
 
 ### Correlation plot of top survival variables
@@ -2130,7 +2173,7 @@ def invlogit(s):
     return numpy.exp(s)/(1 + numpy.exp(s))
 if RECOMPUTE:
     d = phecode_tests[(phecode_tests.q < 0.01)].copy()
-    covariate_formula = 'sex + age_at_actigraphy + BMI + smoking_ever + health_good + ethnicity_white + education_College_or_University_degree + high_income'
+    covariate_formula = 'sex + age_at_actigraphy + BMI + smoking_ever + overall_health_good + ethnicity_white + education_College_or_University_degree + high_income'
     #covariate_formula = ' + '.join(covariates)
     risk_quantification_data = []
     for _, row in d.iterrows():
@@ -2155,7 +2198,7 @@ if RECOMPUTE:
     risk_quantification = pandas.DataFrame(risk_quantification_data)
     risk_quantification.to_csv(OUTDIR+"relative_risks.txt", sep="\t", index=False)
 else:
-    risk_quantification = pandas.read_csv(OUTDIR+"relative_risks.txt", ,sep="\t")
+    risk_quantification = pandas.read_csv(OUTDIR+"relative_risks.txt", sep="\t")
 
 ## Plot relative risks
 fig, ax = pylab.subplots(figsize=(9,9))
@@ -2172,7 +2215,7 @@ ax.scatter(
     -numpy.log10(risk_quantification.p),
     c = color,
     marker="+")
-ax.set_xlabel("Standardized Marginal Effect / Incidence")
+ax.set_xlabel("Standardized Marginal Effect / Prevalence")
 ax.set_ylabel("-log10 p-value")
 legend_elts = [matplotlib.lines.Line2D(
                         [0],[0],
