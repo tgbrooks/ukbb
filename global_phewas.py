@@ -25,7 +25,7 @@ COHORT = 1
 OUTDIR = f"../global_phewas/cohort{COHORT}/"
 
 ### Whether to run all the big computations or attempt to load from disk since already computed
-RECOMPUTE = False
+RECOMPUTE = True
 
 # Point at which to call FDR q values significant
 FDR_CUTOFF_VALUE = 0.05
@@ -2287,6 +2287,98 @@ d['std_female_logHR'] = d.activity_var.map(activity_var_stds) * d['female_logHR'
 d['activity_var_category'] = d.activity_var.map(activity_variable_descriptions.Subcategory)
 fig, ax = sex_difference_survival_plot(d)
 fig.savefig(OUTDIR+"survival.by_sex.png")
+
+
+### Comparisons of self-reported versus objectively derived variables
+# Some self-reported variables are closely matched by objectively derived variables
+# so which one is best associated with phecodes?
+
+# self_report_sleep_duration versus main_sleep_duration_mean or total_sleep_mean
+# Sleep durations have a fairly U-shaped curve so we use the abs_dev versions here
+# and the total_sleep_mean variable includes napping time as well as sleep time
+# so we don't use that here since napping is investigated in the self_report_nap_during_day variable
+variable_pairs = [ ("sleep_duration", "main_sleep_duration_mean_abs_dev"),
+                   ("morning_evening_person", "phase"),
+                   ("morning_evening_person", "phase_abs_dev"),
+                   ("nap_during_day", "other_sleep_mean"),
+                   ("sleeplessness", "WASO_mean")]
+fig, (ax1, ax2) = pylab.subplots(ncols=2, sharey=True)
+for i, (self_report, activity_var) in enumerate(variable_pairs):
+    self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
+    print(f"Comparing: {self_report} to {activity_var}")
+    self_report_survival = survival_tests.query(f"activity_var == '{self_report_var}'").iloc[0]
+    self_report_objective = survival_tests.query(f"activity_var == '{activity_var}'").iloc[0]
+    # Downsample the objective ot have the same population as the self_report
+    downsampled_data = data[~data[self_report_var].isna()]
+    downsampled_uncensored = uncensored[~data[self_report_var].isna()]
+    downsampled_entry_age = entry_age[~data[self_report_var].isna()]
+    covariate_formula = "BMI + smoking_ever"
+    survival_test = smf.phreg(formula = f"age_at_death_censored ~ {activity_var} + sex + {covariate_formula}",
+                                    data=downsampled_data,
+                                    status=downsampled_uncensored,
+                                    entry=downsampled_entry_age,
+                                    ).fit(method=method)
+    pvalues = pandas.Series(survival_test.pvalues, index=survival_test.model.exog_names)
+    params = pandas.Series(survival_test.params, index=survival_test.model.exog_names)
+    if data[self_report].dtype.name == "category":
+        cat_counts = data[self_report].value_counts()
+        most_common = cat_counts.idxmax()
+        dropped_cats = cat_counts.index[cat_counts < 400].to_list() # Want at least this many in the category
+        cats = '"' + '", "'.join(cat_counts.index[cat_counts >= 400].to_list()) + '"'
+        subset = ~data[self_report].isin(dropped_cats)
+        self_report_survival_test = smf.phreg(
+            formula = f'age_at_death_censored ~ C({self_report}, levels=[{cats}]) + sex + {covariate_formula}',
+            #formula = f'age_at_death_censored ~ {self_report} + sex + {covariate_formula}',
+            data=data[subset],
+            status=uncensored[subset],
+            entry=entry_age[subset],
+        ).fit()
+        self_report_pvalue = self_report_survival_test.f_test(
+            [[1 if j == i else 0 for j in range(len(self_report_survival_test.model.exog_names))]
+                for i, var in enumerate(self_report_survival_test.model.exog_names)
+                if self_report in var]
+        ).pvalue
+        self_report_pvalue = self_report_pvalue.flatten()[0]
+    else:
+        self_report_pvalue = float("NaN")
+    df = pandas.DataFrame.from_dict({
+        "self_report": {
+            "survival_p": self_report_survival.p,
+            "survival_logHR": self_report_survival['standardized log Hazard Ratio'],
+        },
+        "objective": {
+            "survival_p": self_report_objective.p,
+            "survival_logHR": self_report_objective['standardized log Hazard Ratio'],
+        },
+        "downsampled_objective": {
+            "survival_p": pvalues[activity_var],
+            "survival_logHR": params[activity_var] * downsampled_data[activity_var].std(),
+        },
+        "self_report_cat": {
+            "survival_p": self_report_pvalue,
+        },
+    })
+    print(df.T)
+    # Plot the points
+    ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report"])], c="k")
+    ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "downsampled_objective"])], c="r")
+    ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report_cat"])], c="k")
+    ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "objective"])], c="r")
+ax1.set_ylabel("-log10 p-value")
+ax1.set_xticks(range(len(variable_pairs)))
+ax1.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
+ax2.set_xticks(range(len(variable_pairs)))
+ax2.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
+ax1.xaxis.set_tick_params(rotation=90)
+ax2.xaxis.set_tick_params(rotation=90)
+legend_elts = [matplotlib.lines.Line2D(
+                        [0],[0],
+                        marker="o", markerfacecolor=c, markersize=10,
+                        label=l,
+                        c=c, lw=0)
+                    for c, l in zip(["k", "r"], ["Subjective", "Objective"])]
+fig.legend(handles=legend_elts)
+fig.tight_layout()
 
 #### Combine all tables into the summary with the header file
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
