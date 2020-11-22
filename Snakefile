@@ -17,8 +17,8 @@ print(f"Found {len(activity_features_batches)} activity feature batches to consi
 
 rule all:
     input:
-        "../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
-        "../processed/activity_features_aggregate_seasonal.txt", #NOTE: slow, as above
+        #"../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
+        #"../processed/activity_features_aggregate_seasonal.txt", #NOTE: slow, as above
         "../processed/ukbb_mental_health.h5",
         "../processed/ukbb_employment.h5",
         "../processed/ukbb_data_table.h5",
@@ -154,23 +154,25 @@ rule process_ukbb_table_general:
 
 rule process_icd10_codes:
     input:
-        "../data/ukb41264.tab",
+        "../data/patient_records/hesin.txt",
+        "../data/patient_records/hesin_diag.txt"
     output:
         "../processed/ukbb_icd10_entries.txt"
     resources:
-        mem_mb = 20000
+        mem_mb = 40000
     shell:
-        "./process_icd_codes.py -t {input} -o {output}"
+        "./process_icd_codes.py --hesin {input[0]} --hesin_diag {input[1]} -v 10 -o {output}"
 
 rule process_icd9_codes:
     input:
-        "../data/ukb41264.tab",
+        "../data/patient_records/hesin.txt",
+        "../data/patient_records/hesin_diag.txt"
     output:
         "../processed/ukbb_icd9_entries.txt"
     resources:
-        mem_mb = 20000
+        mem_mb = 40000
     shell:
-        "./process_icd_codes.py -t {input} -o {output} -v 9"
+        "./process_icd_codes.py --hesin {input[0]} --hesin_diag {input[1]} -v 9 -o {output}"
 
 rule process_self_reported_conditions:
     input:

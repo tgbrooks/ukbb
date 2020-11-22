@@ -2,7 +2,7 @@
 import argparse
 
 description = '''
-Gather ICD10/9 codes from the datatable
+Gather ICD10/9 codes from the HESIN/HESIN_DIAG tables
 
 The result is a table of entries, one for each occurance of an ICD10/9 code:
 ID  ICD10_code  first_date
@@ -13,56 +13,38 @@ So a participant may have multiple entries, or none
 '''
 
 parser = argparse.ArgumentParser(description)
-parser.add_argument("-t", "--table", help="UKBB table file to read in", required=True)
+parser.add_argument("--hesin", help="UKBB HESIN table file to read in", required=True)
+parser.add_argument("--hesin_diag", help="UKBB HESIN diagnosis table file to read in", required=True)
 parser.add_argument("-o", "--output", help="output tab-separated file to write to", required=True)
 parser.add_argument("-v", "--version", help="whether to use ICD 9 or ICD10 codes", default="10", choices=["10", "9"])
 
 args = parser.parse_args()
 
-ICD10_FIELD = 41270
-ICD10_FIRST_DATE_FIELD = 41280
-ICD9_FIELD = 41271
-ICD9_FIRST_DATE_FIELD = 41281
+ICD10_FIELD = "diag_icd10"
+ICD9_FIELD = "diag_icd9"
 
 if args.version == "10":
     CODE_FIELD = ICD10_FIELD
-    FIRST_DATE_FIELD = ICD10_FIRST_DATE_FIELD
     CODE_NAME = "ICD10_code"
 else:
     CODE_FIELD = ICD9_FIELD
-    FIRST_DATE_FIELD = ICD9_FIRST_DATE_FIELD
     CODE_NAME = "ICD9_code"
 
 import pandas
 
-# These two files contain the information describing the fields in the UKBB
-# they are downloaded from:
-# http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=19
-# http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=87
-# http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-if args.version == "10":
-    codings = pandas.read_csv("../icd10_coding.txt", index_col=0, sep="\t")
-else:
-    codings = pandas.read_csv("../icd9_coding.txt", index_col=0, sep="\t")
-fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
-num_entries = fields.loc[CODE_FIELD].Array
+events = pandas.read_csv("../data/patient_records/hesin.txt", sep="\t")
+events['epistart'] = pandas.to_datetime(events.epistart, format="%d/%m/%Y")
+events['disdate'] = pandas.to_datetime(events.disdate, format="%d/%m/%Y")
+events['date'] = events.epistart
+events.loc[events.date.isna(), 'date'] = events.loc[events.date.isna(), "disdate"] # Some have only disdate, so use that when epistart is not available
+diags = pandas.read_csv("../data/patient_records/hesin_diag.txt", sep="\t")
 
-icd10code_fields = [f"f.{CODE_FIELD}.0.{i}" for i in range(num_entries)]
-first_date_fields = [f"f.{FIRST_DATE_FIELD}.0.{i}" for i in range(num_entries)]
+data = pandas.merge(diags, events[["eid", "ins_index", "date"]], on=["eid", "ins_index"])
 
-processed_data = []
-for data in pandas.read_csv(args.table, sep="\t", index_col=0, chunksize=10_000, low_memory=False):
-    data.index.rename("ID", inplace=True)
-    for i, (code_field, date_field) in enumerate(zip(icd10code_fields, first_date_fields)):
-        code = data[code_field]
-        date = data[date_field]
+selected = data[~data[CODE_FIELD].isna()] #Only use the requested codes
 
-        valid = ~code.isna()
-        code = code[valid]
-        date = date[valid]
-        entries = pandas.DataFrame({CODE_NAME: code, "first_date": date})
-        processed_data.append(entries)
+# Take just the first date of diagnosis per each individaul
+first_diags = selected.groupby(["eid", CODE_FIELD]).date.first().reset_index()
+first_diags = first_diags.rename(columns={"eid": "ID", CODE_FIELD: CODE_NAME, "date": "first_date"})
 
-all_data = pandas.concat(processed_data)
-all_data.sort_index(inplace=True, kind="mergesort")
-all_data.to_csv(args.output, sep="\t")
+first_diags.to_csv(args.output, sep="\t", index=False)
