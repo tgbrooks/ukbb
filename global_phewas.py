@@ -25,7 +25,7 @@ COHORT = 1
 OUTDIR = f"../global_phewas/cohort{COHORT}/"
 
 ### Whether to run all the big computations or attempt to load from disk since already computed
-RECOMPUTE = True
+RECOMPUTE = False
 
 # Point at which to call FDR q values significant
 FDR_CUTOFF_VALUE = 0.05
@@ -180,18 +180,6 @@ data_full = activity.join(ukbb, how="inner")
 print(f"Data starting size: {data_full.shape}")
 
 
-# List of covariates we will controll for in the linear model
-covariates = [
-              "sex", "ethnicity", "overall_health", "household_income", "smoking", "birth_year", "BMI",
-               #'education_Prefer_not_to_answer', # This answer causes problems for some reason
-               'education_None_of_the_above',
-               'education_College_or_University_degree',
-               'education_A_levels_AS_levels_or_equivalent', 
-               'education_O_levels_GCSEs_or_equivalent',
-               'education_CSEs_or_equivalent',
-               'education_NVQ_or_HND_or_HNC_or_equivalent',
-               'education_Other_professional_qualifications_eg__nursing__teaching',
-                ]
 # Down sample for testing
 numpy.random.seed(0)
 # Note: total 92331, half is 46164
@@ -397,6 +385,26 @@ FDR_cutoff = phecode_tests[phecode_tests.q < 0.05].p.max()
 print(f"Of {len(phecode_tests)} tested, approx {int(num_nonnull)} expected non-null")
 print(f"and {(phecode_tests.p <= bonferonni_cutoff).sum()} exceed the Bonferonni significance threshold")
 print(f"and {(phecode_tests.p <= FDR_cutoff).sum()} exceed the FDR < 0.05 significance threshold")
+
+### Prepare color maps for the plots
+color_by_phecode_cat = {cat:color for cat, color in
+                            zip(phecode_tests.phecode_category.unique(),
+                                [pylab.get_cmap("tab20")(i) for i in range(20)])}
+
+color_by_actigraphy_cat = {cat:color for cat, color in
+                                zip(["Sleep", "Circadianness", "Physical activity"],
+                                    [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+color_by_actigraphy_subcat = {cat:color for cat, color in
+                                zip(activity_variable_descriptions.Subcategory.unique(),
+                                    [pylab.get_cmap("Set3")(i) for i in range(20)])}
+def legend_from_colormap(fig, colormap, **kwargs):
+    legend_elts = [matplotlib.lines.Line2D(
+                            [0],[0],
+                            marker="o", markerfacecolor=c, markersize=10,
+                            label=cat if not pandas.isna(cat) else "NA",
+                            c=c, lw=0)
+                        for cat, c in colormap.items()]
+    fig.legend(handles=legend_elts, **kwargs)
 
 fig, ax = pylab.subplots()
 
@@ -735,9 +743,6 @@ fig.savefig(OUTDIR+"pvalues_by_phecode_category.by_sex.png")
 # Plot the regression coefficients for each of the phenotypes
 num_male = (data.sex == "Male").sum()
 num_female = (data.sex == "Female").sum()
-color_by_phecode_cat = {cat:color for cat, color in
-                            zip(phecode_tests.phecode_category.unique(),
-                                [pylab.get_cmap("tab20")(i) for i in range(20)])}
 d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
                         & (phecode_tests_by_sex.N_male > 300)
                         & (phecode_tests_by_sex.N_female > 300)]
@@ -968,7 +973,6 @@ def find_var(var):
         if v in data.columns:
             if pandas.api.types.is_numeric_dtype(data[v].dtype):
                 return v
-    print(var)
     return None # can't find it
 quantitative_vars = [find_var(c) for block in quantitative_blocks
                         for c in block
@@ -1661,8 +1665,8 @@ date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
 ax1.annotate("Assessment", (assessment_time.mean(), 1250), ha="center")
 ax1.annotate("Actigraphy", (actigraphy_time.mean(), 1250), ha="center")
 ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 1250), ha="center")
-ax2.annotate("Medical Record\nDiagnoses", (diagnosis_time.mean(), 1200), ha="center")
-ax3.annotate("Deaths", (death_time.mean(), 13), ha="center")
+ax2.annotate("Medical Record\nDiagnoses", (diagnosis_time.mean(), 1500), ha="center")
+ax3.annotate("Deaths", (death_time.mean(), 20), ha="center")
 fig.savefig(OUTDIR+"summary_timeline.png")
 
 time_difference = (actigraphy_time - assessment_time).mean()
@@ -1756,7 +1760,7 @@ fig = quintile_survival_plot(data, "MVPA_overall", "MVPA Mean")
 fig.savefig(OUTDIR+"survival.MVPA_overall.png")
 
 # Survival by MVPA_overall_avg
-fig = quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA Std Dev")
+fig = quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA hourly SD")
 fig.savefig(OUTDIR+"survival.MVPA_hourly_SD.png")
 
 # Survival by phase
@@ -2027,15 +2031,12 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
 ### Plot survival assocations versus inter/intra personal variance for validation
 fig, ax = pylab.subplots(figsize=(8,6))
 colorby = survival_tests.activity_var.map(activity_variable_descriptions.Category)
-colormap = {cat:color for cat, color in
-                    zip(["Sleep", "Circadianness", "Physical activity"],
-                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-color = colorby.map(colormap)
+color = colorby.map(color_by_actigraphy_cat)
 def get_variance_ratio(var):
     if var.endswith("_abs_dev"):
         var = var[:-8]
     try:
-        return activity_variance.normalized.loc[var]
+        return activity_variance.corrected_intra_personal_normalized.loc[var]
     except KeyError:
         print(var)
         return float("NaN")
@@ -2105,10 +2106,14 @@ if RECOMPUTE:
         except numpy.linalg.LinAlgError:
             print(f"Failed regression on {var} - skipping")
             continue
+        pvalues = pandas.Series(results.pvalues, index=results.model.exog_names)
+        params = pandas.Series(results.params, index=results.model.exog_names)
         beyond_RA_tests_list.append({
             "activity_var": var,
-            "p": results.pvalues[-1],
-            "standardized log Hazard Ratio": result.params[-1] * data[var].std(),
+            "p": pvalues[var],
+            "p_RA": pvalues["acceleration_RA"],
+            "standardized log Hazard Ratio": params[var] * data[var].std(),
+            "standardized log Hazard Ratio RA": params['acceleration_RA'] * data['acceleration_RA'].std(),
         })
     beyond_RA_tests = pandas.DataFrame(beyond_RA_tests_list)
     beyond_RA_tests = pandas.merge(beyond_RA_tests, activity_variable_descriptions[["Category", "Subcategory"]],
@@ -2317,7 +2322,7 @@ for i, (self_report, activity_var) in enumerate(variable_pairs):
                                     data=downsampled_data,
                                     status=downsampled_uncensored,
                                     entry=downsampled_entry_age,
-                                    ).fit(method=method)
+                                    ).fit()
     pvalues = pandas.Series(survival_test.pvalues, index=survival_test.model.exog_names)
     params = pandas.Series(survival_test.params, index=survival_test.model.exog_names)
     if data[self_report].dtype.name == "category":
