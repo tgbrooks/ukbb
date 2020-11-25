@@ -2384,6 +2384,138 @@ legend_elts = [matplotlib.lines.Line2D(
                     for c, l in zip(["k", "r"], ["Subjective", "Objective"])]
 fig.legend(handles=legend_elts)
 fig.tight_layout()
+fig.savefig(OUTDIR+"subjective_objective_comparison.survival.png")
+
+
+# Compare the objective/subjective variables again on the phecodes
+fig, axes = pylab.subplots(ncols=len(variable_pairs), figsize=(15,7), sharex=True, sharey=True)
+Q_CUTOFF = 0.05
+for ax, (self_report, activity_var) in zip(axes.flatten(), variable_pairs):
+    self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
+    either_significant = phecode_tests[
+        ((phecode_tests.activity_var == self_report_var) |
+         (phecode_tests.activity_var == activity_var)) &
+        (phecode_tests.q < Q_CUTOFF)].phecode.unique()
+    downsampled_data = data[~data[self_report_var].isna()]
+    objective_tests_list = []
+    for phecode in either_significant:
+        covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+        N = data[phecode].sum()
+        fit = OLS(f"{activity_var} ~ Q({phecode}) + sex * ({covariate_formula})",
+                     data=downsampled_data)
+        p = fit.pvalues[f"Q({phecode})"]
+        coeff = fit.params[f"Q({phecode})"]
+        std_effect = coeff / data[activity_var].std()
+        N_cases = data.loc[~data[activity_var].isna(), phecode].sum()
+        objective_tests_list.append({"phecode": phecode,
+                                "activity_var": activity_var,
+                                "p": p,
+                                "coeff": coeff,
+                                "std_effect": std_effect,
+                                "N_cases": N_cases,
+                               })
+    objective_tests = pandas.DataFrame(objective_tests_list)
+    subjective_ps = objective_tests.phecode.map(phecode_tests[(phecode_tests.activity_var == self_report_var)].set_index("phecode").p)
+    colors = objective_tests.phecode.map(phecode_info.category).map(color_by_phecode_cat)
+    ax.scatter(-numpy.log10(objective_tests.p), -numpy.log10(subjective_ps), c=colors)
+    ax.set_aspect("equal")
+    bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
+                numpy.max([ax.get_xlim(), ax.get_ylim()]))
+    diag = numpy.array([0, bound])
+    ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+    ax.set_xlabel(f"-log10 p {activity_var}")
+    if ax == axes.flatten()[0]:
+        ax.set_ylabel(f"-log10 p subjective variable")
+    ax.set_title(self_report_circadian_variables[self_report]['name'])
+    #TODO: add colors
+fig.tight_layout()
+fig.savefig(OUTDIR+"objective_subjective_comparison.png")
+
+## Investigate phenotypes by diagnosis age
+def plot_by_diagnosis_date(ICD10_codes, phecode, phenotype_name):
+    # gather icd10 entries by the date of first diagnosis
+    Q_CUTOFF = 0.01
+    NUM_GROUPS = 20 # number of equal-sized groupsgroups to break the diagnosis dates into
+    GROUPS_PER_POINT = 5 # Number of those groups to use at once: use 1 for non-overlapping, higher numbers to get overlap of adjacent
+    in_icd10_codes = numpy.any([icd10_entries.ICD10.str.startswith(code) for code in ICD10_codes], axis=0)
+    diag_dates = icd10_entries[in_icd10_codes].groupby("ID").first_date.first()
+    activity_vars_to_test = phecode_tests[(phecode_tests.phecode == phecode) & (phecode_tests.q < Q_CUTOFF)].activity_var.unique()
+
+    date_data = data.copy()
+    date_data['diag_date'] = pandas.to_datetime(pandas.Series(data.index.map(diag_dates), data.index))
+    date_data['diag_date_minus_actigraphy'] = (date_data.diag_date - date_data.actigraphy_start_date) / pandas.to_timedelta("1Y")
+    date_data['diag_date_group'] = pandas.qcut(date_data.diag_date_minus_actigraphy, NUM_GROUPS)
+    by_date_list = []
+    for i, date_group in enumerate(date_data.diag_date_group.cat.categories):
+        date_groups = date_data.diag_date_group.cat.categories[i:i+GROUPS_PER_POINT]
+        if len(date_groups) < GROUPS_PER_POINT:
+            continue # Insufficient groups, reached end of the study
+        mid_point = date_groups[GROUPS_PER_POINT//2].mid
+        date_data['in_group'] = (date_data.diag_date_group.isin(date_groups)).astype(int)
+        # Compare only to people who do not have the phecode from any source
+        date_data['use'] = date_data.in_group | (date_data[phecode] == 0)
+        for activity_var in activity_vars_to_test:
+            if activity_var.startswith("self_report"):
+                continue # Not based off actigraphy, skip
+            covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+            N = data[phecode].sum()
+            fit = OLS(f"{activity_var} ~ in_group + sex * ({covariate_formula})",
+                         data=date_data,
+                         subset=date_data.use)
+            p = fit.pvalues["in_group"]
+            coeff = fit.params["in_group"]
+            std_effect = coeff / data[activity_var].std()
+            N_cases = data.loc[~data[activity_var].isna(), phecode].sum()
+            by_date_list.append({
+                                    "group": date_group,
+                                    "group_mid": mid_point,
+                                    "activity_var": activity_var,
+                                    "p": p,
+                                    "coeff": coeff,
+                                    "std_effect": std_effect,
+                                    "N_cases": N_cases,
+                                   })
+    by_date = pandas.DataFrame(by_date_list)
+
+    fig, ax = pylab.subplots(figsize=(10,7))
+    def plot_var(data):
+        data = data.sort_values(by="group_mid")
+        cat = activity_variable_descriptions.Subcategory[data.activity_var.iloc[0]]
+        color = color_by_actigraphy_subcat[cat]
+        #cat = activity_variable_descriptions.Category[data.activity_var.iloc[0]]
+        #color = color_by_actigraphy_cat[cat]
+        ax.plot(-data.group_mid,
+                data.std_effect.abs(),
+                #-numpy.log10(data.p),
+                c = color, label=cat,
+                linewidth=3)
+    ax.set_xlabel("Years since diagnosis")
+    ax.set_ylabel("Effect size")
+    ax.set_title(phenotype_name)
+    by_date.groupby('activity_var').apply(plot_var)
+    legend_from_colormap(fig, color_by_actigraphy_subcat, fontsize="small", loc="upper left")
+    return fig, ax, by_date
+
+fig, ax, hypertension_by_date = plot_by_diagnosis_date(["I10"], 401, "Hypertension")
+fig.savefig(OUTDIR+"by_date.hypertension.png")
+
+fig, ax, diabetes_by_date = plot_by_diagnosis_date(["E09", "E10", "E11", "E13"], 250, "Diabetes")
+fig.savefig(OUTDIR+"by_date.diabetes.png")
+
+fig, ax, IHD_by_date = plot_by_diagnosis_date(["I20", "I21", "I22", "I23", "I25"], 411, "Ischemic Heart Disease")
+fig.savefig(OUTDIR+"by_date.IHD.png")
+
+fig, ax, pneumonia_by_date = plot_by_diagnosis_date(["J09", "J10", "J11", "J12", "J13", "J14", "J15", "J16", "J17", "J18"], 480, "Pneumonia")
+fig.savefig(OUTDIR+"by_date.pneumonia.png")
+
+fig, ax, mood_disorders_by_date = plot_by_diagnosis_date(["F30", "F31", "F32", "F33", "F34", "F39"], 296, "Mood Disorders")
+fig.savefig(OUTDIR+"by_date.mood_disorders.png")
+
+fig, ax, anxiety_by_date = plot_by_diagnosis_date(["F40", "F41"], 300, "Anxiety Disorders")
+fig.savefig(OUTDIR+"by_date.mood_disorders.png")
+
+fig, ax, renal_failure_by_date = plot_by_diagnosis_date(["N17", "N18", "N19", "Y60", "Y84", "Z49"], 585, "Renal Failure")
+fig.savefig(OUTDIR+"by_date.renal_failure.png")
 
 #### Combine all tables into the summary with the header file
 print(f"Writing out the complete results table to {OUTDIR+'results.xlsx'}")
