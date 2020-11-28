@@ -2124,6 +2124,30 @@ else:
     beyond_RA_tests = pandas.read_csv(OUTDIR+"beyond_RA_tests.txt", sep="\t")
 
 
+## Plot the amount RA goes "beyond" other variables
+fig, (ax1, ax2) = pylab.subplots(ncols=2, figsize=(10,6))
+c = beyond_RA_tests.Subcategory.map(color_by_actigraphy_subcat)
+ax1.scatter(
+    beyond_RA_tests['standardized log Hazard Ratio'].abs(),
+    beyond_RA_tests['standardized log Hazard Ratio RA'].abs(),
+    c=c)
+ax1.set_ylim(0, ax1.get_ylim()[1])
+ax1.set_xlabel("log Hazard Ratio / SD of alternative variable")
+ax1.set_ylabel("log Hazard Ratio / SD of RA")
+ax1.axhline(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "standardized log Hazard Ratio"].abs().values,
+            linestyle="--", c="k")
+ax2.scatter(
+    -numpy.log10(beyond_RA_tests.p),
+    -numpy.log10(beyond_RA_tests.p_RA),
+    c=c)
+ax2.set_ylim(0, ax2.get_ylim()[1])
+ax2.set_xlabel("-log10 p-value of alternative variable")
+ax2.set_ylabel("-log10 p-value of RA")
+ax2.axhline(-numpy.log10(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "p"].values),
+            linestyle="--", c="k")
+legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
+fig.savefig(OUTDIR+"additive_benefit_RA.png")
+
 ### Assess the correlations of the various measures
 base_vars = ["acceleration", "moderate", "walking", "sleep", "sedentary", "tasks_light", "MET", "MVPA"]
 additions = ["_overall", "_hourly_SD", "_within_day_SD", "_between_day_SD", "_peak_value_mean", "_RA", "_IV"]
