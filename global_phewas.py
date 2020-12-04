@@ -991,19 +991,51 @@ if RECOMPUTE:
             print(f"Skipping {phenotype} - only {N} cases found")
             continue
         
-        for activity_variable in activity.columns:
-            fit = OLS(f"{phenotype} ~ {activity_variable} + sex * ({covariate_formula})",
+        phenotype_std = data[phenotype].std()
+        for activity_var in activity.columns:
+            N = (~data[[activity_var, phenotype]].isna().any(axis=1)).sum()
+            fit = OLS(f"{phenotype} ~ {activity_var} + sex * ({covariate_formula})",
                          data=data)
-            p = fit.pvalues[activity_variable]
-            coeff = fit.params[activity_variable]
-            std_effect = coeff * data[activity_variable].std() / data[phenotype].std()
+            p = fit.pvalues[activity_var]
+            coeff = fit.params[activity_var]
+            activity_var_std = data[activity_var].std()
+            std_effect = coeff * activity_var_std / phenotype_std
+            # Fit the by-sex fit
+            sex_fit = OLS(f"{phenotype} ~ 0 + C(sex, Treatment(reference=-1)) : ({activity_var} +  {covariate_formula})",
+                             data=data)
+            _, sex_difference_p, _ = sex_fit.compare_f_test(fit)
+            female_coeff = sex_fit.params[f'C(sex, Treatment(reference=-1))[Female]:{activity_var}']
+            male_coeff = sex_fit.params[f'C(sex, Treatment(reference=-1))[Male]:{activity_var}']
+            p_female = sex_fit.pvalues[f'C(sex, Treatment(reference=-1))[Female]:{activity_var}']
+            p_male = sex_fit.pvalues[f'C(sex, Treatment(reference=-1))[Male]:{activity_var}']
+            #diff_test = sex_fit.t_test(f'C(sex, Treatment(reference=-1))[Male]:{activity_var} = C(sex, Treatment(reference=-1))[Female]:{activity_var}')
+            #p_diff = diff_test.pvalue
+            male_std_ratio = data.loc[data.sex == "Male", activity_var].std() / data.loc[data.sex == "Male", phenotype].std()
+            female_std_ratio = data.loc[data.sex == "Female", activity_var].std() / data.loc[data.sex == "Female", phenotype].std()
+            #By-age association
+            age_fit = OLS(f"{phenotype} ~ {activity_var} * age_at_actigraphy + sex * ({covariate_formula})",
+                             data=data)
+            age_difference_p = age_fit.pvalues[f"{activity_var}:age_at_actigraphy"]
+            main_coeff = age_fit.params[activity_var]
+            age_coeff = age_fit.params[f"{activity_var}:age_at_actigraphy"]
+            std_age_effect = age_coeff * activity_var_std / phenotype_std
             quantitative_tests_list.append({"phenotype": phenotype,
-                                    "activity_var": activity_variable,
+                                    "activity_var": activity_var,
                                     "p": p,
                                     "coeff": coeff,
                                     "std_effect": std_effect,
+                                    "sex_difference_p": sex_difference_p,
+                                    "p_male": p_male,
+                                    "p_female": p_female,
+                                    "std_male_coeff": male_coeff * male_std_ratio,
+                                    "std_female_coeff": female_coeff * female_std_ratio,
+                                    "age_difference_p": age_difference_p,
+                                    "age_main_coeff": main_coeff,
+                                    "age_effect_coeff": age_coeff,
+                                    "std_age_effect": std_age_effect,
                                     "N": N,
                                    })
+
     quantitative_tests = pandas.DataFrame(quantitative_tests_list)
     quantitative_tests['q'] = BH_FDR(quantitative_tests.p)
     def base_name(x):
@@ -1072,6 +1104,11 @@ common_associations_ratio = (common_associations / (expected_associations+0.001)
 ax = plot_heatmap(common_associations_ratio)
 ax.figure.savefig(OUTDIR+"/common_assocations_ratio_heatmap.png")
 
+# Run sex-difference and age-difference plots on the quantitative tests
+fig, ax = sex_difference_plot(quantitative_tests, color_by="phenotype", cmap="rainbow")
+fig.savefig(OUTDIR+"sex_differences.quantitative.png")
+
+### Connections plots
 def plot_connections(associations, directionality = None, **kwargs):
     fig, ax = pylab.subplots(**kwargs)
     scale = 1 / associations.max().max()
@@ -1206,14 +1243,22 @@ d = d[d.N_cases > 500]
 d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
 d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
 
-def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category"):
+def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category", cmap="Dark2"):
     fig, ax = pylab.subplots(figsize=(9,9))
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
-    else:
+        color = [colormap[c] for c in d[color_by]]
+    elif color_by is not None:
+        cats = d[color_by].unique()
+        if cmap == "rainbow":
+            cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+        else:
+            cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
         colormap = {cat:color for cat, color in
-                            zip(d[color_by].unique(),
-                                [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+                            zip(cats, cmap)}
+        color = [colormap[c] for c in d[color_by]]
+    else:
+        color = None
     color = [colormap[c] for c in d[color_by]]
     # The points
     ax.scatter(
@@ -1256,7 +1301,7 @@ def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category"):
                                 label=cat if not pandas.isna(cat) else "NA",
                                 c=c, lw=0)
                             for cat, c in colormap.items()]
-        ax.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+        fig.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
     return fig,ax
 fig, ax = age_effect_plot(d)
 fig.savefig(f"{OUTDIR}/age_effects.png")
@@ -1271,6 +1316,15 @@ fig, ax = age_effect_plot(d[d.phecode_category == 'genitourinary'], annotate=Fal
 fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
 fig, ax = age_effect_plot(d[d.phecode_category == 'respiratory'], annotate=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.respiratory.png")
+
+## age effect for quantitative traits
+dage = quantitative_tests.copy()
+dage['age_55_effect'] = dage["std_effect"] + dage['std_age_effect'] * young_offset
+dage['age_75_effect'] = dage["std_effect"] + dage['std_age_effect'] * old_offset
+dage['p_overall'] = dage.p
+dage['p_age'] = dage.age_difference_p
+fig, ax = age_effect_plot(dage, color_by="phenotype", cmap="rainbow")
+fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
 
 
 ######## PHENOTYPE-SPECIFIC PLOTS
@@ -2066,7 +2120,7 @@ legend_elts = [matplotlib.lines.Line2D(
                         marker="o", markerfacecolor=c, markersize=10,
                         label=cat if not pandas.isna(cat) else "NA",
                         c=c, lw=0)
-                    for cat, c in colormap.items()]
+                    for cat, c in color_by_actigraphy_cat.items()]
 fig.legend(handles=legend_elts, ncol=2, fontsize="small")
 #fig.tight_layout()
 fig.savefig(OUTDIR+"survival_versus_variation.svg")
