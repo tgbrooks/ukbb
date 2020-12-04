@@ -340,9 +340,24 @@ for group in phecode_groups:
 
 # Correlate each block-level code with our activity variable
 # Loop through all the activity variables and phecode groups we are interested in
+def compute_phecode_test(activity_variable, phecode, data):
+    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    fit = OLS(f"{activity_variable} ~ Q({phecode}) + sex * ({covariate_formula})",
+                 data=data)
+    p = fit.pvalues[f"Q({phecode})"]
+    coeff = fit.params[f"Q({phecode})"]
+    std_effect = coeff / data[activity_variable].std()
+    N_cases = data.loc[~data[activity_variable].isna(), phecode].sum()
+    return {"phecode": phecode,
+             "activity_var": activity_variable,
+             "p": p,
+             "coeff": coeff,
+             "std_effect": std_effect,
+             "N_cases": N_cases,
+    }, fit 
+
 if RECOMPUTE:
     phecode_tests_list = []
-    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
     for group in phecode_groups:
         print(group, )
         N = data[group].sum()
@@ -351,19 +366,8 @@ if RECOMPUTE:
             continue
         
         for activity_variable in activity.columns:
-            fit = OLS(f"{activity_variable} ~ Q({group}) + sex * ({covariate_formula})",
-                         data=data)
-            p = fit.pvalues[f"Q({group})"]
-            coeff = fit.params[f"Q({group})"]
-            std_effect = coeff / data[activity_variable].std()
-            N_cases = data.loc[~data[activity_variable].isna(), group].sum()
-            phecode_tests_list.append({"phecode": group,
-                                    "activity_var": activity_variable,
-                                    "p": p,
-                                    "coeff": coeff,
-                                    "std_effect": std_effect,
-                                    "N_cases": N_cases,
-                                   })
+            summary, fit = compute_phecode_tests(activity_variable, group, data)
+            phecode_tests.list.append(summary)
     phecode_tests = pandas.DataFrame(phecode_tests_list)
 
     phecode_tests['q'] = BH_FDR(phecode_tests.p)
@@ -406,25 +410,47 @@ def legend_from_colormap(fig, colormap, **kwargs):
                         for cat, c in colormap.items()]
     fig.legend(handles=legend_elts, **kwargs)
 
-fig, ax = pylab.subplots()
+## Prepare utility functions
+def truncate(string, N):
+    if len(string) <= N:
+        return string
+    return string[:N-3] + "..."
 
-ax.scatter(phecode_tests.N_cases, -numpy.log10(phecode_tests.p), marker=".")
+def wrap(string, N):
+    # Wrap to lines at most length N, preserving words
+    words = string.split()
+    lines = []
+    current_line = []
+    for word in words:
+        if len(word) + sum(len(w) for w in current_line) > N:
+            lines.append(' '.join(current_line))
+            current_line = []
+        current_line.append(word)
+    lines.append(' '.join(current_line))
+    return '\n'.join(lines)
+
+### Create summary plots
+fig, ax = pylab.subplots(figsize=(8,6))
+color = phecode_tests.phecode_category.map(color_by_phecode_cat)
+ax.scatter(phecode_tests.N_cases, -numpy.log10(phecode_tests.p), marker="+", c=color)
 ax.set_xlabel("Number cases")
-ax.set_ylabel("-log10(p-value)")
+ax.set_ylabel("-log10 (p-value)")
 ax.axhline( -numpy.log10(bonferonni_cutoff), c="k", zorder = -1 )
 ax.axhline( -numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = -1 )
 ax.set_title("PheCode - Activity associations")
 fig.savefig(OUTDIR+"phewas_summary.png")
 
 
-fig, ax = pylab.subplots()
-
-ax.scatter(phecode_tests.std_effect, -numpy.log10(phecode_tests.p), marker=".")
+fig, ax = pylab.subplots(figsize=(8,6))
+pt = phecode_tests.sample(frac=1) # Randomly reorder for the plot
+color = pt.phecode_category.map(color_by_phecode_cat)
+ax.scatter(pt.std_effect, -numpy.log10(pt.p), marker="+", c=color)
 ax.set_xlabel("Effect size")
 ax.set_ylabel("-log10(p-value)")
 ax.axhline( -numpy.log10(bonferonni_cutoff), c="k", zorder = -1 )
 ax.axhline( -numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = -1 )
 ax.set_title("PheCode - Activity associations")
+legend_from_colormap(ax, color_by_phecode_cat, ncol=2, fontsize="small")
 fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
 
@@ -746,14 +772,21 @@ num_female = (data.sex == "Female").sum()
 d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
                         & (phecode_tests_by_sex.N_male > 300)
                         & (phecode_tests_by_sex.N_female > 300)]
-def sex_difference_plot(d, color_by="phecode_category"):
+def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2"):
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
-    else:
+        color = [colormap[c] for c in d[color_by]]
+    elif color_by is not None:
+        cats = d[color_by].unique()
+        if cmap == "rainbow":
+            cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+        else:
+            cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
         colormap = {cat:color for cat, color in
-                            zip(d[color_by].unique(),
-                                [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-    color = [colormap[c] for c in d[color_by]]
+                            zip(cats, cmap)}
+        color = [colormap[c] for c in d[color_by]]
+    else:
+        color = None
     fig, ax = pylab.subplots(figsize=(9,9))
     # The points
     ax.scatter(
@@ -786,14 +819,16 @@ def sex_difference_plot(d, color_by="phecode_category"):
     ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
     ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
     ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
-    legend_elts = [matplotlib.lines.Line2D(
-                            [0],[0],
-                            marker="o", markerfacecolor=c, markersize=10,
-                            label=cat if not pandas.isna(cat) else "NA",
-                            c=c, lw=0)
-                        for cat, c in colormap.items()]
-    ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+    if color_by is not None:
+        legend_elts = [matplotlib.lines.Line2D(
+                                [0],[0],
+                                marker="o", markerfacecolor=c, markersize=10,
+                                label=cat if not pandas.isna(cat) else "NA",
+                                c=c, lw=0)
+                            for cat, c in colormap.items()]
+        fig.legend(handles=legend_elts, ncol=2, fontsize="small")
     return fig, ax
+
 fig, ax = sex_difference_plot(d)
 fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
@@ -2202,6 +2237,83 @@ ax2.axhline(-numpy.log10(survival_tests.loc[survival_tests.activity_var == "acce
 legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
 fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
+## Plot comparison of circadian versus other variables for the phecodes where circadian do the best
+# gather the top circadian phecodes
+circadian_does_best = phecode_tests.sort_values(by="p").groupby("phecode").apply(lambda x: x.iloc[0].activity_var_category == "Circadianness")
+circadian_phecodes = circadian_does_best.index[circadian_does_best]
+circadian_best_tests = phecode_tests[phecode_tests.phecode.isin(circadian_phecodes)].copy()
+circadian_best_tests['ordering'] = circadian_best_tests.phecode.map(circadian_best_tests.groupby("phecode").p.min().rank())
+fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
+yticks = {}
+pvalues = []
+ranks = []
+for  phecode, row in circadian_best_tests.groupby('phecode'):
+    rank = row.ordering.iloc[0]
+    phenotype = row.phecode_meaning.iloc[0]
+    if rank > 20:
+        continue # Skip all but the most significant
+    color = row.activity_var_category.map(color_by_actigraphy_cat)
+    top_circ = row[row.activity_var_category == "Circadianness"].sort_values(by="p").iloc[0].activity_var
+    top_physical = row[row.activity_var_category == "Physical activity"].sort_values(by="p").iloc[0].activity_var
+    top_sleep = row[row.activity_var_category == "Sleep"].sort_values(by="p").iloc[0].activity_var
+    _, circ_fit = compute_phecode_test(top_circ, phecode, data)
+    _, physical_fit = compute_phecode_test(top_physical, phecode, data)
+    _, sleep_fit = compute_phecode_test(top_sleep, phecode, data)
+    circ_conf_int = circ_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_circ].std()
+    physical_conf_int = physical_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_physical].std()
+    sleep_conf_int = sleep_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_sleep].std()
+    #ax1.scatter(-numpy.log10(row.p), row.ordering, c = color)
+    ##ax2.scatter(numpy.abs(row.std_effect), row.ordering, c=color)
+    #ax2.plot(circ_conf_int, [rank, rank], c = "r")
+    #ax2.plot(physical_conf_int, [rank+0.1, rank+0.1], c = "b")
+    #ax2.plot(sleep_conf_int, [rank+0.2, rank+0.2], c = "g")
+
+    # Logistic model
+    corr = data[[top_circ, top_physical]].corr().values[0,1]
+    data['orthog'] = (data[top_circ] - data[top_circ].mean()) /data[top_circ].std() - corr * (data[top_physical] - data[top_physical].mean()) / data[top_physical].std()
+    results = smf.logit(f"Q({phecode}) ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
+    marginals = results.get_margeff()
+    ps = pandas.Series(results.pvalues, index=results.model.exog_names)[[top_circ, top_physical, top_sleep]]
+    margeffs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]].abs()
+    margeffs *= data[margeffs.index].std() # Standardize by the actigraphy variables used
+    margeffs /= data[phecode].mean() # Standardize by the overall prevalence
+    ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]]
+    ses *= data[margeffs.index].std() # Standardized SEs too
+    ses /= data[phecode].mean()
+
+    colors = [color_by_actigraphy_cat[c] for c in ["Circadianness", "Physical activity", "Sleep"]]
+    ys = numpy.linspace(rank-0.15, rank+0.15, 3)
+    #ax1.scatter(-numpy.log10(ps), [rank]*len(ps), c=colors)
+    ax2.scatter(margeffs, ys, c=colors)
+    for eff, se, y, c, p in zip(margeffs, ses, ys, colors, ps):
+        ax1.barh([y], height=0.15, width=[-numpy.log10(p)], color=c)
+        ax2.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c)
+
+    yticks[rank] = wrap(phenotype, 30)
+    pvalues.append(ps[top_circ])
+    ranks.append(rank)
+# Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
+# so we will assume worst case, all others ps are 1
+#pvalues = numpy.array(pvalues + [1]*(phecode_tests.phecode.nunique() - len(pvalues)))
+pvalues = numpy.concatenate([pvalues, numpy.random.uniform(size=(phecode_tests.phecode.nunique() - len(pvalues)))])
+qvalues = BH_FDR(pvalues)
+qvalue_dict = {rank: q for rank, q in zip(ranks, qvalues[:len(ranks)])}
+# Cut off half way between pvalues of worst gene passing FDR < 0.05 and best gene not passing
+pvalue_cutoff = 0.5*pvalues[qvalues < 0.05].max() + 0.5*pvalues[qvalues >= 0.05].min()
+ax1.axvline(-numpy.log10(pvalue_cutoff), linestyle="--", color="k")
+ax1.set_yticks(list(yticks.keys()))
+ax1.set_yticklabels([name if qvalue_dict[rank] >= 0.05 else name + " (*)"
+                        for rank, name in yticks.items()])
+ax1.set_xlabel("-log10 p-value")
+ax1.set_xlim(left=0)
+ax2.set_xlabel("Standardized Effect Size")
+ax2.axvline(0, linestyle="-", color="k", linewidth=1)
+legend_from_colormap(fig, color_by_actigraphy_cat)
+ax1.margins(0.5, 0.02)
+fig.tight_layout()
+fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
+
+
 ### Assess the correlations of the various measures
 base_vars = ["acceleration", "moderate", "walking", "sleep", "sedentary", "tasks_light", "MET", "MVPA"]
 additions = ["_overall", "_hourly_SD", "_within_day_SD", "_between_day_SD", "_peak_value_mean", "_RA", "_IV"]
@@ -2380,14 +2492,19 @@ fig.savefig(OUTDIR+"survival.by_sex.png")
 # Sleep durations have a fairly U-shaped curve so we use the abs_dev versions here
 # and the total_sleep_mean variable includes napping time as well as sleep time
 # so we don't use that here since napping is investigated in the self_report_nap_during_day variable
-variable_pairs = [ ("sleep_duration", "main_sleep_duration_mean_abs_dev"),
-                   ("morning_evening_person", "phase"),
-                   ("morning_evening_person", "phase_abs_dev"),
-                   ("nap_during_day", "other_sleep_mean"),
-                   ("sleeplessness", "WASO_mean")]
-fig, (ax1, ax2) = pylab.subplots(ncols=2, sharey=True)
-for i, (self_report, activity_var) in enumerate(variable_pairs):
-    self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
+variable_pairs = { "sleep duration": ("sleep_duration", "main_sleep_duration_mean"),
+                   "sleep duration abs. dev.": ("sleep_duration_abs_dev", "main_sleep_duration_mean_abs_dev"),
+                   "phase": ("morning_evening_person", "phase"),
+                   #("morning_evening_person", "phase_abs_dev"),
+                   "napping": ("nap_during_day", "other_sleep_mean"),
+                   "sleeplessness": ("sleeplessness", "WASO_mean")}
+#fig, (ax1, ax2) = pylab.subplots(ncols=2, sharey=True)
+fig, ax2 = pylab.subplots(figsize=(4,4))
+for i, (name, (self_report, activity_var)) in enumerate(variable_pairs.items()):
+    if self_report == "sleep_duration_abs_dev":
+        self_report_var = "self_report_sleep_duration_abs_dev"
+    else:
+        self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
     print(f"Comparing: {self_report} to {activity_var}")
     self_report_survival = survival_tests.query(f"activity_var == '{self_report_var}'").iloc[0]
     self_report_objective = survival_tests.query(f"activity_var == '{activity_var}'").iloc[0]
@@ -2403,7 +2520,7 @@ for i, (self_report, activity_var) in enumerate(variable_pairs):
                                     ).fit()
     pvalues = pandas.Series(survival_test.pvalues, index=survival_test.model.exog_names)
     params = pandas.Series(survival_test.params, index=survival_test.model.exog_names)
-    if data[self_report].dtype.name == "category":
+    if self_report in data and data[self_report].dtype.name == "category":
         cat_counts = data[self_report].value_counts()
         most_common = cat_counts.idxmax()
         dropped_cats = cat_counts.index[cat_counts < 400].to_list() # Want at least this many in the category
@@ -2423,7 +2540,8 @@ for i, (self_report, activity_var) in enumerate(variable_pairs):
         ).pvalue
         self_report_pvalue = self_report_pvalue.flatten()[0]
     else:
-        self_report_pvalue = float("NaN")
+        # Non-categorical values don't have an alternative, use the same as before
+        self_report_pvalue = self_report_survival.p
     df = pandas.DataFrame.from_dict({
         "self_report": {
             "survival_p": self_report_survival.p,
@@ -2443,16 +2561,22 @@ for i, (self_report, activity_var) in enumerate(variable_pairs):
     })
     print(df.T)
     # Plot the points
-    ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report"])], c="k")
-    ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "downsampled_objective"])], c="r")
-    ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report_cat"])], c="k")
-    ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "objective"])], c="r")
-ax1.set_ylabel("-log10 p-value")
-ax1.set_xticks(range(len(variable_pairs)))
-ax1.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
-ax2.set_xticks(range(len(variable_pairs)))
-ax2.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
-ax1.xaxis.set_tick_params(rotation=90)
+    #ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report"])], c="k")
+    #ax1.scatter([i], [-numpy.log10(df.loc["survival_p", "downsampled_objective"])], c="r")
+    #ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "self_report_cat"])], c="k")
+    #ax2.scatter([i], [-numpy.log10(df.loc["survival_p", "objective"])], c="r")
+    BAR_WIDTH = 0.6
+    ax2.bar(2*i-BAR_WIDTH/2, -numpy.log10(df.loc['survival_p', 'self_report_cat']), color="k", width=BAR_WIDTH)
+    ax2.bar(2*i+BAR_WIDTH/2, -numpy.log10(df.loc['survival_p', 'objective']), color="r", width=BAR_WIDTH)
+#ax1.set_ylabel("-log10 p-value")
+#ax1.set_xticks(range(len(variable_pairs)))
+#ax1.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
+#ax2.set_xticks(range(len(variable_pairs)))
+#ax2.set_xticklabels([f"{self_report}\n{activity_var}" for self_report, activity_var in variable_pairs])
+#ax1.xaxis.set_tick_params(rotation=90)
+ax2.set_xticks(2*numpy.arange(len(variable_pairs)))
+ax2.set_xticklabels([name for name in variable_pairs.keys()])
+ax2.set_ylabel("-log10 p-value")
 ax2.xaxis.set_tick_params(rotation=90)
 legend_elts = [matplotlib.lines.Line2D(
                         [0],[0],
@@ -2460,7 +2584,7 @@ legend_elts = [matplotlib.lines.Line2D(
                         label=l,
                         c=c, lw=0)
                     for c, l in zip(["k", "r"], ["Subjective", "Objective"])]
-fig.legend(handles=legend_elts)
+ax2.legend(handles=legend_elts)
 fig.tight_layout()
 fig.savefig(OUTDIR+"subjective_objective_comparison.survival.png")
 
@@ -2468,8 +2592,11 @@ fig.savefig(OUTDIR+"subjective_objective_comparison.survival.png")
 # Compare the objective/subjective variables again on the phecodes
 fig, axes = pylab.subplots(ncols=len(variable_pairs), figsize=(15,7), sharex=True, sharey=True)
 Q_CUTOFF = 0.05
-for ax, (self_report, activity_var) in zip(axes.flatten(), variable_pairs):
-    self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
+for ax, (name, (self_report, activity_var)) in zip(axes.flatten(), variable_pairs.items()):
+    if self_report is not "sleep_duration_abs_dev":
+        self_report_var = "self_report_" + self_report_circadian_variables[self_report]['name']
+    else:
+        self_report_var = "self_report_sleep_duration_abs_dev"
     either_significant = phecode_tests[
         ((phecode_tests.activity_var == self_report_var) |
          (phecode_tests.activity_var == activity_var)) &
@@ -2497,15 +2624,17 @@ for ax, (self_report, activity_var) in zip(axes.flatten(), variable_pairs):
     colors = objective_tests.phecode.map(phecode_info.category).map(color_by_phecode_cat)
     ax.scatter(-numpy.log10(objective_tests.p), -numpy.log10(subjective_ps), c=colors)
     ax.set_aspect("equal")
+    ax.set_xlabel(f"-log10 p objective variable")
+    if ax == axes.flatten()[0]:
+        ax.set_ylabel(f"-log10 p subjective variable")
+    ax.set_title(name)
+for ax in axes.flatten():
     bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
                 numpy.max([ax.get_xlim(), ax.get_ylim()]))
     diag = numpy.array([0, bound])
     ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
-    ax.set_xlabel(f"-log10 p {activity_var}")
-    if ax == axes.flatten()[0]:
-        ax.set_ylabel(f"-log10 p subjective variable")
-    ax.set_title(self_report_circadian_variables[self_report]['name'])
-    #TODO: add colors
+    ax.set_xlim(0,20)
+    ax.set_ylim(0,20)
 fig.tight_layout()
 fig.savefig(OUTDIR+"objective_subjective_comparison.png")
 
@@ -2590,7 +2719,7 @@ fig, ax, mood_disorders_by_date = plot_by_diagnosis_date(["F30", "F31", "F32", "
 fig.savefig(OUTDIR+"by_date.mood_disorders.png")
 
 fig, ax, anxiety_by_date = plot_by_diagnosis_date(["F40", "F41"], 300, "Anxiety Disorders")
-fig.savefig(OUTDIR+"by_date.mood_disorders.png")
+fig.savefig(OUTDIR+"by_date.anxiety_disorders.png")
 
 fig, ax, renal_failure_by_date = plot_by_diagnosis_date(["N17", "N18", "N19", "Y60", "Y84", "Z49"], 585, "Renal Failure")
 fig.savefig(OUTDIR+"by_date.renal_failure.png")
