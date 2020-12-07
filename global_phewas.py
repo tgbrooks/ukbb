@@ -1307,19 +1307,27 @@ d = d[d.N_cases > 500]
 d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
 d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
 
-def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category", cmap="Dark2"):
-    fig, ax = pylab.subplots(figsize=(9,9))
+def age_effect_plot(d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.45, ax=None):
+    if ax is None:
+        fig, ax = pylab.subplots(figsize=(9,9))
+        just_ax = False
+    else:
+        fig = ax.figure
+        just_ax = True
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
         color = [colormap[c] for c in d[color_by]]
     elif color_by is not None:
-        cats = d[color_by].unique()
-        if cmap == "rainbow":
-            cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+        if type(cmap) == str:
+            cats = d[color_by].unique()
+            if cmap == "rainbow":
+                cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+            else:
+                cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
+            colormap = {cat:color for cat, color in
+                                zip(cats, cmap)}
         else:
-            cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
-        colormap = {cat:color for cat, color in
-                            zip(cats, cmap)}
+            colormap = cmap
         color = [colormap[c] for c in d[color_by]]
     else:
         color = None
@@ -1330,19 +1338,16 @@ def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category", 
         d.age_75_effect,
         s=-numpy.log10(numpy.minimum(d.p_overall, d.p_age))*3,
         c=color)
-    ax.set_title("Effect sizes by age\nAmong signifcant associations")
     ax.spines['bottom'].set_color(None)
     ax.spines['top'].set_color(None)
     ax.spines['left'].set_color(None)
     ax.spines['right'].set_color(None)
     ax.axvline(c="k", lw=1)
     ax.axhline(c="k", lw=1)
-    ax.set_xlabel("Effect size at 55")
-    ax.set_ylabel("Effect size at 70")
-    ax.set_xlim(-0.45,0.45)
-    ax.set_ylim(-0.45,0.45)
-    ax.set_xticks(numpy.linspace(-0.4,0.4,11))
-    ax.set_yticks(numpy.linspace(-0.4,0.4,11))
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
+    #ax.set_xticks(numpy.linspace(-0.4,0.4,11))
+    #ax.set_yticks(numpy.linspace(-0.4,0.4,11))
     # Diagonal y=x line
     bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
                 numpy.max([ax.get_xlim(), ax.get_ylim()]))
@@ -1350,14 +1355,17 @@ def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category", 
     ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal", linewidth=1)
     ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal", linewidth=1)
     ax.set_aspect("equal")
-    if annotate:
+    if labels:
+        #ax.set_title("Effect sizes by age\nAmong signifcant associations")
+        ax.set_xlabel("Effect size at 55")
+        ax.set_ylabel("Effect size at 70")
         bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
-        ax.annotate("Age 55 Effect Larger", xy=(0.3,0), ha="center", bbox=bbox, zorder=3)
-        ax.annotate("Age 55 Effect Larger", xy=(-0.3,0), ha="center", bbox=bbox, zorder=3)
-        ax.annotate("Age 70 Effect Larger", xy=(0,0.15), ha="center", bbox=bbox, zorder=3)
-        ax.annotate("Age 70 Effect Larger", xy=(0,-0.30), ha="center", bbox=bbox, zorder=3)
-        ax.annotate("Equal Effects", xy=(0.3,0.3), ha="center", va="center", bbox=bbox, zorder=3, rotation=45)
-        ax.annotate("Opposite Effects", xy=(0.3,-0.3), ha="center", va="center", bbox=bbox, zorder=3, rotation=-45)
+        ax.annotate("Age 55 Effect Larger", xy=(0.8*lim,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 55 Effect Larger", xy=(-0.8*lim,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 70 Effect Larger", xy=(0,0.8*lim), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Age 70 Effect Larger", xy=(0,-0.8*lim), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Equal Effects", xy=(0.8*lim,0.8*lim), ha="center", va="center", bbox=bbox, zorder=3, rotation=45)
+        ax.annotate("Opposite Effects", xy=(0.8*lim,-0.8*lim), ha="center", va="center", bbox=bbox, zorder=3, rotation=-45)
     if legend:
         legend_elts = [matplotlib.lines.Line2D(
                                 [0],[0],
@@ -1365,20 +1373,23 @@ def age_effect_plot(d, legend=True, annotate=True, color_by="phecode_category", 
                                 label=cat if not pandas.isna(cat) else "NA",
                                 c=c, lw=0)
                             for cat, c in colormap.items()]
-        fig.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+        if just_ax == True:
+            ax.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+        else:
+            fig.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
     return fig,ax
 fig, ax = age_effect_plot(d)
 fig.savefig(f"{OUTDIR}/age_effects.png")
 
-fig, ax = age_effect_plot(d[d.phecode_category == 'mental disorders'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'mental disorders'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
-fig, ax = age_effect_plot(d[d.phecode_category == 'circulatory system'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'circulatory system'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.circulatory.png")
-fig, ax = age_effect_plot(d[d.phecode_category == 'endocrine/metabolic'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'endocrine/metabolic'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.endorcine.png")
-fig, ax = age_effect_plot(d[d.phecode_category == 'genitourinary'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'genitourinary'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
-fig, ax = age_effect_plot(d[d.phecode_category == 'respiratory'], annotate=False, color_by="phecode_meaning")
+fig, ax = age_effect_plot(d[d.phecode_category == 'respiratory'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.respiratory.png")
 
 ## age effect for quantitative traits
@@ -1387,8 +1398,18 @@ dage['age_55_effect'] = dage["std_effect"] + dage['std_age_effect'] * young_offs
 dage['age_75_effect'] = dage["std_effect"] + dage['std_age_effect'] * old_offset
 dage['p_overall'] = dage.p
 dage['p_age'] = dage.age_difference_p
-fig, ax = age_effect_plot(dage, color_by="phenotype", cmap="rainbow")
+fig, ax = age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
 fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
+
+#Make 2x2 grid of quantitative age differences
+fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
+for cat, ax in zip(SUBCATEGORIES, axes.flatten()):
+    tests = dage[dage['Functional Category'] == cat]
+    age_effect_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
+    ax.set_title(cat)
+fig.savefig(OUTDIR+"age_effects.quantitative.2x2.png")
+
 
 
 ######## PHENOTYPE-SPECIFIC PLOTS
