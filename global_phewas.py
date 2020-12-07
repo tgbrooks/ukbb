@@ -77,6 +77,9 @@ print(f"Selected {len(activity.columns)} after discarding those with poor intra-
 # Load descriptions + categorization of activity variables
 activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
 
+# Load descriptions of the quantitative variables
+quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0)
+
 # drop activity for people who fail basic QC
 okay = (activity_summary['quality-goodCalibration'].astype(bool)
             & (~activity_summary['quality-daylightSavingsCrossover'].astype(bool))
@@ -356,6 +359,7 @@ def compute_phecode_test(activity_variable, phecode, data):
              "N_cases": N_cases,
     }, fit 
 
+## Compute the phecode associations
 if RECOMPUTE:
     phecode_tests_list = []
     for group in phecode_groups:
@@ -401,6 +405,9 @@ color_by_actigraphy_cat = {cat:color for cat, color in
 color_by_actigraphy_subcat = {cat:color for cat, color in
                                 zip(activity_variable_descriptions.Subcategory.unique(),
                                     [pylab.get_cmap("Set3")(i) for i in range(20)])}
+color_by_quantitative_function = {cat:color for cat, color in
+                                    zip(quantitative_variable_descriptions['Functional Categories'].unique(),
+                                        [pylab.get_cmap("tab20b")(i) for i in range(20)])}
 def legend_from_colormap(fig, colormap, **kwargs):
     legend_elts = [matplotlib.lines.Line2D(
                             [0],[0],
@@ -772,22 +779,30 @@ num_female = (data.sex == "Female").sum()
 d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
                         & (phecode_tests_by_sex.N_male > 300)
                         & (phecode_tests_by_sex.N_female > 300)]
-def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2"):
+def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2", lim=0.5, ax=None, legend=True, labels=True):
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
         color = [colormap[c] for c in d[color_by]]
     elif color_by is not None:
-        cats = d[color_by].unique()
-        if cmap == "rainbow":
-            cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+        if type(cmap) == str:
+            cats = d[color_by].unique()
+            if cmap == "rainbow":
+                cmap = [pylab.get_cmap("rainbow")(i) for i in numpy.arange(len(cats))/len(cats)]
+            else:
+                cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
+            colormap = {cat:color for cat, color in
+                                zip(cats, cmap)}
         else:
-            cmap = [pylab.get_cmap(cmap)(i) for i in range(len(cats))]
-        colormap = {cat:color for cat, color in
-                            zip(cats, cmap)}
+            colormap = cmap
         color = [colormap[c] for c in d[color_by]]
     else:
         color = None
-    fig, ax = pylab.subplots(figsize=(9,9))
+    if ax is None:
+        fig, ax = pylab.subplots(figsize=(9,9))
+        just_ax = False
+    else:
+        fig = ax.figure
+        just_ax = True
     # The points
     ax.scatter(
         d.std_male_coeff,
@@ -796,37 +811,41 @@ def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2"):
         #s=-numpy.log10(d.p_diff)*10,
         s=-numpy.log10(numpy.minimum(d.p_male, d.p_female))*4,
         c=color)
-    ax.set_title("Effect sizes by sex\nAmong signifcant associations")
     ax.spines['bottom'].set_color(None)
     ax.spines['top'].set_color(None)
     ax.spines['left'].set_color(None)
     ax.spines['right'].set_color(None)
     ax.axvline(c="k", lw=1)
     ax.axhline(c="k", lw=1)
-    ax.set_xlabel("Effect size in males")
-    ax.set_ylabel("Effect size in females")
+    if labels:
+        #ax.set_title("Effect sizes by sex\nAmong signifcant associations")
+        ax.set_xlabel("Effect size in males")
+        ax.set_ylabel("Effect size in females")
+        bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
+        ax.annotate("Male Effect Larger", xy=(0.8*lim,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Male Effect Larger", xy=(-0.8*lim,0), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Female Effect Larger", xy=(0,0.8*lim), ha="center", bbox=bbox, zorder=3)
+        ax.annotate("Female Effect Larger", xy=(0,-0.5*lim), ha="center", bbox=bbox, zorder=3)
     ax.set_aspect("equal")
-    ax.set_xlim(-0.5,0.5)
-    ax.set_ylim(-0.5,0.5)
+    ax.set_xlim(-lim, lim)
+    ax.set_ylim(-lim, lim)
     # Diagonal y=x line
     bound = max(abs(numpy.min([ax.get_xlim(), ax.get_ylim()])),
                 numpy.max([ax.get_xlim(), ax.get_ylim()]))
     diag = numpy.array([-bound, bound])
     ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
     ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal")
-    bbox = {'facecolor': (1,1,1,0.8), 'edgecolor':(0,0,0,0)}
-    ax.annotate("Male Effect Larger", xy=(0.4,0), ha="center", bbox=bbox, zorder=3)
-    ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
-    ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
-    ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
-    if color_by is not None:
+    if color_by is not None and legend:
         legend_elts = [matplotlib.lines.Line2D(
                                 [0],[0],
                                 marker="o", markerfacecolor=c, markersize=10,
                                 label=cat if not pandas.isna(cat) else "NA",
                                 c=c, lw=0)
                             for cat, c in colormap.items()]
-        fig.legend(handles=legend_elts, ncol=2, fontsize="small")
+        if just_ax:
+            ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+        else:
+            fig.legend(handles=legend_elts, ncol=2, fontsize="small")
     return fig, ax
 
 fig, ax = sex_difference_plot(d)
@@ -1083,6 +1102,7 @@ if RECOMPUTE:
 else:
     quantitative_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
 quantitative_tests_raw = quantitative_tests.copy()
+quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
 
 pylab.close('all')
 
@@ -1140,8 +1160,17 @@ ax = plot_heatmap(common_associations_ratio)
 ax.figure.savefig(OUTDIR+"/common_assocations_ratio_heatmap.png")
 
 # Run sex-difference and age-difference plots on the quantitative tests
-fig, ax = sex_difference_plot(quantitative_tests, color_by="phenotype", cmap="rainbow")
+fig, ax = sex_difference_plot(quantitative_tests.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
 fig.savefig(OUTDIR+"sex_differences.quantitative.png")
+
+#Make 2x2 grid of quantitative sex differences
+fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
+for cat, ax in zip(SUBCATEGORIES, axes.flatten()):
+    tests = quantitative_tests[quantitative_tests['Functional Category'] == cat]
+    sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
+    ax.set_title(cat)
+fig.savefig(OUTDIR+"sex_differences.quantitative.2x2.png")
 
 ### Connections plots
 def plot_connections(associations, directionality = None, **kwargs):
