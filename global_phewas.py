@@ -470,211 +470,7 @@ legend_from_colormap(ax, color_by_phecode_cat, ncol=2, fontsize="small")
 fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
 
-
-### Generate summaries of the phecode test results
-
-## Display the p-values of each activity variable
-fig, ax = pylab.subplots(figsize=(8,8))
-for i, activity_variable in enumerate(activity_variables):
-    ps = phecode_tests[phecode_tests['activity_var'] == activity_variable].p
-    ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.random(ps.shape)-0.5) * 0.7,
-                marker=".", s=1.5)
-ax.set_xlabel("-log10(p-value)")
-ax.set_title("Phecode associations\ngrouped by activity variable")
-ax.set_yticks(range(len(activity_variables)))
-ax.set_yticklabels(activity_variables)
-ax.set_ylim(-1, len(activity_variables))
-ax.axvline( -numpy.log10(bonferonni_cutoff), c="k", zorder = -1 )
-ax.axvline( -numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = -1 )
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalues_by_activity_variable.png")
-
-## Display p-values by the category of the phecode
-fig, ax = pylab.subplots(figsize=(6,8))
-phecode_categories = phecode_tests.phecode_category.unique()
-for i, category in enumerate(phecode_categories):
-    ps = phecode_tests[phecode_tests.phecode_category == category].p
-    ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
-                marker=".", s=1.5)
-ax.set_xlabel("-log10(p-value)")
-ax.set_title("Phecode associations\ngrouped by phecode category")
-ax.set_yticks(range(len(phecode_categories)))
-ax.set_yticklabels(phecode_categories)
-ax.set_ylim(-1, len(phecode_categories))
-ax.axvline( -numpy.log10(bonferonni_cutoff), c="k", zorder = -1 )
-ax.axvline( -numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = -1 )
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalues_by_phecode_category.png")
-
-## Display p-values by the inter-intra personal variance ratio
-fig, ax = pylab.subplots(figsize=(8,8))
-ax.scatter(phecode_tests['activity_var'].map(activity_variance.corrected_intra_personal_normalized),
-            -numpy.log10(phecode_tests.p))
-ax.set_xlabel("Ratio of intra- to inter-personal variance")
-ax.set_ylabel("-log10(p-value)")
-ax.set_title("p-values by variance ratio")
-fig.savefig(OUTDIR+"pvalues_by_variance.png")
-
-## Display effect sizes by the inter-intra personal variance ratio
-fig, ax = pylab.subplots(figsize=(8,8))
-ax.scatter(phecode_tests['activity_var'].map(activity_variance.corrected_intra_personal_normalized),
-            phecode_tests.std_effect.abs())
-ax.set_xlabel("Ratio of intra- to inter-personal variance")
-ax.set_ylabel("Standardized Effect Size")
-ax.set_title("Effect sizes by variance ratio")
-fig.savefig(OUTDIR+"effect_size_by_variance.png")
-
-## heatmap of phenotype-activity relationships
-fig, ax = pylab.subplots(figsize=(9,9))
-FDR_CUTOFF_VALUE = 0.05
-pvalue_counts = phecode_tests.groupby(["activity_var", "phecode_category"]).q_significant.sum().unstack()
-h = ax.imshow(pvalue_counts.values)
-ax.set_xticks(range(len(pvalue_counts.columns)))
-ax.set_xticklabels(pvalue_counts.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_counts.columns)-0.5)
-ax.set_yticks(range(len(pvalue_counts.index)))
-ax.set_yticklabels(pvalue_counts.index)
-ax.set_ylim(-0.5, len(pvalue_counts.index)-0.5)
-ax.set_title(f"Number associations significant (q < {FDR_CUTOFF_VALUE})")
-c = fig.colorbar(h)
-c.ax.set_ylabel("Number significant in category")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.png")
-
-## same as above but with percent-of-category-significant displayed
-fig, ax = pylab.subplots(figsize=(9,9))
-pvalue_percent = phecode_tests.groupby(["activity_var", "phecode_category"]).q_significant.mean().unstack()*100
-h = ax.imshow(pvalue_percent.values)
-ax.set_xticks(range(len(pvalue_percent.columns)))
-ax.set_xticklabels(pvalue_percent.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_percent.columns)-0.5)
-ax.set_yticks(range(len(pvalue_percent.index)))
-ax.set_yticklabels(pvalue_percent.index)
-ax.set_ylim(-0.5, len(pvalue_percent.index)-0.5)
-ax.set_title(f"Percent phenotypes with significant associations\n(q < {FDR_CUTOFF_VALUE})")
-c = fig.colorbar(h)
-c.ax.set_ylabel("Percent of category significant")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.percent.png")
-
-## Same as a above showing the hypergeometric test p-value or enrichment
-total_significant = phecode_tests.groupby(["activity_var"]).q_significant.sum()
-num_tests = phecode_tests.phecode.nunique()
-#category_sizes = phecode_tests.groupby(['phecode_category']).phecode.nunique().
-
-def hypergeom_enrichment(data):
-    var = data['activity_var'].iloc[0]
-    k = data.q_significant.sum()
-    M = num_tests
-    n = total_significant[var]
-    N = len(data)
-    p =  scipy.stats.hypergeom.sf(k, M, n, N)
-    if n == 0:
-        return 1
-    return p
-fig, ax = pylab.subplots(figsize=(9,9))
-pvalue_enrichment_stacked = phecode_tests.groupby(["activity_var", "phecode_category"])[['phecode', 'q_significant', 'activity_var']].apply(hypergeom_enrichment)
-pvalue_enrichment = pvalue_enrichment_stacked.unstack()
-enrichment_qs = BH_FDR(pvalue_enrichment.values.ravel()).reshape(pvalue_enrichment.shape)
-h = ax.imshow(-numpy.log10(enrichment_qs))
-ax.set_xticks(range(len(pvalue_enrichment.columns)))
-ax.set_xticklabels(pvalue_enrichment.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_enrichment.columns)-0.5)
-ax.set_yticks(range(len(pvalue_enrichment.index)))
-ax.set_yticklabels(pvalue_enrichment.index)
-ax.set_ylim(-0.5, len(pvalue_enrichment.index)-0.5)
-ax.set_title("Enrichment of significant phenotypes within a category")
-c = fig.colorbar(h)
-c.ax.set_ylabel("-log10(enrichment q-value)")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.png")
-
-## Heat of activity-category versus phecode-category p-values
-fig, ax = pylab.subplots(figsize=(9,5))
-pvalue_percent_categories = phecode_tests.groupby(["activity_var_category", "phecode_category"]).q_significant.mean().unstack()*100
-h = ax.imshow(pvalue_percent_categories.values)
-ax.set_xticks(range(len(pvalue_percent_categories.columns)))
-ax.set_xticklabels(pvalue_percent_categories.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_percent_categories.columns)-0.5)
-ax.set_yticks(range(len(pvalue_percent_categories.index)))
-ax.set_yticklabels(pvalue_percent_categories.index)
-ax.set_ylim(-0.5, len(pvalue_percent_categories.index)-0.5)
-ax.set_title(f"Percent phenotypes with significant associations\n(q < {FDR_CUTOFF_VALUE})")
-c = fig.colorbar(h)
-c.ax.set_ylabel("Percent of category significant")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.by_activity_var_category.percent.png")
-
-
-## PCA of the different phenotypes
-# each point is a phenotype and its given the vector of effect sizes relating to the different associations
-# is there a pattern/clustering to the phenotypes?
-#phecode_effect_vectors = phecode_tests.set_index(["group", "var"]).std_effect.unstack()
-#pca = PCA(n_components=2)
-#pca_coords = pca.fit_transform(phecode_effect_vectors)
-#phecode_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=phecode_effect_vectors.index)
-#phecode_pca['category'] = phecode_pca.index.map(phecode_info.category)
-#
-#fig, ax = pylab.subplots(figsize=(8,8))
-#for category in phecode_info.category.unique():
-#    category_points = phecode_pca.loc[phecode_pca.category == category, [0,1]]
-#    ax.scatter(category_points[0], category_points[1], label=category)
-#ax.legend()
-#ax.set_title("PCA of Phenotypes by Activity Effect Sizes")
-#fig.savefig(OUTDIR+"phecode_pca.png")
-
-## PCA of the different activity variables
-#activity_effect_vectors = phecode_tests.set_index(["var", "group"]).std_effect.unstack()
-#pca_coords = pca.fit_transform(activity_effect_vectors)
-#activity_pca = pandas.DataFrame({0: pca_coords[:,0], 1:pca_coords[:,1]}, index=activity_effect_vectors.index)
-#fig, ax = pylab.subplots(figsize=(8,8))
-#ax.scatter(activity_pca[0], activity_pca[1])
-#for i, var in enumerate(activity_effect_vectors.index):
-#    ax.annotate(var, (activity_pca.loc[var, 0], activity_pca.loc[var,1]))
-#ax.legend()
-#ax.set_title("PCA of Activity Variables by Phenotype Effect Sizes")
-#fig.savefig(OUTDIR+"activity_variable_pca.png")
-
-
-## Connection analysis
-# We say there is a 'connection' between two phenotypes if there is an activity variable
-# that associates with both of them
-
-# count the number of connections for each phenotype-pairing
-significance_matrix = phecode_tests.set_index(["activity_var", "phecode"]).q_significant.unstack()
-connections_phecodes = significance_matrix.T @ significance_matrix
-connections_activity = significance_matrix @ significance_matrix.T
-def plot_heatmap(data, order=True, label=""):
-    fig, ax = pylab.subplots()
-    if order:
-        dist_x = scipy.spatial.distance.squareform(1/(data @ data.T+1), checks=False)
-        linkage_x = scipy.cluster.hierarchy.linkage(dist_x, optimal_ordering=True)
-        ordering_x = scipy.cluster.hierarchy.leaves_list(linkage_x)
-
-        dist_y = scipy.spatial.distance.squareform(1/(data.T @ data+1), checks=False)
-        linkage_y = scipy.cluster.hierarchy.linkage(dist_y, optimal_ordering=True)
-        ordering_y = scipy.cluster.hierarchy.leaves_list(linkage_y)
-    else:
-        ordering_x = numpy.arange(len(data.index))
-        ordering_y = numpy.arange(len(data.columns))
-
-    ax.imshow(data.iloc[ordering_x, ordering_y])
-
-    if "x" in label:
-        ax.set_xticks(numpy.arange(len(data.columns)))
-        ax.set_xticklabels(data.columns[ordering_x])
-    if "y" in label:
-        ax.set_yticks(numpy.arange(len(data.index)))
-        ax.set_yticklabels(data.index[ordering_y])
-    return ax
-plot_heatmap(connections_phecodes)
-plot_heatmap(connections_activity, label="xy")
-
-
-
-# # Test sex differences in RA-diagnosis associations
+# # Test sex differences in actigraphy-diagnosis associations
 # 
 # We are interested in whether there is a difference between male and female susceptibility to
 # loss of circadian rhythm and differences in the impact of loss of circadian rhythm.
@@ -750,37 +546,6 @@ else:
 phecode_tests_by_sex_raw = phecode_tests_by_sex.copy()
 
 ### Generate summaries of the phecode test by-sex results
-
-## Display the p-values of each actiivty variable
-fig, ax = pylab.subplots(figsize=(8,8))
-for i, activity_variable in enumerate(activity_variables):
-    ps = phecode_tests_by_sex[phecode_tests_by_sex['activity_var'] == activity_variable].p_diff
-    ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
-                marker=".", s=1.5)
-ax.set_xlabel("-log10(p-value)")
-ax.set_title("Sex-differences\ngrouped by activity variable")
-ax.set_yticks(range(len(activity_variables)))
-ax.set_yticklabels(activity_variables)
-ax.set_ylim(-1, len(activity_variables))
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalues_by_activity_variable.by_sex.png")
-
-## Display p-values by the category of the phecode
-fig, ax = pylab.subplots(figsize=(6,8))
-phecode_categories = phecode_tests_by_sex.phecode_category.unique()
-for i, category in enumerate(phecode_categories):
-    ps = phecode_tests_by_sex[phecode_tests_by_sex.phecode_category == category].p_diff
-    ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
-                marker=".", s=1.5)
-ax.set_xlabel("-log10(p-value)")
-ax.set_title("Sex differences\ngrouped by phecode category")
-ax.set_yticks(range(len(phecode_categories)))
-ax.set_yticklabels(phecode_categories)
-ax.set_ylim(-1, len(phecode_categories))
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalues_by_phecode_category.by_sex.png")
 
 # Plot the regression coefficients for each of the phenotypes
 num_male = (data.sex == "Male").sum()
@@ -949,17 +714,6 @@ ax.set_title("Phenotype-Rhythmicity association by prevalnce rate")
 #ax.set_ylim(-0.04,0.00)
 fig.savefig(OUTDIR+"/all_phenotypes.by_incidence_rate.png")
 
-## Do an "enrichment" study of the set of phenotypes associating in males and females
-phecode_tests_by_sex['significant_male'] = BH_FDR(phecode_tests_by_sex.p_male) < 0.1
-phecode_tests_by_sex['significant_female'] = BH_FDR(phecode_tests_by_sex.p_female) < 0.1
-phecode_tests_by_sex['significant_either'] = phecode_tests_by_sex.significant_male | phecode_tests_by_sex.significant_female
-num_significant_male = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"]).significant_male.sum()
-num_significant_female = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"]).significant_female.sum()
-num_significant_either = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"]).significant_either.sum()
-
-#TODO: is there a meaningful way to test for male/female enrichment by category?
-#male_enriched = [scipy.stats.hypergeom(M, n, num_significant_male
-
 # ### Check the overall average of effect size by sex of the RA-phenotype associations
 
 male_weights = 1 / (phecode_tests_by_sex.std_male_coeff_high - phecode_tests_by_sex.std_male_coeff_low)**2 * (phecode_tests_by_sex.std_male_coeff != 0.0)
@@ -973,86 +727,6 @@ print(f"Weighted mean female effect: {rel_female_coeff.mean() / male_weights.mea
 print(f"Median female effect:        {phecode_tests_by_sex.std_female_coeff.abs().median():0.4f}")
 #print(f"Note: effects are the difference in mean RA values between cases and controls of the phenotype.")
 #print(f"   standard deviation of RA:  {data.acceleration_RA.std():0.4f}")
-
-## Heatmap of sex-difference signifiances
-fig, ax = pylab.subplots(figsize=(9,9))
-FDR_CUTOFF_VALUE = 0.05
-phecode_tests_by_sex['q_significant'] = (phecode_tests_by_sex.q_diff < FDR_CUTOFF_VALUE).astype(int)
-pvalue_counts = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"]).q_significant.sum().unstack()
-h = ax.imshow(pvalue_counts.values)
-ax.set_xticks(range(len(pvalue_counts.columns)))
-ax.set_xticklabels(pvalue_counts.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_counts.columns)-0.5)
-ax.set_yticks(range(len(pvalue_counts.index)))
-ax.set_yticklabels(pvalue_counts.index)
-ax.set_ylim(-0.5, len(pvalue_counts.index)-0.5)
-ax.set_title(f"Number sex-difference associations significant (q < {FDR_CUTOFF_VALUE})")
-c = fig.colorbar(h)
-c.ax.set_ylabel("Number significant in category")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.by_sex.png")
-
-## same as above but with percent-of-category-significant displayed
-fig, ax = pylab.subplots(figsize=(9,9))
-pvalue_percent = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"]).q_significant.mean().unstack()*100
-h = ax.imshow(pvalue_percent.values)
-ax.set_xticks(range(len(pvalue_percent.columns)))
-ax.set_xticklabels(pvalue_percent.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_percent.columns)-0.5)
-ax.set_yticks(range(len(pvalue_percent.index)))
-ax.set_yticklabels(pvalue_percent.index)
-ax.set_ylim(-0.5, len(pvalue_percent.index)-0.5)
-ax.set_title(f"Percent phenotypes with significant sex-difference associations\n(q < {FDR_CUTOFF_VALUE})")
-c = fig.colorbar(h)
-c.ax.set_ylabel("Percent of category significant")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.percent.by_sex.png")
-
-## Same as a above showing the hypergeometric test p-value or enrichment
-total_significant = phecode_tests_by_sex.groupby(["activity_var"]).q_significant.sum()
-num_tests = phecode_tests_by_sex.phecode.nunique()
-fig, ax = pylab.subplots(figsize=(9,9))
-pvalue_enrichment_stacked = phecode_tests_by_sex.groupby(["activity_var", "phecode_category"])[['phecode', 'q_significant', 'activity_var']].apply(hypergeom_enrichment)
-pvalue_enrichment = pvalue_enrichment_stacked.unstack()
-enrichment_qs = BH_FDR(pvalue_enrichment.values.ravel()).reshape(pvalue_enrichment.shape)
-h = ax.imshow(-numpy.log10(enrichment_qs))
-ax.set_xticks(range(len(pvalue_enrichment.columns)))
-ax.set_xticklabels(pvalue_enrichment.columns, rotation=90)
-ax.set_xlim(-0.5, len(pvalue_enrichment.columns)-0.5)
-ax.set_yticks(range(len(pvalue_enrichment.index)))
-ax.set_yticklabels(pvalue_enrichment.index)
-ax.set_ylim(-0.5, len(pvalue_enrichment.index)-0.5)
-ax.set_title("Enrichment of significant sex-difference phenotypes within a category")
-c = fig.colorbar(h)
-c.ax.set_ylabel("-log10(enrichment q-value)")
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalue_significance_heatmap.enrichment.by_sex.png")
-
-
-## PCA by sex-specific phecodes
-#TODO: use the absolute value of the effect sizes here?
-#phecode_effect_vectors_male = phecode_tests_by_sex.set_index(["group", "var"])['std_male_coeff'].unstack()
-#phecode_effect_vectors_female = phecode_tests_by_sex.set_index(["group", "var"])['std_female_coeff'].unstack()
-#pca = PCA(n_components=2)
-#pca.fit(pandas.concat([phecode_effect_vectors_male, phecode_effect_vectors_female]))
-#pca_coords_male = pca.transform(phecode_effect_vectors_male)
-#pca_coords_female = pca.transform(phecode_effect_vectors_female)
-#phecode_pca_male = pandas.DataFrame({0: pca_coords_male[:,0], 1: pca_coords_male[:,1]},
-#                                        index=phecode_effect_vectors_male.index)
-#phecode_pca_female = pandas.DataFrame({0: pca_coords_female[:,0], 1: pca_coords_female[:,1]},
-#                                        index=phecode_effect_vectors_female.index)
-#fig, ax = pylab.subplots(figsize=(8,8))
-#for var in phecode_pca_male.index:
-#    ax.plot([phecode_pca_male.loc[var,0], phecode_pca_female.loc[var,0]],
-#            [phecode_pca_male.loc[var,1], phecode_pca_female.loc[var,1]],
-#            c="k",
-#            zorder=-1)
-#ax.scatter(phecode_pca_male[0], phecode_pca_male[1], label="male")
-#ax.scatter(phecode_pca_female[0], phecode_pca_female[1], label="female")
-#ax.legend()
-#ax.set_title("PCA of Phenotypes by Activity Effect Sizes by Sex")
-#fig.savefig(OUTDIR+"phecode_pca.by_sex.png")
-
 
 ### Associate with quantitiative traits
 # Quantitative traits:
@@ -1148,26 +822,6 @@ quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(qua
 pylab.close('all')
 
 
-## Summarize the quantitative_trait results
-quantitative_bonferonni_cutoff = 0.05 / len(quantitative_tests)
-quantitative_FDR_cutoff = quantitative_tests[quantitative_tests.q < 0.05].p.max()
-
-fig, ax = pylab.subplots(figsize=(8,16))
-for i, trait in enumerate(quantitative_vars):
-    ps = quantitative_tests[quantitative_tests['phenotype'] == trait].p
-    ax.scatter(-numpy.log10(ps),
-                numpy.ones(ps.shape)*i + (numpy.random.uniform(size=ps.shape)-0.5) * 0.7,
-                marker=".", s=1.5)
-ax.set_xlabel("-log10(p-value)")
-ax.set_title("Trait associations")
-ax.set_yticks(range(len(quantitative_vars)))
-ax.set_yticklabels(quantitative_vars)
-ax.set_ylim(-1, len(quantitative_vars))
-ax.axvline( -numpy.log10(quantitative_bonferonni_cutoff), c="k", zorder = -1 )
-ax.axvline( -numpy.log10(quantitative_FDR_cutoff), c="k", linestyle="--", zorder = -1 )
-fig.tight_layout()
-fig.savefig(OUTDIR+"pvalues_by_quantitative_trait.png")
-
 ### Network analysis between quantitative traits and a phenotype
 ## Connect a quantitative trait to a phenotype if they both associate with the same activity value
 quantitative_tests['q_significant'] = (quantitative_tests.q < 0.05).astype(int)
@@ -1218,85 +872,6 @@ for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
         ax.set_xlabel("Effect size in males")
 fig.tight_layout()
 fig.savefig(OUTDIR+"sex_differences.quantitative.2x2.png")
-
-### Connections plots
-def plot_connections(associations, directionality = None, **kwargs):
-    fig, ax = pylab.subplots(**kwargs)
-    scale = 1 / associations.max().max()
-    index_heights = numpy.linspace(0,1, len(associations.index))
-    column_heights = numpy.linspace(0,1, len(associations.columns))
-    colormap = pylab.get_cmap("Spectral")
-    for i, a in zip(index_heights, associations.index):
-        ax.text(0, i, a, horizontalalignment='right')
-    for j, b in zip(column_heights, associations.columns):
-        ax.text(1, j, b)
-    for i,a in zip(index_heights, associations.index):
-        for j,b in zip(column_heights, associations.columns):
-            conns = associations.loc[a,b]
-            if conns < 10:
-                continue
-            if directionality is not None:
-                color = colormap((directionality.loc[a,b] + 1)/2)
-            else:
-                color = "k"
-            ax.plot([0,1], [i,j],
-                    alpha= conns * scale,
-                    #linewidth = conns * scale * 10,
-                    c=color)
-    fig.tight_layout()
-    return fig, ax
-selected_associations = common_associations.sum(axis=1) > 50
-fig, ax = plot_connections(common_associations[selected_associations],
-                        common_direction[selected_associations],
-                        figsize=(8,30))
-fig.savefig(OUTDIR+"/common_associations.png")
-
-category_associations = phecode_tests.groupby(["phecode_category", "activity_var"]).q_significant.sum().unstack()
-common_category_associations = category_associations @ quantitative_associations.T
-common_category_direction = (phecode_effects @ quantitative_effects.T)
-common_category_direction = common_category_direction.groupby(
-    common_category_direction.index.map(phecode_info.category)
-).apply( lambda x: x.sum(axis=0) / x.abs().sum(axis=0)
-).fillna(0)
-
-fig, ax = plot_connections(common_category_associations, common_category_direction, figsize=(8,20))
-fig.savefig(OUTDIR+"/common_category_associations.png")
-
-
-## heatmap of hypergeometric enrichment test
-## for the phecode - trait associations via activity variables
-#common_associations_long = common_associations.unstack().reset_index()
-#common_associations_long['category'] = common_associations_long["group"].map(phecode_info.set_index("phenotype").category)
-#total_significant = common_associations_long.groupby(["phenotype"]).sum()
-#num_tests = common_associations_long[0].sum()
-#def hypergeom_enrichment_2(data):
-#    print(data.columns)
-#    quant_trait = data['phenotype'].iloc[0]
-#    phecode_cat = data['category'].iloc[0]
-#    k = data.sum()
-#    M = num_tests
-#    n = total_significant[quant_trait]
-#    N = len(data)
-#    p =  scipy.stats.hypergeom.sf(k, M, n, N)
-#    if n == 0:
-#        return 1
-#    return p
-#common_pvalue_enrichment_stacked = common_associations_long.groupby(["phenotype", "category"]).apply(hypergeom_enrichment_2)
-#pvalue_enrichment = pvalue_enrichment_stacked.unstack()
-#enrichment_qs = BH_FDR(pvalue_enrichment.values.ravel()).reshape(pvalue_enrichment.shape)
-#fig, ax = pylab.subplots(figsize=(9,9))
-#h = ax.imshow(-numpy.log10(enrichment_qs))
-#ax.set_xticks(range(len(pvalue_enrichment.columns)))
-#ax.set_xticklabels(pvalue_enrichment.columns, rotation=90)
-#ax.set_xlim(-0.5, len(pvalue_enrichment.columns)-0.5)
-#ax.set_yticks(range(len(pvalue_enrichment.index)))
-#ax.set_yticklabels(pvalue_enrichment.index)
-#ax.set_ylim(-0.5, len(pvalue_enrichment.index)-0.5)
-#ax.set_title("Enrichment of significant phenotypes within a category")
-#c = fig.colorbar(h)
-#c.ax.set_ylabel("-log10(enrichment q-value)")
-#fig.tight_layout()
-
 
 ##### Age-associations
 if RECOMPUTE:
@@ -2214,33 +1789,6 @@ for ax, cat in zip(axes.flatten(), activity_variable_descriptions.Category.uniqu
 
 
 
-### Assess variability versus average values for acc
-# P-values show that acc_overall_sd associates more strongly with many phenotypes than acc_overall_avg does
-# but the two are very strongly correlated. We need to test if there really is a significant difference between them
-#results = smf.logit(f"Q(401) ~ sex + household_income + smoking + BMI + birth_year + acc_overall + acc_overall_sd", data=data).fit()
-#print("Comparing physical activity variability to averages:")
-#print("(In hypertension)")
-#print(results.summary())
-#print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues['acc_overall_sd']}")
-#
-#formula = f"date_of_death_censored_number ~ birth_year + sex + BMI + smoking + acc_overall_avg + acc_overall_sd"
-#results = smf.phreg(formula=formula,
-#                    data=data,
-#                    status=uncensored,
-#                    ).fit()
-#print(formula)
-#print(results.summary())
-#print(f"p-value that acc_overall_sd contributes above and beyond acc_overall_avg: p = {results.pvalues[-1]}")
-
-
-### Assess the repeatability of some variables
-#full_repeat_data = pandas.read_hdf("../processed/repeat.ukbb_data_table.h5")
-#repeat_data = full_repeat_data[full_repeat_data.index.isin(data.index)]
-#
-#for key in self_report_circadian_variables.keys():
-#    question_data = data[[key]].join(repeat_data[repeat_data.columns[repeat_data.columns.str.contains(key)]])
-
-
 ### Plot survival assocations versus inter/intra personal variance for validation
 fig, ax = pylab.subplots(figsize=(8,6))
 colorby = survival_tests.activity_var.map(activity_variable_descriptions.Category)
@@ -2300,8 +1848,6 @@ def matrix_plot(data, **kwargs):
     return fig, ax
 fig, ax = matrix_plot(data[top_survival_vars].corr(), vmin=-1, vmax=1, cmap="bwr")
 fig.savefig(OUTDIR+"correlation.top_survival_activity_vars.png")
-
-
 
 
 ### Assess what variables add to acceleration_RA the most
@@ -2382,6 +1928,9 @@ for  phecode, row in circadian_best_tests.groupby('phecode'):
     top_circ = row[row.activity_var_category == "Circadianness"].sort_values(by="p").iloc[0].activity_var
     top_physical = row[row.activity_var_category == "Physical activity"].sort_values(by="p").iloc[0].activity_var
     top_sleep = row[row.activity_var_category == "Sleep"].sort_values(by="p").iloc[0].activity_var
+    #top_circ = "amplitude"
+    #top_sleep = "main_sleep_ratio_mean"
+    #top_physical = "acceleration_overall"
     _, circ_fit = compute_phecode_test(top_circ, phecode, data)
     _, physical_fit = compute_phecode_test(top_physical, phecode, data)
     _, sleep_fit = compute_phecode_test(top_sleep, phecode, data)
@@ -2491,8 +2040,6 @@ fig.savefig(OUTDIR+"num_phecodes.RA.png")
 
 ### Relative Risks
 # Create interpretable risks from the phecode associations
-def invlogit(s):
-    return numpy.exp(s)/(1 + numpy.exp(s))
 if RECOMPUTE:
     d = phecode_tests[(phecode_tests.q < 0.01)].copy()
     covariate_formula = 'sex + age_at_actigraphy + BMI + smoking_ever + overall_health_good + ethnicity_white + education_College_or_University_degree + high_income'
@@ -2524,12 +2071,6 @@ else:
 
 ## Plot relative risks
 fig, ax = pylab.subplots(figsize=(9,9))
-#color = risk_quantification.phecode_category.map(color_by_phecode_cat)
-#colorby = risk_quantification.activity_var.map(activity_variable_descriptions.Subcategory)
-#colormap = {cat:color for cat, color in
-#                    zip(colorby.unique(),
-#                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-#color = colorby.map(colormap)
 colormap = color_by_phecode_cat
 color = risk_quantification.phecode_category.map(colormap)
 ax.scatter(
