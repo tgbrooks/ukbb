@@ -416,6 +416,15 @@ def legend_from_colormap(fig, colormap, **kwargs):
                             c=c, lw=0)
                         for cat, c in colormap.items()]
     fig.legend(handles=legend_elts, **kwargs)
+def legend_of_pointscale(fig, offset, values_to_size, values_to_show, fmt="{}", **kwargs):
+    legend_elts = [matplotlib.lines.Line2D(
+                            [0],[0],
+                            marker="o", markerfacecolor='k',
+                            markersize=numpy.sqrt(offset + values_to_size * value),
+                            label=fmt.format(value),
+                            c='k', lw=0)
+                        for value in values_to_show]
+    fig.legend(handles=legend_elts, **kwargs)
 
 ## Prepare utility functions
 def truncate(string, N):
@@ -839,7 +848,7 @@ def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2", lim=0.5, a
         legend_elts = [matplotlib.lines.Line2D(
                                 [0],[0],
                                 marker="o", markerfacecolor=c, markersize=10,
-                                label=cat if not pandas.isna(cat) else "NA",
+                                label=truncate(cat,35) if not pandas.isna(cat) else "NA",
                                 c=c, lw=0)
                             for cat, c in colormap.items()]
         if just_ax:
@@ -861,6 +870,38 @@ fig, ax = sex_difference_plot(d[d.phecode_category == 'infectious diseases'], co
 fig.savefig(f"{OUTDIR}/sex_differences.infections.png")
 fig, ax = sex_difference_plot(d[d.phecode_category == 'respiratory'], color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/sex_differences.respiratory.png")
+
+#Make 2x2 grid of quantitative sex differences
+fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+ij = [[0,0], [0,1], [1,0], [1,1]]
+SUBCATEGORIES = ["circulatory system", "mental disorders", "endocrine/metabolic", "respiratory"]
+for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
+    tests = d[d.phecode_category == cat]
+    sex_difference_plot(tests.sample(frac=1), color_by="phecode_meaning", ax=ax, legend=True, labels=False, cmap="tab20_r")
+    ax.set_title(cat)
+    if j == 0:
+        ax.set_ylabel("Effect size in females")
+    if i == 1:
+        ax.set_xlabel("Effect size in males")
+fig.tight_layout()
+fig.savefig(OUTDIR+"sex_differences.2x2.png")
+
+
+#Make 2x2 grid of quantitative sex differences
+fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+ij = [[0,0], [0,1], [1,0], [1,1]]
+SUBCATEGORIES = ["circulatory system", "mental disorders", "endocrine/metabolic", "respiratory"]
+for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
+    tests = d[d.phecode_category == cat]
+    sex_difference_plot(tests.sample(frac=1), color_by="phecode_meaning", ax=ax, legend=True, labels=False, cmap="tab20_r")
+    ax.set_title(cat)
+    if j == 0:
+        ax.set_ylabel("Effect size in females")
+    if i == 1:
+        ax.set_xlabel("Effect size in males")
+fig.tight_layout()
+fig.savefig(OUTDIR+"sex_differences.2x2.png")
+
 
 def local_regression(x,y, out_x, bw=0.05):
     # Preform a local regression y ~ x and evaluate it at the provided points `out_x`
@@ -1165,11 +1206,17 @@ fig.savefig(OUTDIR+"sex_differences.quantitative.png")
 
 #Make 2x2 grid of quantitative sex differences
 fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+ij = [[0,0], [0,1], [1,0], [1,1]]
 SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
-for cat, ax in zip(SUBCATEGORIES, axes.flatten()):
+for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
     tests = quantitative_tests[quantitative_tests['Functional Category'] == cat]
     sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
     ax.set_title(cat)
+    if j == 0:
+        ax.set_ylabel("Effect size in females")
+    if i == 1:
+        ax.set_xlabel("Effect size in males")
+fig.tight_layout()
 fig.savefig(OUTDIR+"sex_differences.quantitative.2x2.png")
 
 ### Connections plots
@@ -1370,7 +1417,7 @@ def age_effect_plot(d, legend=True, labels=True, color_by="phecode_category", cm
         legend_elts = [matplotlib.lines.Line2D(
                                 [0],[0],
                                 marker="o", markerfacecolor=c, markersize=10,
-                                label=cat if not pandas.isna(cat) else "NA",
+                                label=truncate(cat, 35) if not pandas.isna(cat) else "NA",
                                 c=c, lw=0)
                             for cat, c in colormap.items()]
         if just_ax == True:
@@ -1392,6 +1439,22 @@ fig.savefig(f"{OUTDIR}/age_effects.genitourinary.png")
 fig, ax = age_effect_plot(d[d.phecode_category == 'respiratory'], labels=False, color_by="phecode_meaning")
 fig.savefig(f"{OUTDIR}/age_effects.respiratory.png")
 
+#Make 2x2 grid of age effect plots
+fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+ij = [[0,0], [0,1], [1,0], [1,1]]
+SUBCATEGORIES = ["circulatory system", "mental disorders", "endocrine/metabolic", "respiratory"]
+for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
+    tests = d[d.phecode_category == cat]
+    age_effect_plot(tests.sample(frac=1), color_by="phecode_meaning", ax=ax, legend=True, labels=False, cmap="tab20_r")
+    ax.set_title(cat)
+    if j == 0:
+        ax.set_ylabel("Effect size at 70")
+    if i == 1:
+        ax.set_xlabel("Effect size at 55")
+fig.tight_layout()
+fig.savefig(OUTDIR+"age_effects.2x2.png")
+
+
 ## age effect for quantitative traits
 dage = quantitative_tests.copy()
 dage['age_55_effect'] = dage["std_effect"] + dage['std_age_effect'] * young_offset
@@ -1403,11 +1466,17 @@ fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
 
 #Make 2x2 grid of quantitative age differences
 fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
+ij = [[0,0], [0,1], [1,0], [1,1]]
 SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
-for cat, ax in zip(SUBCATEGORIES, axes.flatten()):
+for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
     tests = dage[dage['Functional Category'] == cat]
     age_effect_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
     ax.set_title(cat)
+    if j == 0:
+        ax.set_ylabel("Effect size at 70")
+    if i == 1:
+        ax.set_xlabel("Effect size at 55")
+fig.tight_layout()
 fig.savefig(OUTDIR+"age_effects.quantitative.2x2.png")
 
 
@@ -1858,8 +1927,9 @@ def quintile_survival_plot(data, var, var_label=None):
     quintiles = pandas.qcut(data[var], 5)
     fig, ax = pylab.subplots(figsize=(8,6))
     for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
-        survival_curve(data[quintiles == quintile], ax, label= var_label + " " + label + " Quintile")
+        survival_curve(data[quintiles == quintile], ax, label= label + " Quintile")
     fig.legend(loc=(0.15,0.15))
+    ax.set_title(f"Survival by {var_label}")
     ax.set_ylabel("Survival Probability")
     ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
@@ -1901,6 +1971,10 @@ fig.savefig(OUTDIR+"survival.MVPA_overall.png")
 # Survival by MVPA_overall_avg
 fig = quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA hourly SD")
 fig.savefig(OUTDIR+"survival.MVPA_hourly_SD.png")
+
+# Survival by acceleration_hourly_SD
+fig = quintile_survival_plot(data, "acceleration_hourly_SD", "Acceleration Hourly SD")
+fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.png")
 
 # Survival by phase
 fig, ax = pylab.subplots()
@@ -2289,9 +2363,11 @@ fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
 ## Plot comparison of circadian versus other variables for the phecodes where circadian do the best
 # gather the top circadian phecodes
-circadian_does_best = phecode_tests.sort_values(by="p").groupby("phecode").apply(lambda x: x.iloc[0].activity_var_category == "Circadianness")
-circadian_phecodes = circadian_does_best.index[circadian_does_best]
-circadian_best_tests = phecode_tests[phecode_tests.phecode.isin(circadian_phecodes)].copy()
+#circadian_does_best = phecode_tests.sort_values(by="p").groupby("phecode").apply(lambda x: x.iloc[0].activity_var_category == "Circadianness")
+#circadian_phecodes = circadian_does_best.index[circadian_does_best]
+#circadian_best_tests = phecode_tests[phecode_tests.phecode.isin(circadian_phecodes)].copy()
+circadian_best_tests = phecode_tests.copy()
+circadian_best_tests = circadian_best_tests[~circadian_best_tests.activity_var.str.startswith("self_report")]
 circadian_best_tests['ordering'] = circadian_best_tests.phecode.map(circadian_best_tests.groupby("phecode").p.min().rank())
 fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
 yticks = {}
@@ -2342,6 +2418,7 @@ for  phecode, row in circadian_best_tests.groupby('phecode'):
     yticks[rank] = wrap(phenotype, 30)
     pvalues.append(ps[top_circ])
     ranks.append(rank)
+    ax2.set_xlim(0, 0.8)
 # Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
 # so we will assume worst case, all others ps are 1
 #pvalues = numpy.array(pvalues + [1]*(phecode_tests.phecode.nunique() - len(pvalues)))
@@ -2358,7 +2435,7 @@ ax1.set_xlabel("-log10 p-value")
 ax1.set_xlim(left=0)
 ax2.set_xlabel("Standardized Effect Size")
 ax2.axvline(0, linestyle="-", color="k", linewidth=1)
-legend_from_colormap(fig, color_by_actigraphy_cat)
+legend_from_colormap(fig, {cat:color_by_actigraphy_cat[cat] for cat in ["Sleep", "Physical activity", "Circadianness"]})
 ax1.margins(0.5, 0.02)
 fig.tight_layout()
 fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
