@@ -548,11 +548,6 @@ phecode_tests_by_sex_raw = phecode_tests_by_sex.copy()
 ### Generate summaries of the phecode test by-sex results
 
 # Plot the regression coefficients for each of the phenotypes
-num_male = (data.sex == "Male").sum()
-num_female = (data.sex == "Female").sum()
-d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
-                        & (phecode_tests_by_sex.N_male > 300)
-                        & (phecode_tests_by_sex.N_female > 300)]
 def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2", lim=0.5, ax=None, legend=True, labels=True):
     if color_by == "phecode_category":
         colormap = color_by_phecode_cat
@@ -622,6 +617,11 @@ def sex_difference_plot(d, color_by="phecode_category", cmap="Dark2", lim=0.5, a
             fig.legend(handles=legend_elts, ncol=2, fontsize="small")
     return fig, ax
 
+num_male = (data.sex == "Male").sum()
+num_female = (data.sex == "Female").sum()
+d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
+                        & (phecode_tests_by_sex.N_male > 300)
+                        & (phecode_tests_by_sex.N_female > 300)]
 fig, ax = sex_difference_plot(d)
 fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
@@ -1000,6 +1000,7 @@ def age_effect_plot(d, legend=True, labels=True, color_by="phecode_category", cm
         else:
             fig.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
     return fig,ax
+
 fig, ax = age_effect_plot(d)
 fig.savefig(f"{OUTDIR}/age_effects.png")
 
