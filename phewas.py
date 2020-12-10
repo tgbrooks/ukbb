@@ -212,7 +212,6 @@ def summary():
     ax.set_xlabel("Number of unique diagnoses")
     ax.set_ylabel("RA")
     fig.savefig(OUTDIR+"num_phecodes.RA.png")
-summary()
 
 def sex_difference_plots():
     d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
@@ -282,7 +281,6 @@ def sex_difference_plots():
             ax.set_xlabel("Effect size in males")
     fig.tight_layout()
     fig.savefig(OUTDIR+"sex_differences.quantitative.2x2.png")
-sex_difference_plots()
 
 def age_difference_plots():
     ## Plot summary of age tests
@@ -352,7 +350,6 @@ def age_difference_plots():
             ax.set_xlabel("Effect size at 55")
     fig.tight_layout()
     fig.savefig(OUTDIR+"age_effects.quantitative.2x2.png")
-age_difference_plots()
 
 def fancy_plots():
     # Hypertension
@@ -401,7 +398,6 @@ def fancy_plots():
     fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
     fig = phewas_plots.fancy_case_control_plot(data, 332, normalize=True, confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
-fancy_plots()
 
 def survival_curves():
     # Survival by RA
@@ -445,7 +441,6 @@ def survival_curves():
     ax1.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
     fig.legend()
     fig.savefig(OUTDIR+"survival.RA.by_sex.png")
-survival_curves()
 
 def survival_plots():
     ### Plot survival assocations versus inter/intra personal variance for validation
@@ -538,7 +533,6 @@ def survival_plots():
     d['activity_var_category'] = d.activity_var.map(activity_variable_descriptions.Subcategory)
     fig, ax = sex_difference_survival_plot(d)
     fig.savefig(OUTDIR+"survival.by_sex.png")
-survival_plots()
 
 def circadian_component_plots():
     ## Plot the amount RA goes "beyond" other variables
@@ -647,7 +641,6 @@ def circadian_component_plots():
     ax1.margins(0.5, 0.02)
     fig.tight_layout()
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
-circadian_component_plots()
 
 def objective_subjective_plots():
     ### Comparisons of self-reported versus objectively derived variables
@@ -827,7 +820,6 @@ def by_date_plots():
 
     fig, ax, renal_failure_by_date = phewas_plots.plot_by_diagnosis_date(data, ["N17", "N18", "N19", "Y60", "Y84", "Z49"], 585, "Renal Failure", icd10_entries, phecode_tests)
     fig.savefig(OUTDIR+"by_date.renal_failure.png")
-by_date_plots()
 
 def generate_results_table():
     #### Combine all tables into the summary with the header file
@@ -848,4 +840,16 @@ def generate_results_table():
         quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
+
+## Make the plots
+summary()
+sex_difference_plots()
+age_difference_plots()
+fancy_plots()
+survival_curves()
+survival_plots()
+circadian_component_plots()
+by_date_plots()
+
+## Summarize everything
 generate_results_table()
