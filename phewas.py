@@ -691,6 +691,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="run phewas pipeline on actigraphy\nOutputs to ../global_phewas/cohort#/")
     parser.add_argument("--cohort", help="Cohort number to load data for", type = int)
     parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
+    parser.add_argumnet("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
 
     args = parser.parse_args()
     COHORT = args.cohort
@@ -777,7 +778,9 @@ if __name__ == '__main__':
     survival_plots()
     objective_subjective_plots()
     circadian_component_plots()
-    #by_date_plots() # Note: slow to run: performs many regressions
+    if args.all:
+        # Note: slow to run: performs many regressions
+        by_date_plots()
 
     ## Summarize everything
     generate_results_table()
