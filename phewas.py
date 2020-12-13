@@ -15,85 +15,6 @@ import phewas_plots as plots
 import util
 from util import BH_FDR, legend_of_pointscale, legend_from_colormap, truncate, wrap
 
-### Config
-COHORT = 1
-OUTDIR = f"../global_phewas/cohort{COHORT}/"
-FDR_CUTOFF_VALUE = 0.05
-
-### Whether to run all the big computations or attempt to load from disk since already computed
-RECOMPUTE = False
-
-
-#### Load and preprocess the underlying data
-data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = phewas_preprocess.load_data(COHORT)
-
-# Load descriptions + categorization of activity variables and quantitative variables
-activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
-quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0)
-
-# Gather list of the
-import fields_of_interest
-quantitative_blocks = [
-    fields_of_interest.blood_fields,
-    fields_of_interest.urine,
-    fields_of_interest.arterial_stiffness,
-    fields_of_interest.physical_measures,
-]
-def find_var(var):
-    for v in [var, var+"_V0"]:
-        if v in data.columns:
-            if pandas.api.types.is_numeric_dtype(data[v].dtype):
-                return v
-    return None # can't find it
-quantitative_variables = [find_var(c) for block in quantitative_blocks
-                        for c in block
-                        if find_var(c) is not None]
-
-
-
-#### Run (or load from disk if they already exist) 
-#### the statistical tests
-phecode_tests, phecode_tests_by_sex = phewas_tests.phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
-phecode_tests_raw = phecode_tests.copy()
-phecode_tests['activity_var_category'] = phecode_tests['activity_var'].map(activity_variable_descriptions.Category)
-phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
-
-quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR, RECOMPUTE)
-quantitative_tests_raw  = quantitative_tests.copy()
-quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
-
-age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
-age_tests_raw = age_tests.copy()
-age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
-
-survival_tests = phewas_tests.survival_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
-
-beyond_RA_tests = phewas_tests.beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
-
-#### Prepare color maps for the plots
-color_by_phecode_cat = {cat:color for cat, color in
-                            zip(phecode_tests.phecode_category.unique(),
-                                [pylab.get_cmap("tab20")(i) for i in range(20)])}
-color_by_actigraphy_cat = {cat:color for cat, color in
-                                zip(["Sleep", "Circadianness", "Physical activity"],
-                                    [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-color_by_actigraphy_subcat = {cat:color for cat, color in
-                                zip(activity_variable_descriptions.Subcategory.unique(),
-                                    [pylab.get_cmap("Set3")(i) for i in range(20)])}
-color_by_quantitative_function = {cat:color for cat, color in
-                                    zip(quantitative_variable_descriptions['Functional Categories'].unique(),
-                                        [pylab.get_cmap("tab20b")(i) for i in range(20)])}
-colormaps = {
-    "phecode_cat": color_by_phecode_cat,
-    "actigraphy_cat": color_by_actigraphy_cat,
-    "actigraphy_subcat": color_by_actigraphy_subcat,
-    "quantitative_function": color_by_quantitative_function,
-}
-
-## Create the plotter object
-# for common plot types
-phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions)
-
 def summary():
     # Summarize the phecode test results
     num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
@@ -359,16 +280,16 @@ def fancy_plots():
     fig = phewas_plots.incidence_rate_by_category(data, 401, categories="birth_year_category", confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.hypertension.by_age.png")
 
-    sns.lmplot("acceleration_RA", "cholesterol", data=data, hue="birth_year_category", markers='.')
+    sns.lmplot(x="acceleration_RA", y="cholesterol", data=data, hue="birth_year_category", markers='.')
     pylab.gcf().savefig(OUTDIR+"phenotypes.LDL.png")
 
-    sns.lmplot("acceleration_RA", "hdl_cholesterol", data=data, hue="birth_year_category", markers='.')
+    sns.lmplot(x="acceleration_RA", y="hdl_cholesterol", data=data, hue="birth_year_category", markers='.')
     pylab.gcf().savefig(OUTDIR+"phenotypes.HDL.png")
 
-    sns.lmplot("acceleration_RA", "systolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
+    sns.lmplot(x="acceleration_RA", y="systolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
     pylab.gcf().savefig(OUTDIR+"phenotypes.systolic_blood_pressure.png")
 
-    sns.lmplot("acceleration_RA", "diastolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
+    sns.lmplot(x="acceleration_RA", y="diastolic_blood_pressure_V0", data=data, hue="birth_year_category", markers='.')
     pylab.gcf().savefig(OUTDIR+"phenotypes.diastolic_blood_pressure.png")
 
     # Diabetes
@@ -378,7 +299,7 @@ def fancy_plots():
     fig = phewas_plots.incidence_rate_by_category(data, 250, categories="birth_year_category", confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.diabetes.by_age.png")
 
-    sns.lmplot("acceleration_RA", "glycated_heamoglobin", data=data, hue="birth_year_category", markers='.')
+    sns.lmplot(x="acceleration_RA", y="glycated_heamoglobin", data=data, hue="birth_year_category", markers='.')
     pylab.gcf().savefig(OUTDIR+"phenotypes.glycated_heamoglobin.png")
 
     percent_diabetes_with_hypertension = (data[401].astype(bool) & data[250].astype(bool)).mean() / data[250].mean()
@@ -559,88 +480,13 @@ def circadian_component_plots():
     legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
     fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
-    ## Plot comparison of circadian versus other variables for the phecodes where circadian do the best
-    # gather the top circadian phecodes
-    #circadian_does_best = phecode_tests.sort_values(by="p").groupby("phecode").apply(lambda x: x.iloc[0].activity_var_category == "Circadianness")
-    #circadian_phecodes = circadian_does_best.index[circadian_does_best]
-    #circadian_best_tests = phecode_tests[phecode_tests.phecode.isin(circadian_phecodes)].copy()
-    circadian_best_tests = phecode_tests.copy()
-    circadian_best_tests = circadian_best_tests[~circadian_best_tests.activity_var.str.startswith("self_report")]
-    circadian_best_tests['ordering'] = circadian_best_tests.phecode.map(circadian_best_tests.groupby("phecode").p.min().rank())
-    fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
-    yticks = {}
-    pvalues = []
-    ranks = []
-    for  phecode, row in circadian_best_tests.groupby('phecode'):
-        rank = row.ordering.iloc[0]
-        phenotype = row.phecode_meaning.iloc[0]
-        if rank > 20:
-            continue # Skip all but the most significant
-        top_circ = row[row.activity_var_category == "Circadianness"].sort_values(by="p").iloc[0].activity_var
-        top_physical = row[row.activity_var_category == "Physical activity"].sort_values(by="p").iloc[0].activity_var
-        top_sleep = row[row.activity_var_category == "Sleep"].sort_values(by="p").iloc[0].activity_var
-        #top_circ = "amplitude"
-        #top_sleep = "main_sleep_ratio_mean"
-        #top_physical = "acceleration_overall"
-        #color = row.activity_var_category.map(color_by_actigraphy_cat)
-        #_, circ_fit = phewas_tests.compute_phecode_test(top_circ, phecode, data)
-        #_, physical_fit = phewas_tests.compute_phecode_test(top_physical, phecode, data)
-        #_, sleep_fit = phewas_tests.compute_phecode_test(top_sleep, phecode, data)
-        #circ_conf_int = circ_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_circ].std()
-        #physical_conf_int = physical_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_physical].std()
-        #sleep_conf_int = sleep_fit.conf_int().loc[f"Q({phecode})"].abs() / data[top_sleep].std()
-        #ax1.scatter(-numpy.log10(row.p), row.ordering, c = color)
-        ##ax2.scatter(numpy.abs(row.std_effect), row.ordering, c=color)
-        #ax2.plot(circ_conf_int, [rank, rank], c = "r")
-        #ax2.plot(physical_conf_int, [rank+0.1, rank+0.1], c = "b")
-        #ax2.plot(sleep_conf_int, [rank+0.2, rank+0.2], c = "g")
-
-        # Logistic model
-        corr = data[[top_circ, top_physical]].corr().values[0,1]
-        data['orthog'] = (data[top_circ] - data[top_circ].mean()) /data[top_circ].std() - corr * (data[top_physical] - data[top_physical].mean()) / data[top_physical].std()
-        covariate_formula = ' + '.join(c for c in covariates)
-        results = smf.logit(f"Q({phecode}) ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
-        marginals = results.get_margeff()
-        ps = pandas.Series(results.pvalues, index=results.model.exog_names)[[top_circ, top_physical, top_sleep]]
-        margeffs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]].abs()
-        margeffs *= data[margeffs.index].std() # Standardize by the actigraphy variables used
-        margeffs /= data[phecode].mean() # Standardize by the overall prevalence
-        ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]]
-        ses *= data[margeffs.index].std() # Standardized SEs too
-        ses /= data[phecode].mean()
-
-        colors = [color_by_actigraphy_cat[c] for c in ["Circadianness", "Physical activity", "Sleep"]]
-        ys = numpy.linspace(rank-0.15, rank+0.15, 3)
-        #ax1.scatter(-numpy.log10(ps), [rank]*len(ps), c=colors)
-        ax2.scatter(margeffs, ys, c=colors)
-        for eff, se, y, c, p in zip(margeffs, ses, ys, colors, ps):
-            ax1.barh([y], height=0.15, width=[-numpy.log10(p)], color=c)
-            ax2.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c)
-
-        yticks[rank] = wrap(phenotype, 30)
-        pvalues.append(ps[top_circ])
-        ranks.append(rank)
-        ax2.set_xlim(0, 0.8)
-    # Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
-    # so we will assume worst case, all others ps are 1
-    #pvalues = numpy.array(pvalues + [1]*(phecode_tests.phecode.nunique() - len(pvalues)))
-    pvalues = numpy.concatenate([pvalues, numpy.random.uniform(size=(phecode_tests.phecode.nunique() - len(pvalues)))])
-    qvalues = BH_FDR(pvalues)
-    qvalue_dict = {rank: q for rank, q in zip(ranks, qvalues[:len(ranks)])}
-    # Cut off half way between pvalues of worst gene passing FDR < 0.05 and best gene not passing
-    pvalue_cutoff = 0.5*pvalues[qvalues < 0.05].max() + 0.5*pvalues[qvalues >= 0.05].min()
-    ax1.axvline(-numpy.log10(pvalue_cutoff), linestyle="--", color="k")
-    ax1.set_yticks(list(yticks.keys()))
-    ax1.set_yticklabels([name if qvalue_dict[rank] >= 0.05 else name + " (*)"
-                            for rank, name in yticks.items()])
-    ax1.set_xlabel("-log10 p-value")
-    ax1.set_xlim(left=0)
-    ax2.set_xlabel("Standardized Effect Size")
-    ax2.axvline(0, linestyle="-", color="k", linewidth=1)
-    legend_from_colormap(fig, {cat:color_by_actigraphy_cat[cat] for cat in ["Sleep", "Physical activity", "Circadianness"]})
-    ax1.margins(0.5, 0.02)
-    fig.tight_layout()
+    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
+    fig, axes = phewas_plots.circadian_component_plot(data, top_phenotypes[:20], len(phecode_groups))
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
+
+    top_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
+    fig, axes = phewas_plots.circadian_component_plot(data, top_phenotypes[:20], len(quantitative_variables), quantitative=True)
+    fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
 
 def objective_subjective_plots():
     ### Comparisons of self-reported versus objectively derived variables
@@ -796,7 +642,6 @@ def objective_subjective_plots():
         ax.set_ylim(0,20)
     fig.tight_layout()
     fig.savefig(OUTDIR+"objective_subjective_comparison.png")
-objective_subjective_plots()
 
 
 def by_date_plots():
@@ -841,15 +686,98 @@ def generate_results_table():
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
 
-## Make the plots
-summary()
-sex_difference_plots()
-age_difference_plots()
-fancy_plots()
-survival_curves()
-survival_plots()
-circadian_component_plots()
-by_date_plots()
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description="run phewas pipeline on actigraphy\nOutputs to ../global_phewas/cohort#/")
+    parser.add_argument("--cohort", help="Cohort number to load data for", type = int)
+    parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
 
-## Summarize everything
-generate_results_table()
+    args = parser.parse_args()
+    COHORT = args.cohort
+    RECOMPUTE = args.force_recompute
+    OUTDIR = f"../global_phewas/cohort{COHORT}/"
+    FDR_CUTOFF_VALUE = 0.05
+
+    #### Load and preprocess the underlying data
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = phewas_preprocess.load_data(COHORT)
+
+    # Load descriptions + categorization of activity variables and quantitative variables
+    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
+    quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0)
+
+    # Gather list of the
+    import fields_of_interest
+    quantitative_blocks = [
+        fields_of_interest.blood_fields,
+        fields_of_interest.urine,
+        fields_of_interest.arterial_stiffness,
+        fields_of_interest.physical_measures,
+    ]
+    def find_var(var):
+        for v in [var, var+"_V0"]:
+            if v in data.columns:
+                if pandas.api.types.is_numeric_dtype(data[v].dtype):
+                    return v
+        return None # can't find it
+    quantitative_variables = [find_var(c) for block in quantitative_blocks
+                            for c in block
+                            if find_var(c) is not None]
+
+
+
+    #### Run (or load from disk if they already exist) 
+    #### the statistical tests
+    phecode_tests, phecode_tests_by_sex = phewas_tests.phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
+    phecode_tests_raw = phecode_tests.copy()
+    phecode_tests['activity_var_category'] = phecode_tests['activity_var'].map(activity_variable_descriptions.Category)
+    phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
+
+    quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR, RECOMPUTE)
+    quantitative_tests_raw  = quantitative_tests.copy()
+    quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
+
+    age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
+    age_tests_raw = age_tests.copy()
+    age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
+
+    survival_tests = phewas_tests.survival_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
+
+    beyond_RA_tests = phewas_tests.beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
+
+    #### Prepare color maps for the plots
+    color_by_phecode_cat = {cat:color for cat, color in
+                                zip(phecode_tests.phecode_category.unique(),
+                                    [pylab.get_cmap("tab20")(i) for i in range(20)])}
+    color_by_actigraphy_cat = {cat:color for cat, color in
+                                    zip(["Sleep", "Circadianness", "Physical activity"],
+                                        [pylab.get_cmap("Dark2")(i) for i in range(20)])}
+    color_by_actigraphy_subcat = {cat:color for cat, color in
+                                    zip(activity_variable_descriptions.Subcategory.unique(),
+                                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
+    color_by_quantitative_function = {cat:color for cat, color in
+                                        zip(quantitative_variable_descriptions['Functional Categories'].unique(),
+                                            [pylab.get_cmap("tab20b")(i) for i in range(20)])}
+    colormaps = {
+        "phecode_cat": color_by_phecode_cat,
+        "actigraphy_cat": color_by_actigraphy_cat,
+        "actigraphy_subcat": color_by_actigraphy_subcat,
+        "quantitative_function": color_by_quantitative_function,
+    }
+
+    ## Create the plotter object
+    # for common plot types
+    phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions)
+
+    ## Make the plots
+    summary()
+    sex_difference_plots()
+    age_difference_plots()
+    fancy_plots()
+    survival_curves()
+    survival_plots()
+    objective_subjective_plots()
+    circadian_component_plots()
+    #by_date_plots() # Note: slow to run: performs many regressions
+
+    ## Summarize everything
+    generate_results_table()
