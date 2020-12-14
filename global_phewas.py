@@ -10,7 +10,6 @@ import scipy.stats
 import numpy
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from sklearn.decomposition import PCA
 import seaborn as sns
 import matplotlib
 import matplotlib.patches as mpatches

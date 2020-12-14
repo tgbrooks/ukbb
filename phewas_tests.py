@@ -328,7 +328,7 @@ def beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OU
     for var in activity_variables:
         if var == "acceleration_RA":
             continue
-        formula = f"age_at_death_censored ~ {var} + sex + {covariate_formula}"
+        formula = f"age_at_death_censored ~ acceleration_RA + {var} + sex + {covariate_formula}"
         try:
             results = smf.phreg(formula=formula,
                                 data=data,
