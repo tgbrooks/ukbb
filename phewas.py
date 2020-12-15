@@ -135,11 +135,12 @@ def summary():
     fig.savefig(OUTDIR+"num_phecodes.RA.png")
 
 def sex_difference_plots():
+    N_CUTOFF = {1: 300, 2:750}[COHORT] # Get cutoff by cohort number
     d = phecode_tests_by_sex[True #(phecode_tests_by_sex.q < 0.05 )
-                            & (phecode_tests_by_sex.N_male > 300)
-                            & (phecode_tests_by_sex.N_female > 300)]
+                            & (phecode_tests_by_sex.N_male > N_CUTOFF)
+                            & (phecode_tests_by_sex.N_female > N_CUTOFF)]
     ## Create the phewas_plots.sex_difference_plots
-    fig, ax = phewas_plots.sex_difference_plot(d)
+    fig, ax = phewas_plots.sex_difference_plot(d, cmap=color_by_phecode_cat)
     fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
 
     fig, ax = phewas_plots.sex_difference_plot(d[d.phecode_category == 'circulatory system'], color_by="phecode_meaning")
@@ -205,6 +206,7 @@ def sex_difference_plots():
 
 def age_difference_plots():
     ## Plot summary of age tests
+    N_CUTOFF = {1: 500, 2: 1250}[COHORT] # Get cutoff by cohort number
     mean_age = data.age_at_actigraphy.mean()
     young_offset = 55 - mean_age
     old_offset = 70 - mean_age
@@ -213,7 +215,7 @@ def age_difference_plots():
             phecode_tests[['phecode', 'activity_var', 'std_effect', 'p', 'q']],
             suffixes=["_age", "_overall"],
             on=["activity_var", "phecode"]).reset_index()
-    d = d[d.N_cases > 500]
+    d = d[d.N_cases > N_CUTOFF]
     d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
     d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
 
@@ -764,6 +766,7 @@ if __name__ == '__main__':
     phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions)
 
     ## Make the plots
+    if not args.noplots:
         summary()
         sex_difference_plots()
         age_difference_plots()
