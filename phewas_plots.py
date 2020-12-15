@@ -596,13 +596,13 @@ class Plotter:
                 ses *= data[effs.index].std() # Standardize by the actigraphy variables used
                 ses /= data[phenotype].std() # Standardize by the phenotype variance
 
-            ys = numpy.linspace(rank-0.3, rank+0.15, 4)
-            #ax1.scatter(-numpy.log10(ps), [rank]*len(ps), c=colors)
+            height = 0.15 #Height of the bar plots (1 unit is the spacing between variables)
+            ys = numpy.linspace(rank-height*1.5, rank+height*1.5, 4)
             ax2.scatter(effs, ys[:3], c=colors_list[:3])
             for eff, se, y, c, p in zip(effs, ses, ys, colors_list, ps):
                 ax2.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c) # Draw effect sizes
             for y, c, p in zip(ys, colors_list, numpy.concatenate((ps, [overall_p]))):
-                ax1.barh([y], height=0.15, width=[-numpy.log10(p)], color=c, align="edge") # Draw p values
+                ax1.barh([y], height=height, width=[-numpy.log10(p)], color=c) # Draw p value bars
 
             yticks[rank] = util.wrap(phenotype_name, 30)
             pvalues.append(ps[top_circ])
@@ -620,10 +620,10 @@ class Plotter:
         ax1.set_yticklabels([name if qvalue_dict[rank] >= 0.05 else name + " (*)"
                                 for rank, name in yticks.items()])
         ax1.set_xlabel("-log10 p-value")
-        ax1.set_xlim(left=0)
+        ax1.set_xlim(left=0, right=min(ax1.get_xlim()[1], 40)) # Cap log p-values at 40
         ax2.set_xlabel("Standardized Effect Size")
         ax2.axvline(0, linestyle="-", color="k", linewidth=1)
-        ax2.set_xlim(0)
+        ax2.set_xlim(left=0)
         util.legend_from_colormap(fig, colors)
         ax1.margins(0.5, 0.02)
         fig.tight_layout()
