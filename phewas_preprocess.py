@@ -249,7 +249,8 @@ def load_data(cohort):
     numpy.random.seed(0)
     # Note: total 92331, half is 46164
     cohort_id_ranges = {1: slice(0, 25000),
-               2: slice(25000,50000)}
+               2: slice(25000,None), # Everyone not in cohort1
+               }
     selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], replace=False)[cohort_id_ranges[cohort]]
 
     data = data_full.loc[selected_ids].copy()
