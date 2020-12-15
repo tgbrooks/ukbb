@@ -37,6 +37,15 @@ plot_config = {
 # Labels for quintile plots
 quintile_labels = ["First", "Second", "Third", "Fourth", "Fifth"]
 
+def p_to_size(p_value):
+    # maps a p-value to a point size for scatter plots
+    CAP = 10 # -log P-values above this point are all the same size
+    SCALE = 4
+    MINIMUM = 1
+    logp = -numpy.log10(p_value)
+    logp = numpy.minimum(logp, CAP)
+    return logp * SCALE + MINIMUM
+
 
 def local_regression(x,y, out_x, bw=0.05):
     # Preform a local regression y ~ x and evaluate it at the provided points `out_x`
@@ -83,8 +92,7 @@ class Plotter:
             d.std_male_coeff,
             d.std_female_coeff,
             label="phenotypes",
-            #s=-numpy.log10(d.p_diff)*10,
-            s=-numpy.log10(numpy.minimum(d.p_male, d.p_female))*4,
+            s=p_to_size(numpy.minimum(d.p_male, d.p_female)),
             c=color)
         ax.spines['bottom'].set_color(None)
         ax.spines['top'].set_color(None)
@@ -146,7 +154,7 @@ class Plotter:
         ax.scatter(
             d.age_55_effect,
             d.age_75_effect,
-            s=-numpy.log10(numpy.minimum(d.p_overall, d.p_age))*3,
+            s=p_to_size(numpy.minimum(d.p_overall, d.p_age)),
             c=color)
         ax.spines['bottom'].set_color(None)
         ax.spines['top'].set_color(None)

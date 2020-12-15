@@ -380,10 +380,9 @@ def survival_plots():
             return float("NaN")
     variance_ratio = survival_tests.activity_var.apply(get_variance_ratio)
     variance_ratio.index = survival_tests.activity_var
-    ax.scatter(#-numpy.log10(survival_tests.p),
-                survival_tests['standardized log Hazard Ratio'],
+    ax.scatter(survival_tests['standardized log Hazard Ratio'],
                 variance_ratio,
-                s=1-numpy.log10(survival_tests.p)*3,
+                s=plots.p_to_size(survival_tests.p),
                 c=color)
     ax.set_xlabel("Standardized log Hazard Ratio")
     ax.set_ylabel("Within-person variation / Between-person variation")
@@ -393,7 +392,7 @@ def survival_plots():
         # Label the top points
         ax.annotate(
             row.activity_var,
-            (#-numpy.log10(row.p),
+            (
             row['standardized log Hazard Ratio'],
             variance_ratio.loc[row.activity_var]),
             xytext=(0,15),
@@ -415,7 +414,7 @@ def survival_plots():
             d.std_male_logHR,
             d.std_female_logHR,
             label="phenotypes",
-            #s=-numpy.log10(d.p)*10,
+            s=plots.p_to_size(d.p),
             c=color)
         ax.set_title("Survival associations by sex")
         ax.spines['bottom'].set_color(None)
