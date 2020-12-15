@@ -397,13 +397,7 @@ def survival_plots():
             xytext=(0,15),
             textcoords="offset pixels",
             arrowprops={'arrowstyle':"->"})
-    legend_elts = [matplotlib.lines.Line2D(
-                            [0],[0],
-                            marker="o", markerfacecolor=c, markersize=10,
-                            label=cat if not pandas.isna(cat) else "NA",
-                            c=c, lw=0)
-                        for cat, c in color_by_actigraphy_cat.items()]
-    fig.legend(handles=legend_elts, ncol=2, fontsize="small")
+    util.legend_from_colormap(fig, color_by_actigraphy_cat, ncol=2, fontsize="small")
     #fig.tight_layout()
     fig.savefig(OUTDIR+"survival_versus_variation.svg")
 
@@ -444,8 +438,7 @@ def survival_plots():
         #ax.annotate("Male Effect Larger", xy=(-0.4,0), ha="center", bbox=bbox, zorder=3)
         #ax.annotate("Female Effect Larger", xy=(0,0.4), ha="center", bbox=bbox, zorder=3)
         #ax.annotate("Female Effect Larger", xy=(0,-0.25), ha="center", bbox=bbox, zorder=3)
-        util.legend_from_colormap(ax, colormap)
-        ax.legend(handles=legend_elts, ncol=2, fontsize="small")
+        util.legend_from_colormap(ax, colormap, loc="upper left")
         return fig, ax
     d = survival_tests.copy()
     activity_var_stds = data[activity_variables].std() #TODO: should we separate male/female stds?
