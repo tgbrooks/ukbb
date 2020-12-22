@@ -680,6 +680,43 @@ def generate_results_table():
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
 
+def temperature_trace_plots(data):
+    ids = day_plots.get_ids_of_traces_available()
+    N_IDS = 500
+
+    def temp_to_C(temp):
+        return (500*temp - 2550)/256 # Convert "temp" units to Celsius
+        #TODO: should we be doing this at another step??
+
+    ## Overall temperature cycle
+    _, _, ax = day_plots.plot_average_trace(numpy.random.choice(ids, size=N_IDS, replace=False), 
+                    var="temp",
+                    transform = temp_to_C,
+                    normalize_mean = True)
+    ax.set_ylabel("Temperature (C)")
+
+    ## By categories
+    def case_control(phecode):
+        fig, axes = pylab.subplots(nrows=2, sharex=True, sharey=True)
+        d = data[data.index.isin(ids)]
+        for  ax, status in zip(axes.flatten(), [True,False]):
+            selected_ids = d[d[phecode] == status].index
+            selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
+            day_plots.plot_average_trace(selected_ids,
+                        var="temp",
+                        transform = temp_to_C,
+                        normalize_mean = True,
+                        ax=ax)
+            ax.set_title("Cases" if status else "Controls")
+        fig.tight_layout()
+        return fig
+    fig = case_control(250)
+    fig.savefig(OUTDIR+"temperature.diabetes.png")
+    fig = case_control(401)
+    fig.savefig(OUTDIR+"temperature.hypertension.png")
+    fig = case_control(496)
+    fig.savefig(OUTDIR+"temperature.chronic_airway_obstruction.png")
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run phewas pipeline on actigraphy\nOutputs to ../global_phewas/cohort#/")
@@ -776,6 +813,7 @@ if __name__ == '__main__':
         survival_plots()
         objective_subjective_plots()
         circadian_component_plots()
+        temperature_trace_plots()
         if args.all:
             # Note: slow to run: performs many regressions
             by_date_plots()
