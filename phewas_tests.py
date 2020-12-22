@@ -259,6 +259,64 @@ def age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RE
     age_tests.to_csv(OUTDIR+f"phecodes.age_effects.txt", sep="\t", index=False)
     return age_tests
 
+def age_sex_interaction_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE):
+    if not RECOMPUTE:
+        try:
+            sex_age_tests = pandas.read_csv(OUTDIR+"phecodes.sex_and_age_effects.txt", sep="\t")
+            return sex_age_tests
+        except FileNotFoundError:
+            pass
+
+    print("Computing sex-age associations")
+    sex_age_tests_list = []
+    covariate_formula = ' + '.join(c for c in covariates if (c != 'birth_year'))
+    for group in phecode_groups:
+        N_male = data.loc[data.sex == "Male", group].sum()
+        N_female = data.loc[data.sex == "Female", group].sum()
+        if N_male < 500 or N_female < 500:
+            print(f"Skipping {group} - only {N_male} and {N_female} cases found in M/F")
+            continue
+        else:
+            print(f"Running {group}")
+        
+        for activity_variable in activity_variables:
+            fit = OLS(f"{activity_variable} ~ Q({group}) * age_at_actigraphy * sex + sex*({covariate_formula})",
+                         data=data)
+            p_age = fit.pvalues[f"Q({group}):age_at_actigraphy"]
+            p_sex = fit.pvalues[f"Q({group}):sex[T.Male]"]
+            p_age_sex_interaction = fit.pvalues[f"Q({group}):age_at_actigraphy:sex[T.Male]"]
+            main_coeff = fit.params[f"Q({group})"]
+            age_coeff = fit.params[f"Q({group}):age_at_actigraphy"]
+            sex_coeff = fit.params[f"Q({group}):sex[T.Male]"]
+            age_sex_interaction_coeff = fit.pvalues[f"Q({group}):age_at_actigraphy:sex[T.Male]"]
+            std =  data[activity_variable].std()
+            sex_age_tests_list.append({"phecode": group,
+                                    "activity_var": activity_variable,
+                                    "p_age": p_age,
+                                    "p_sex": p_sex,
+                                    "p_age_sex_interaction": p_age_sex_interaction,
+                                    "main_coeff": main_coeff,
+                                    "sex_coeff": sex_coeff,
+                                    #"age_coeff": age_coeff,
+                                    #"age_sex_interaction_coeff": age_sex_interaction_coeff,
+                                    "male_age_coeff": age_coeff + age_sex_interaction_coeff,
+                                    "female_age_coeff": age_coeff,
+                                    "std_main_ceoff": main_coeff / std,
+                                    "std_sex_coeff": sex_coeff / std,
+                                    "std_male_age_coeff": (age_coeff + age_sex_interaction_coeff) / std,
+                                    "std_female_age_coeff": age_coeff /std,
+                                    "N_male_cases": N_male,
+                                    "N_female_cases": N_female,
+                                   })
+    sex_age_tests = pandas.DataFrame(sex_age_tests_list)
+
+    sex_age_tests['q_age_sex_interaction'] = BH_FDR(sex_age_tests.p_age_sex_interaction)
+    sex_age_tests["phecode_meaning"] = sex_age_tests.phecode.map(phecode_info.phenotype)
+    sex_age_tests["phecode_category"] = sex_age_tests.phecode.map(phecode_info.category)
+
+    sex_age_tests.to_csv(OUTDIR+f"phecodes.sex_and_age_effects.txt", sep="\t", index=False)
+    return sex_age_tests
+
 def survival_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE=True):
     if not RECOMPUTE:
         try:

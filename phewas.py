@@ -736,6 +736,8 @@ if __name__ == '__main__':
     age_tests_raw = age_tests.copy()
     age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
 
+    age_sex_tests = phewas_tests.age_sex_interaction_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
+
     survival_tests = phewas_tests.survival_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
 
     beyond_RA_tests = phewas_tests.beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
