@@ -618,51 +618,59 @@ TIMEZONES = [("2013-06-01", "2013-10-30", 1), # Original cohorts
              ("2018-10-31", "2019-01-31", 0),
              ]
 
-def run(input, output=None, by_day_output=None):
-    '''Compute and output activity features'''
-    # Load data
-    print(f"Running with input={input}, output={output}, by_day_output={by_day_output}")
-
+def load_activity_file(input):
     try:
         data = pandas.read_csv(input, parse_dates=[0])
     except (OSError, pandas.errors.EmptyDataError) as e:
          # Some rare files are bad, we just skip them and return nothing
         print(f"FAILED to read {input}. Invalid data?")
         print(e)
-        return
+        return None
 
     if 'time' not in data:
-        print(f"Processed timeseries file {input} has no 'time' index collumn and is being skipped")
+        print(f"Processed timeseries file {input} has no 'time' index column and is being skipped")
+        return None
+
+    # Process the timezones from UTC to London
+    # Taking into account how they are reported
+
+    # Times reported to use from processing of the CWA file are in different timezones
+    # based on when they start
+    # We convert those all to Europe/London
+    start_day = data.time[0].date()
+    tz = None
+    for first_day, last_day, offset in TIMEZONES:
+        if (pandas.to_datetime(first_day).date() <= start_day and
+                    pandas.to_datetime(last_day).date() >= start_day):
+            tz = pytz.FixedOffset(60*offset)
+    if tz == None:
+        print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {repr(start_day)}\nTimezones must be manually annotated in activity_features.py based off the starting time of the recording")
+    time = data.time.dt.tz_localize(tz)
+    data = data.set_index(time.dt.tz_convert("Europe/London"))
+
+    # Rename for convenience - this column name contains redundant information we don't need
+    data.rename(columns={data.columns[1]: "acceleration"}, inplace=True)
+    data.drop(columns=["time"], inplace=True)
+    # Replace hyphen with underscore for consistency
+    data.rename(columns={"tasks-light": "tasks_light"}, inplace=True)
+
+    # Remove data when imputed. We don't like that very much
+    imputed = data.imputed.copy()
+    data[imputed == 1] = float("NaN")
+    data.imputed = imputed
+    return data
+
+
+def run(input, output=None, by_day_output=None):
+    '''Compute and output activity features'''
+    # Load data
+    print(f"Running with input={input}, output={output}, by_day_output={by_day_output}")
+
+    data = load_activity_file(input)
+
+    if data is None:
         results = {}
         by_day = pandas.DataFrame([])
-    else:
-        # Process the timezones from UTC to London
-        # Taking into account how they are reported
-
-        # Times reported to use from processing of the CWA file are in different timezones
-        # based on when they start
-        # We convert those all to Europe/London
-        start_day = data.time[0].date()
-        tz = None
-        for first_day, last_day, offset in TIMEZONES:
-            if (pandas.to_datetime(first_day).date() <= start_day and
-                       pandas.to_datetime(last_day).date() >= start_day):
-                tz = pytz.FixedOffset(60*offset)
-        if tz == None:
-            print(f"ERROR: could not find an appropriate timezone for file {input} which starts on date {repr(start_day)}\nTimezones must be manually annotated in activity_features.py based off the starting time of the recording")
-        time = data.time.dt.tz_localize(tz)
-        data = data.set_index(time.dt.tz_convert("Europe/London"))
-
-        # Rename for convenience - this column name contains redundant information we don't need
-        data.rename(columns={data.columns[1]: "acceleration"}, inplace=True)
-        data.drop(columns=["time"], inplace=True)
-        # Replace hyphen with underscore for consistency
-        data.rename(columns={"tasks-light": "tasks_light"}, inplace=True)
-
-        # Remove data when imputed. We don't like that very much
-        imputed = data.imputed.copy()
-        data[imputed == 1] = float("NaN")
-        data.imputed = imputed
 
         # Run
         results, by_day = activity_features(data)
