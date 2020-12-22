@@ -137,7 +137,7 @@ def load_activity(ukbb):
 
     # List the activity variables
     activity_variables = activity.columns
-    return activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance
+    return activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
 
 def load_phecode(selected_ids):
     # Load the PheCode mappings
@@ -238,7 +238,7 @@ def phecode_count_summary():
 
 def load_data(cohort):
     ukbb = load_ukbb()
-    activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance = load_activity(ukbb)
+    activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = load_activity(ukbb)
 
     # Gather all the data
     data_full = activity.join(ukbb, how="inner")
@@ -297,7 +297,7 @@ def load_data(cohort):
         # Note that those without any ICD10 entries at all should be marked as non-case, hence the fillna()
         data[group] = data.index.map(phecode_data[group].astype(int)).fillna(0)
     
-    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all
+    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all
 
 if __name__ == "__main__":
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = load_data(1)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = load_data(1)

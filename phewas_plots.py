@@ -16,21 +16,21 @@ plot_config = {
         "xbottom": 0.6,
         "xtop": 1.0,
         "point_width": 0.01,
-        "bandwidth": 'scott',
+        "bandwidth": 0.15,
         "label": "RA",
     },
     "amplitude": {
         "xbottom": 0.1,
         "xtop": 0.9,
         "point_width": 0.01,
-        "bandwidth": "scott",
+        "bandwidth": 0.15,
         "label": "Amplitude",
     },
     "temp_RA": {
         "xbottom": -0.12,
         "xtop": 0.0,
         "point_width": 0.01,
-        "bandwidth": "scott",
+        "bandwidth": 0.15,
         "label": "Temperature RA"
     }
 }
