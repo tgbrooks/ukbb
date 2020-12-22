@@ -288,7 +288,7 @@ def age_sex_interaction_tests(data, phecode_groups, activity_variables, phecode_
             main_coeff = fit.params[f"Q({group})"]
             age_coeff = fit.params[f"Q({group}):age_at_actigraphy"]
             sex_coeff = fit.params[f"Q({group}):sex[T.Male]"]
-            age_sex_interaction_coeff = fit.pvalues[f"Q({group}):age_at_actigraphy:sex[T.Male]"]
+            age_sex_interaction_coeff = fit.params[f"Q({group}):age_at_actigraphy:sex[T.Male]"]
             std =  data[activity_variable].std()
             sex_age_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
