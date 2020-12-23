@@ -11,6 +11,7 @@ from phewas_preprocess import self_report_circadian_variables
 import phewas_tests
 from phewas_tests import covariates, survival_covariates, OLS
 import phewas_plots as plots
+import day_plots
 
 import util
 from util import BH_FDR, legend_of_pointscale, legend_from_colormap, truncate, wrap
@@ -697,17 +698,24 @@ def temperature_trace_plots(data):
 
     ## By categories
     def case_control(phecode):
-        fig, axes = pylab.subplots(nrows=2, sharex=True, sharey=True)
+        temp_mean = temp_to_C(full_activity.temp_mean_mean.mean())
+        fig, ax = pylab.subplots()
         d = data[data.index.isin(ids)]
-        for  ax, status in zip(axes.flatten(), [True,False]):
+        colors = {True: "orange", False:"teal"}
+        for  status in [True,False]:
             selected_ids = d[d[phecode] == status].index
             selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
             day_plots.plot_average_trace(selected_ids,
                         var="temp",
                         transform = temp_to_C,
                         normalize_mean = True,
-                        ax=ax)
-            ax.set_title("Cases" if status else "Controls")
+                        set_mean = temp_mean,
+                        ax=ax,
+                        color=colors[status],
+                        label="Case" if status else "Control")
+        ax.set_title(phecode_info.loc[phecode].phenotype)
+        ax.set_ylabel("Temperature (C)")
+        fig.legend()
         fig.tight_layout()
         return fig
     fig = case_control(250)

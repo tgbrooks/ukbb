@@ -13,14 +13,14 @@ def get_ids_of_traces_available(directory="../processed/acc_analysis"):
     dir = pathlib.Path(directory)
     return [int(f.name.split("_")[0]) for f in dir.glob("*_90001_0_0-timeSeries.csv.gz")]
 
-def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x, normalize_mean=False, ax=None):
+def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x, normalize_mean=False, set_mean=None, ax=None, color="k", label=None):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
         tracedata = activity_features.load_activity_file(tracefile)
 
         if tracedata is None:
-            print("Skipping {id}")
+            print(f"Skipping {id}")
             continue
 
         # Time since midnight
@@ -29,7 +29,10 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
         average_traces.append(transform(average_trace[[var]]))
     if normalize_mean:
         # Make sure everyone's mean is the same
-        grand_mean = pandas.DataFrame([trace.mean() for trace in average_traces]).mean()
+        if set_mean is not None:
+            grand_mean = set_mean
+        else:
+            grand_mean = pandas.DataFrame([trace.mean() for trace in average_traces]).mean()
         average_traces = [trace - trace.mean() + grand_mean for trace in average_traces]
     resampled = pandas.concat(average_traces).resample("1min")[var]
     grand_average = resampled.mean()
@@ -39,11 +42,12 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
 
     if ax is None:
         fig, ax = pylab.subplots()
-    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, label="mean", c="k")
+    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label)
     ax.fill_between(low_average.index / pandas.to_timedelta("1H"),
                        low_average,
                        high_average,
-                       color="#ccc",
+                       color=color,
+                       alpha=0.3,
                        )
     #ax.plot(low_average.index / pandas.to_timedelta("1H"), low_average, label="75th percentile")
     #ax.plot(high_average.index / pandas.to_timedelta("1H"), high_average, label="25th percentile")
