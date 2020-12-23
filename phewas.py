@@ -121,7 +121,7 @@ def summary():
     ### Overall disease burden (number of phecodes) versus RA
     fig, ax = pylab.subplots()
     num_phecodes = data[phecode_groups].sum(axis=1)
-    phecode_ranges = pandas.cut(num_phecodes, [0,1,2,4,8,16,32,num_phecodes.max()+1])
+    phecode_ranges = pandas.cut(num_phecodes, [0,1,6,11,16,21,26,31,num_phecodes.max()+1])
     xticklabels = []
     for i, (phecode_range, group) in enumerate(data.groupby(phecode_ranges)):
         ax.boxplot(group.acceleration_RA.values, positions=[i], showfliers=False, widths=0.8)
