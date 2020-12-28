@@ -1,6 +1,9 @@
 import numpy
 import pandas
 
+# We will reject all individual measurements beyond this zscore cutoff value
+ZSCORE_OUTLIER_CUTOFF = 7
+
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
 self_report_circadian_variables = {
@@ -137,6 +140,15 @@ def load_activity(ukbb):
 
     # List the activity variables
     activity_variables = activity.columns
+
+    # Zero out the extreme outliers in the dataset
+    stds = activity.std()
+    means = activity.mean()
+    zscores = ((activity - means) / stds).abs()
+    outlier = zscores > ZSCORE_OUTLIER_CUTOFF
+    print(f"Identified {outlier.sum()} ({outlier.sum() / len(zscores.values.flatten()):%} outlier measurements")
+    activity[outlier] = float("Nan")
+
     return activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
 
 def load_phecode(selected_ids):
