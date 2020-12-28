@@ -297,8 +297,6 @@ def age_sex_interaction_tests(data, phecode_groups, activity_variables, phecode_
                                     "p_age_sex_interaction": p_age_sex_interaction,
                                     "main_coeff": main_coeff,
                                     "sex_coeff": sex_coeff,
-                                    #"age_coeff": age_coeff,
-                                    #"age_sex_interaction_coeff": age_sex_interaction_coeff,
                                     "male_age_coeff": age_coeff + age_sex_interaction_coeff,
                                     "female_age_coeff": age_coeff,
                                     "std_main_ceoff": main_coeff / std,

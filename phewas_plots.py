@@ -462,14 +462,18 @@ class Plotter:
                 where='post',
                 **kwargs)
 
-    def quintile_survival_plot(self, data, var, var_label=None):
+    def quintile_survival_plot(self, data, var, var_label=None, ax=None):
         if var_label is None:
             var_label = var
         quintiles = pandas.qcut(data[var], 5)
-        fig, ax = pylab.subplots(figsize=(8,6))
+        if ax is None:
+            fig, ax = pylab.subplots(figsize=(8,6))
+            just_ax = False
+        else:
+            fig = ax.figure
+            just_ax = True
         for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
             self.survival_curve(data[quintiles == quintile], ax, label= label + " Quintile")
-        fig.legend(loc=(0.15,0.15))
         ax.set_title(f"Survival by {var_label}")
         ax.set_ylabel("Survival Probability")
         ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
@@ -478,7 +482,26 @@ class Plotter:
         #scale = len(data)/5
         #ax2.set_ylim(ax.get_ylim()[0]*scale, ax.get_ylim()[1]*scale)
         #ax2.set_ylabel("Participants")
-        fig.tight_layout()
+        if not just_ax:
+            fig.legend(loc=(0.15,0.15))
+            fig.tight_layout()
+        return fig
+
+    def quintile_survival_plot_by_cat(self, data, var, cat_var, var_label=None):
+        cats = data[cat_var].astype("category").cat.categories
+        quintiles = pandas.qcut(data[var], 5)
+        ns = data[cat_var].value_counts()
+        cats = cats[ns[cats] > 500] # Drops categories that don't have enough people
+        fig, axes = pylab.subplots(nrows=len(cats), sharex=True, sharey=True)
+        for ax, cat in zip(axes.flatten(), cats):
+            d = data[data[cat_var] == cat]
+            for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
+                    self.survival_curve(d[quintiles == quintile], ax, label=label+" Quintle")
+            ax.set_title(cat)
+            ax.set_ylabel("Survival Probability")
+            ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+            ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
+        fig.legend()
         return fig
 
     def categorical_survival_plot(self, data, var, var_label=None, min_N=None):
