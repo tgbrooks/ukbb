@@ -681,7 +681,7 @@ def generate_results_table():
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
 
-def temperature_trace_plots(data):
+def temperature_trace_plots():
     ids = day_plots.get_ids_of_traces_available()
     N_IDS = 500
 
@@ -724,6 +724,8 @@ def temperature_trace_plots(data):
     fig.savefig(OUTDIR+"temperature.hypertension.png")
     fig = case_control(496)
     fig.savefig(OUTDIR+"temperature.chronic_airway_obstruction.png")
+    fig = case_control(443)
+    fig.savefig(OUTDIR+"temperature.peripheral_vascular_disease.png")
 
 if __name__ == '__main__':
     import argparse
