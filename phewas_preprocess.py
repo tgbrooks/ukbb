@@ -146,7 +146,9 @@ def load_activity(ukbb):
     means = activity.mean()
     zscores = ((activity - means) / stds).abs()
     outlier = zscores > ZSCORE_OUTLIER_CUTOFF
-    print(f"Identified {outlier.sum()} ({outlier.sum() / len(zscores.values.flatten()):%} outlier measurements")
+    num_outliers = outlier.sum().sum()
+    pct_outliers = num_outliers / len(zscores.values.flatten())
+    print(f"Identified and removed {num_outliers} ({pct_outliers:0.3%}) outlier measurements")
     activity[outlier] = float("Nan")
 
     return activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
