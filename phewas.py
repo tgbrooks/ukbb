@@ -697,13 +697,11 @@ def temperature_trace_plots():
     ax.set_ylabel("Temperature (C)")
 
     ## By categories
-    def case_control(phecode):
+    def temp_trace_by_cat(cats, colors=None, show_variance=True):
         temp_mean = temp_to_C(full_activity.temp_mean_mean.mean())
         fig, ax = pylab.subplots()
-        d = data[data.index.isin(ids)]
-        colors = {True: "orange", False:"teal"}
-        for  status in [True,False]:
-            selected_ids = d[d[phecode] == status].index
+        for cat in cats.cat.categories:
+            selected_ids = data[(cats == cat) & (data.index.isin(ids))].index
             selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
             day_plots.plot_average_trace(selected_ids,
                         var="temp",
@@ -711,13 +709,22 @@ def temperature_trace_plots():
                         normalize_mean = True,
                         set_mean = temp_mean,
                         ax=ax,
-                        color=colors[status],
-                        label="Case" if status else "Control")
-        ax.set_title(phecode_info.loc[phecode].phenotype)
+                        color=colors[cat] if colors is not None else None,
+                        label=cat,
+                        show_variance=show_variance)
         ax.set_ylabel("Temperature (C)")
         fig.legend()
         fig.tight_layout()
         return fig
+
+    def case_control(phecode):
+        cats = data[phecode].astype("category").cat.rename_categories({0:"Control", 1:"Case"})
+        fig = temp_trace_by_cat(cats,
+                                 colors = {"Case": "orange", "Control": "teal"})
+        fig.gca().set_title(phecode_info.loc[phecode].phenotype)
+        fig.tight_layout()
+        return fig
+
     fig = case_control(250)
     fig.savefig(OUTDIR+"temperature.diabetes.png")
     fig = case_control(401)
@@ -726,6 +733,21 @@ def temperature_trace_plots():
     fig.savefig(OUTDIR+"temperature.chronic_airway_obstruction.png")
     fig = case_control(443)
     fig.savefig(OUTDIR+"temperature.peripheral_vascular_disease.png")
+    fig = case_control(495)
+    fig.savefig(OUTDIR+"temperature.asthma.png")
+
+    morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
+    fig = temp_trace_by_cat(morning_evening, show_variance=False)
+    fig.gca().set_title("Chronotype")
+    fig.tight_layout()
+    fig.savefig(OUTDIR+"tempreature.chronotype.png")
+
+    age_cutoffs = numpy.arange(45,75,5) # every 5 years from 40 to 75
+    age_categories = pandas.cut(data.age_at_actigraphy, age_cutoffs)
+    fig = temp_trace_by_cat(age_categories, show_variance=False)
+    fig.gca().set_title("Age")
+    fig.tight_layout()
+    fig.savefig(OUTDIR+"temperature.age.png")
 
 if __name__ == '__main__':
     import argparse
