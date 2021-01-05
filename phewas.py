@@ -337,29 +337,31 @@ def fancy_plots():
 
 def survival_curves():
     # Survival by RA
-    fig = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "RA")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "RA")
     fig.savefig(OUTDIR+"survival.RA.png")
+    death_counts.to_csv(OUTDIR+"deaths.RA.by_year.txt", sep="\t")
 
     # Survival by main_sleep_offset_avg
-    fig = phewas_plots.quintile_survival_plot(data, "main_sleep_offset_mean", "Sleep Offset")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "main_sleep_offset_mean", "Sleep Offset")
     fig.savefig(OUTDIR+"survival.main_sleep_offset_mean.png")
 
     # Survival by MVPA_overall_avg
-    fig = phewas_plots.quintile_survival_plot(data, "MVPA_overall", "MVPA Mean")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "MVPA_overall", "MVPA Mean")
     fig.savefig(OUTDIR+"survival.MVPA_overall.png")
 
     # Survival by MVPA_overall_avg
-    fig = phewas_plots.quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA hourly SD")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "MVPA_hourly_SD", "MVPA hourly SD")
     fig.savefig(OUTDIR+"survival.MVPA_hourly_SD.png")
 
     # Survival by acceleration_hourly_SD
-    fig = phewas_plots.quintile_survival_plot(data, "acceleration_hourly_SD", "Acceleration Hourly SD")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_hourly_SD", "Acceleration Hourly SD")
     fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.png")
+    death_counts.to_csv(OUTDIR+"deaths.acceleration_hourly_SD.by_year.txt", sep="\t")
 
     # Survival by phase
     fig, ax = pylab.subplots()
     data['phase_adjusted'] = (data.phase - 8) % 24 + 8
-    fig = phewas_plots.quintile_survival_plot(data, "phase_adjusted", "phase")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "phase_adjusted", "phase")
     fig.savefig(OUTDIR+"survival.phase.png")
 
     # Survival by RA and sex

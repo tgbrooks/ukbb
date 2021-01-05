@@ -46,6 +46,12 @@ def p_to_size(p_value):
     logp = numpy.minimum(logp, CAP)
     return logp * SCALE + MINIMUM
 
+def gaussian_kde(data, *args, **kwargs):
+    # Gaussian KDE but drops NAs
+    d = data[~data.isna()]
+    return scipy.stats.gaussian_kde(d, *args, **kwargs)
+
+
 
 def local_regression(x,y, out_x, bw=0.05):
     # Preform a local regression y ~ x and evaluate it at the provided points `out_x`
@@ -219,8 +225,8 @@ class Plotter:
         total_incidence = case.sum()/len(case)
 
         def densities_and_incidence(data):
-            case_density = scipy.stats.gaussian_kde(data[var][case], bw_method=bandwidth)(eval_x) * case_scaling
-            control_density = scipy.stats.gaussian_kde(data[var][~case], bw_method=bandwidth)(eval_x) * control_scaling
+            case_density = gaussian_kde(data[var][case], bw_method=bandwidth)(eval_x) * case_scaling
+            control_density = gaussian_kde(data[var][~case], bw_method=bandwidth)(eval_x) * control_scaling
             incidence = case_density / (control_density  + case_density)
             return case_density, control_density, incidence
         
@@ -350,9 +356,9 @@ class Plotter:
         total_incidence = case.sum()/len(case)
 
         def densities_and_incidence(data):
-            case_kde = scipy.stats.gaussian_kde(data[var][case], bw_method=bandwidth)
+            case_kde = gaussian_kde(data[var][case], bw_method=bandwidth)
             case_density = case_kde(eval_x) * case_scaling * case_kde.n
-            control_kde = scipy.stats.gaussian_kde(data[var][~case], bw_method=bandwidth)
+            control_kde = gaussian_kde(data[var][~case], bw_method=bandwidth)
             control_density = control_kde(eval_x) * control_scaling * control_kde.n
             if not normalize:
                 incidence = case_density / (control_density  + case_density)
@@ -472,8 +478,14 @@ class Plotter:
         else:
             fig = ax.figure
             just_ax = True
+        years = range(2015, 2022)
+        yearly_counts = {} # Number of deaths so far
         for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
-            self.survival_curve(data[quintiles == quintile], ax, label= label + " Quintile")
+            quintile_data = data[quintiles == quintile]
+            self.survival_curve(quintile_data, ax, label= label + " Quintile")
+            yearly_counts[label] = {year: (pandas.to_datetime(quintile_data.date_of_death) < pandas.to_datetime(str(year) + "-01-01")).sum()
+                                for year in years }
+
         ax.set_title(f"Survival by {var_label}")
         ax.set_ylabel("Survival Probability")
         ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
@@ -485,7 +497,7 @@ class Plotter:
         if not just_ax:
             fig.legend(loc=(0.15,0.15))
             fig.tight_layout()
-        return fig
+        return fig, pandas.DataFrame(yearly_counts)
 
     def quintile_survival_plot_by_cat(self, data, var, cat_var, var_label=None):
         cats = data[cat_var].astype("category").cat.categories
