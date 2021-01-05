@@ -105,11 +105,23 @@ def summary():
     ID_without_actigraphy = ukbb.index[ukbb.actigraphy_file.isna()]
     icd10_entries_without_actigraphy = icd10_entries_all[icd10_entries_all.ID.isin(ID_without_actigraphy)]
     num_diagnoses_no_actigraphy = icd10_entries_without_actigraphy.groupby(pandas.Categorical(icd10_entries_without_actigraphy.ID, categories=ID_without_actigraphy)).size()
+    icd10_entries_at_assessment_without_actigraphy = icd10_entries_without_actigraphy[pandas.to_datetime(icd10_entries_without_actigraphy.first_date) < pandas.to_datetime(icd10_entries_without_actigraphy.ID.map(ukbb['blood_sample_time_collected_V0']))]
+    num_diagnoses_at_assessment_without_actigraphy = icd10_entries_at_assessment_without_actigraphy.groupby(pandas.Categorical(icd10_entries_at_assessment_without_actigraphy.ID, categories=ID_without_actigraphy)).size()
     fig,ax = pylab.subplots()
-    ax.boxplot([num_diagnoses_at_assessment, num_diagnoses_at_actigraphy, num_diagnoses, num_diagnoses_no_actigraphy], showfliers=False)
-    ax.set_xticklabels(["At Assessment", "At Actigraphy", "Final", "Without Actigraphy\nFinal"])
+    color_by_actigraphy = {"With Actigraphy": "#AAA", "Without Actigraphy": "#C33"}
+    actigraphy_boxes = ax.boxplot([num_diagnoses_at_assessment, num_diagnoses_at_actigraphy, num_diagnoses],
+                                   showfliers=False, positions=[0,1.2,2], widths=0.4, patch_artist=True,
+                                   boxprops={"color": "k", "facecolor": color_by_actigraphy['With Actigraphy']},
+                                   medianprops={"color":"k"})
+    no_actigraphy_boxes = ax.boxplot([num_diagnoses_at_assessment_without_actigraphy, num_diagnoses_no_actigraphy],
+                                        showfliers=False, positions=[0.4,2.4], widths=0.4, patch_artist=True,
+                                        boxprops={"color": "k", "facecolor": color_by_actigraphy["Without Actigraphy"]},
+                                        medianprops={"color":"k"})
+    ax.set_xticks([0.2,1.2,2.2])
+    ax.set_xticklabels(["At Assessment", "At Actigraphy", "At Study End"])
     ax.set_ylabel("Medical Record Diagnoses per Participant")
     ax.set_title("Disease Burden")
+    legend_from_colormap(ax, color_by_actigraphy)
     fig.savefig(OUTDIR+"summary_disease_burden.png")
 
     print(f"Median number of diagnoses by category:")
