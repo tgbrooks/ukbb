@@ -671,7 +671,7 @@ def run(input, output=None, by_day_output=None):
     if data is None:
         results = {}
         by_day = pandas.DataFrame([])
-
+    else:
         # Run
         results, by_day = activity_features(data)
 
