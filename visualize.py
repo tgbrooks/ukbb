@@ -37,7 +37,7 @@ def visualize(filename, show=True, M10_view=False, **kwargs):
         start = pandas.to_datetime(data.index[0].date() + i * pandas.to_timedelta("1 day")).tz_localize(data.index.tz)
         end = start + pandas.to_timedelta("2 day")
         day = data.loc[start:end]
-        index = (day.index - day.index[0].normalize()).total_seconds() / (60*60)
+        index = (day.index - day.index[0].normalize()) / pandas.to_timedelta('1H')
 
         # Shade regions based off the inferred activity
         if not M10_view:
