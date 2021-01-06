@@ -64,11 +64,12 @@ def local_regression(x,y, out_x, bw=0.05):
 
 
 class Plotter:
-    def __init__(self, phecode_info, colormaps, activity_variables, activity_variable_descriptions):
+    def __init__(self, phecode_info, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions):
          self.phecode_info = phecode_info
          self.colormaps = colormaps
          self.activity_variables = activity_variables
          self.activity_variable_descriptions = activity_variable_descriptions
+         self.quantitative_variable_descriptions = quantitative_variable_descriptions
 
          self.quintile_labels = quintile_labels
 
@@ -606,7 +607,7 @@ class Plotter:
         pvalues = []
         ranks = []
         for rank, phenotype in enumerate(phenotypes):
-            phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else phenotype
+            phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
             if rank > 20:
                 continue # Skip all but the most significant
 

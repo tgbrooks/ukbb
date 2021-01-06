@@ -416,6 +416,7 @@ def survival_plots():
     util.legend_from_colormap(fig, color_by_actigraphy_cat, ncol=2, fontsize="small")
     #fig.tight_layout()
     fig.savefig(OUTDIR+"survival_versus_variation.svg")
+    fig.savefig(OUTDIR+"survival_versus_variation.eps")
 
     ### Sex-difference survival plot
     def sex_difference_survival_plot(d, color_by="activity_var_category"):
@@ -847,7 +848,7 @@ if __name__ == '__main__':
 
     ## Create the plotter object
     # for common plot types
-    phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions)
+    phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions)
 
     ## Make the plots
     if not args.noplots:
