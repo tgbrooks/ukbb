@@ -13,7 +13,7 @@ def get_ids_of_traces_available(directory="../processed/acc_analysis"):
     dir = pathlib.Path(directory)
     return [int(f.name.split("_")[0]) for f in dir.glob("*_90001_0_0-timeSeries.csv.gz")]
 
-def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x, normalize_mean=False, set_mean=None, ax=None, color="k", label=None):
+def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x, normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
@@ -36,19 +36,21 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
         average_traces = [trace - trace.mean() + grand_mean for trace in average_traces]
     resampled = pandas.concat(average_traces).resample("1min")[var]
     grand_average = resampled.mean()
-    low_average = resampled.quantile(0.25)
-    high_average = resampled.quantile(0.75)
 
 
     if ax is None:
         fig, ax = pylab.subplots()
     ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label)
-    ax.fill_between(low_average.index / pandas.to_timedelta("1H"),
-                       low_average,
-                       high_average,
-                       color=color,
-                       alpha=0.3,
-                       )
+
+    if show_variance:
+        low_average = resampled.quantile(0.25)
+        high_average = resampled.quantile(0.75)
+        ax.fill_between(low_average.index / pandas.to_timedelta("1H"),
+                        low_average,
+                        high_average,
+                        color=color,
+                        alpha=0.3,
+                        )
     #ax.plot(low_average.index / pandas.to_timedelta("1H"), low_average, label="75th percentile")
     #ax.plot(high_average.index / pandas.to_timedelta("1H"), high_average, label="25th percentile")
     ax.set_xlim(0, 24)
