@@ -89,13 +89,17 @@ def load_activity(ukbb):
     activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
 
     # drop activity for people who fail basic QC
-    okay = (activity_summary['quality-goodCalibration'].astype(bool)
-                & (~activity_summary['quality-daylightSavingsCrossover'].astype(bool))
-                & (activity_summary['quality-goodWearTime'].astype(bool))
-           )
+    calibrated = activity_summary['quality-goodCalibration'].astype(bool)
+    weartime = activity_summary['quality-goodWearTime'].astype(bool)
+    no_DST = ~activity_summary['quality-daylightSavingsCrossover'].astype(bool)
+    print(f"Dropping {(~calibrated).sum()} for bad calibration")
+    print(f"Dropping {((~weartime) & calibrated).sum()} for bad weartime")
+    print(f"Dropping {((~no_DST)  & weartime & calibrated).sum()} for daylight savings transition crossover")
+    okay = (calibrated & weartime & no_DST)
     activity = activity[okay]
+    print(f"Dropped total {(~okay).sum()} entries out of {len(okay)} due to bad quality, wear-time, or DST crossover")
+
     activity.columns = activity.columns.str.replace("-","_") # Can't use special characters easily
-    print(f"Dropping {(~okay).sum()} entries out of {len(okay)} due to bad quality or wear-time")
 
     activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characters easily
 
