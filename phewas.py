@@ -167,23 +167,7 @@ def sex_difference_plots():
     fig, ax = phewas_plots.sex_difference_plot(d[d.phecode_category == 'respiratory'], color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/sex_differences.respiratory.png")
 
-    #Make 2x2 grid of quantitative sex differences
-    fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
-    ij = [[0,0], [0,1], [1,0], [1,1]]
-    SUBCATEGORIES = ["circulatory system", "mental disorders", "endocrine/metabolic", "respiratory"]
-    for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
-        tests = d[d.phecode_category == cat]
-        phewas_plots.sex_difference_plot(tests.sample(frac=1), color_by="phecode_meaning", ax=ax, legend=True, labels=False, cmap="tab20_r")
-        ax.set_title(cat)
-        if j == 0:
-            ax.set_ylabel("Effect size in females")
-        if i == 1:
-            ax.set_xlabel("Effect size in males")
-    fig.tight_layout()
-    fig.savefig(OUTDIR+"sex_differences.2x2.png")
-
-
-    #Make 2x2 grid of phecode sex differences
+    #Make 2x2 grid of sex differences
     fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
     ij = [[0,0], [0,1], [1,0], [1,1]]
     SUBCATEGORIES = ["circulatory system", "mental disorders", "endocrine/metabolic", "respiratory"]
@@ -208,7 +192,7 @@ def sex_difference_plots():
     SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
     for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
         tests = quantitative_tests[quantitative_tests['Functional Category'] == cat]
-        phewas_plots.sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
+        phewas_plots.sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r", names=quantitative_variable_descriptions.Name)
         ax.set_title(cat)
         if j == 0:
             ax.set_ylabel("Effect size in females")
@@ -278,7 +262,7 @@ def age_difference_plots():
     SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
     for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
         tests = dage[dage['Functional Category'] == cat]
-        phewas_plots.age_effect_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r")
+        phewas_plots.age_effect_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r", names=quantitative_variable_descriptions.Name)
         ax.set_title(cat)
         if j == 0:
             ax.set_ylabel("Effect size at 70")

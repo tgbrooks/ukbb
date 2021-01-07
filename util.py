@@ -36,11 +36,13 @@ def BH_FDR(ps):
     return adjusted # the q-values
 
 # Legend-making utilities
-def legend_from_colormap(fig, colormap, maxlength=35, **kwargs):
+def legend_from_colormap(fig, colormap, maxlength=35, names=None, **kwargs):
+    if names is None:
+        names = {cat:cat for cat in colormap.keys()}
     legend_elts = [matplotlib.lines.Line2D(
                             [0],[0],
                             marker="o", markerfacecolor=c, markersize=10,
-                            label=truncate(cat,maxlength) if not pandas.isna(cat) else "NA",
+                            label=truncate(names[cat],maxlength) if not pandas.isna(cat) else "NA",
                             c=c, lw=0)
                         for cat, c in colormap.items()]
     fig.legend(handles=legend_elts, **kwargs)

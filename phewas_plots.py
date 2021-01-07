@@ -73,7 +73,7 @@ class Plotter:
 
          self.quintile_labels = quintile_labels
 
-    def sex_difference_plot(self, d, color_by="phecode_category", cmap="Dark2", lim=0.5, ax=None, legend=True, labels=True):
+    def sex_difference_plot(self, d, color_by="phecode_category", cmap="Dark2", lim=0.5, ax=None, legend=True, labels=True, names=None):
         if color_by is not None:
             if type(cmap) == str:
                 cats = d[color_by].unique()
@@ -127,12 +127,12 @@ class Plotter:
         ax.plot(diag, -diag, linestyle="--", c='k', zorder=-1, label="diagonal")
         if color_by is not None and legend:
             if just_ax:
-                util.legend_from_colormap(ax, colormap, ncol=2, fontsize="small")
+                util.legend_from_colormap(ax, colormap, ncol=2, fontsize="small", names=names)
             else:
-                util.legend_from_colormap(fig, colormap, ncol=2, fontsize="small")
+                util.legend_from_colormap(fig, colormap, ncol=2, fontsize="small", names=names)
         return fig, ax
 
-    def age_effect_plot(self, d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.45, ax=None):
+    def age_effect_plot(self, d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.45, ax=None, names=None):
         if ax is None:
             fig, ax = pylab.subplots(figsize=(9,9))
             just_ax = False
@@ -192,16 +192,10 @@ class Plotter:
             ax.annotate("Equal Effects", xy=(0.8*lim,0.8*lim), ha="center", va="center", bbox=bbox, zorder=3, rotation=45)
             ax.annotate("Opposite Effects", xy=(0.8*lim,-0.8*lim), ha="center", va="center", bbox=bbox, zorder=3, rotation=-45)
         if legend:
-            legend_elts = [matplotlib.lines.Line2D(
-                                    [0],[0],
-                                    marker="o", markerfacecolor=c, markersize=10,
-                                    label=util.truncate(cat, 35) if not pandas.isna(cat) else "NA",
-                                    c=c, lw=0)
-                                for cat, c in colormap.items()]
-            if just_ax == True:
-                ax.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+            if just_ax:
+                util.legend_from_colormap(ax, colormap, ncol=2, fontsize="small", names=names, loc="upper left")
             else:
-                fig.legend(handles=legend_elts, ncol=2, fontsize="small", loc="upper left")
+                util.legend_from_colormap(fig, colormap, ncol=2, fontsize="small", names=names, loc="upper left")
         return fig,ax
 
     # Fancy style plot
