@@ -288,7 +288,7 @@ def load_data(cohort):
 
     # Create simplified versions of the categorical covarites
     # This is necessary for convergence of the logistic models
-    data['ethnicity_white'] = data.ethnicity.isin(["British", "any other white background", "Irish", "White"])
+    data['ethnicity_white'] = data.ethnicity.isin(["British", "Any other white background", "Irish", "White"])
     data['overall_health_good'] = data.overall_health.isin(["Good", "Excellent"])
     data.loc[data.overall_health.isin(['Do not know', 'Prefer not to answer']), 'overall_health_good'] = float("NaN")
     data['smoking_ever'] = data.smoking.isin(['Previous', 'Current'])
