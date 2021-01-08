@@ -748,6 +748,29 @@ def temperature_trace_plots():
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.age.png")
 
+def chronotype_plots():
+    # Chronotype by sex+age plot
+    age_cutoffs = numpy.arange(40,80,5) # every 5 years from 40 to 75
+    responses = ["Definitely a 'morning' person", "More a 'morning' than 'evening' person", 'Do not know', "More an 'evening' than a 'morning' person", "Definitely an 'evening' person", 'Prefer not to answer']
+    cmap = pylab.get_cmap("viridis")
+    colors = [cmap(0), cmap(0.25), cmap(0.5), cmap(0.75), cmap(1.0), "k"]
+    age_at_assessment = (pandas.to_datetime(data.blood_sample_time_collected_V0) - data.birth_year_dt) / pandas.to_timedelta("1Y")
+    fig, axes = pylab.subplots(nrows=2, figsize=(8,6))
+    for ax, sex in zip(axes.flatten(), ['Male', 'Female']):
+        d = data[data.sex == sex]
+        age_buckets = pandas.cut(age_at_assessment[data.sex == sex], age_cutoffs, right=True)
+        for i, (bucket, age_data) in enumerate(d.groupby(age_buckets).morning_evening_person):
+            counts = age_data.value_counts()
+            counts /= counts.sum()
+            base = 0
+            for response, color in zip(responses, colors):
+                ax.bar(i, counts[response], bottom=base, color = color)
+                base += counts[response]
+        ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
+        ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
+    util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
+    fig.subplots_adjust(right=0.65)
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run phewas pipeline on actigraphy\nOutputs to ../global_phewas/cohort#/")
@@ -845,32 +868,10 @@ if __name__ == '__main__':
         objective_subjective_plots()
         circadian_component_plots()
         temperature_trace_plots()
+        chronotype_plots()
         if args.all:
             # Note: slow to run: performs many regressions
             by_date_plots()
 
         ## Summarize everything
         generate_results_table()
-
-
-    # Chronotype by sex+age plot
-    age_cutoffs = numpy.arange(40,80,5) # every 5 years from 40 to 75
-    responses = ["Definitely a 'morning' person", "More a 'morning' than 'evening' person", 'Do not know', "More an 'evening' than a 'morning' person", "Definitely an 'evening' person", 'Prefer not to answer']
-    cmap = pylab.get_cmap("viridis")
-    colors = [cmap(0), cmap(0.25), cmap(0.5), cmap(0.75), cmap(1.0), "k"]
-    age_at_assessment = (pandas.to_datetime(data.blood_sample_time_collected_V0) - data.birth_year_dt) / pandas.to_timedelta("1Y")
-    fig, axes = pylab.subplots(nrows=2, figsize=(8,6))
-    for ax, sex in zip(axes.flatten(), ['Male', 'Female']):
-        d = data[data.sex == sex]
-        age_buckets = pandas.cut(age_at_assessment[data.sex == sex], age_cutoffs, right=True)
-        for i, (bucket, age_data) in enumerate(d.groupby(age_buckets).morning_evening_person):
-            counts = age_data.value_counts()
-            counts /= counts.sum()
-            base = 0
-            for response, color in zip(responses, colors):
-                ax.bar(i, counts[response], bottom=base, color = color)
-                base += counts[response]
-        ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
-        ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
-    util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
-    fig.subplots_adjust(right=0.65)
