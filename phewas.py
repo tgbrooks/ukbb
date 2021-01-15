@@ -360,6 +360,10 @@ def survival_curves():
     fig.savefig(OUTDIR+"survival.main_sleep_ratio.by_sex.png")
     fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "acceleration_hourly_SD", "sex", "Acceleration Hourly SD")
     fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.by_sex.png")
+    fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "moderate_between_day_SD", "sex", "Moderate between-day SD")
+    fig.savefig(OUTDIR+"survival.moderate_between_day_SD.by_sex.png")
+    fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "MET_overall", "sex", "MET")
+    fig.savefig(OUTDIR+"survival.MET_overall.by_sex.png")
 
 def survival_plots():
     ### Plot survival assocations versus inter/intra personal variance for validation
