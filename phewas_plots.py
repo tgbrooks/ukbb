@@ -499,19 +499,24 @@ class Plotter:
         quintiles = pandas.qcut(data[var], 5)
         ns = data[cat_var].value_counts()
         cats = cats[ns[cats] > 500] # Drops categories that don't have enough people
+        years = [pandas.to_datetime(str(year) + "-01-01") for year in range(2015, 2022)]
+        yearly_counts = {cat:{} for cat in cats}
         fig, axes = pylab.subplots(ncols=len(cats), sharex=True, sharey=True, figsize=(10,5))
         for ax, cat in zip(axes.flatten(), cats):
             d = data[data[cat_var] == cat]
             q =  d.index.map(quintiles)
             for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
-                    label = (label + " Quintile") if ax == axes.flatten()[0] else None # Only label first
-                    self.survival_curve(d[q == quintile], ax, label=label)
+                quintile_d = d[q == quintile]
+                quintile_label = (label + " Quintile") if ax == axes.flatten()[0] else None # Only label first
+                self.survival_curve(quintile_d, ax, label=quintile_label)
+                yearly_counts[cat][label] = {year: (pandas.to_datetime(quintile_d.date_of_death) < year).mean()
+                                                for year in years }
             ax.set_title(cat)
             ax.set_ylabel("Survival Probability")
             ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
             ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
         fig.legend()
-        return fig
+        return fig, {cat: pandas.DataFrame(counts) for cat,counts in yearly_counts.items()}
 
     def categorical_survival_plot(self, data, var, var_label=None, min_N=None):
         if var_label is None:
