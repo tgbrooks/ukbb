@@ -342,6 +342,11 @@ def survival_curves():
     fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.png")
     death_counts.to_csv(OUTDIR+"deaths.acceleration_hourly_SD.by_year.txt", sep="\t")
 
+    # Survival by main_sleep_ratio_mean
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "main_sleep_ratio_mean", "Sleep Ratio")
+    fig.savefig(OUTDIR+"survival.main_sleep_ratio_mean.png")
+    death_counts.to_csv(OUTDIR+"deaths.main_sleep_ratio_mean.by_year.txt", sep="\t")
+
     # Survival by phase
     fig, ax = pylab.subplots()
     data['phase_adjusted'] = (data.phase - 8) % 24 + 8
