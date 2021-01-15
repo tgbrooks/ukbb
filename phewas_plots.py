@@ -499,11 +499,13 @@ class Plotter:
         quintiles = pandas.qcut(data[var], 5)
         ns = data[cat_var].value_counts()
         cats = cats[ns[cats] > 500] # Drops categories that don't have enough people
-        fig, axes = pylab.subplots(nrows=len(cats), sharex=True, sharey=True)
+        fig, axes = pylab.subplots(ncols=len(cats), sharex=True, sharey=True, figsize=(10,5))
         for ax, cat in zip(axes.flatten(), cats):
             d = data[data[cat_var] == cat]
+            q =  d.index.map(quintiles)
             for quintile, label in list(zip(quintiles.cat.categories, quintile_labels))[::-1]:
-                    self.survival_curve(d[quintiles == quintile], ax, label=label+" Quintle")
+                    label = (label + " Quintile") if ax == axes.flatten()[0] else None # Only label first
+                    self.survival_curve(d[q == quintile], ax, label=label)
             ax.set_title(cat)
             ax.set_ylabel("Survival Probability")
             ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
