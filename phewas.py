@@ -694,7 +694,7 @@ def temperature_trace_plots():
         #TODO: should we be doing this at another step??
 
     ## Overall temperature cycle
-    _, _, ax = day_plots.plot_average_trace(numpy.random.choice(ids, size=N_IDS, replace=False), 
+    _, _, ax = day_plots.plot_average_trace(numpy.random.choice(ids, size=N_IDS, replace=False),
                     var="temp",
                     transform = temp_to_C,
                     normalize_mean = True)
@@ -775,6 +775,28 @@ def chronotype_plots():
         ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
     util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
     fig.subplots_adjust(right=0.65)
+
+def demographics_table():
+    # Create a table of demographics of the population studied, compared to the overall UK Biobank
+    demographics = {}
+    ukbb_without_actigraphy = ukbb[ukbb.actigraphy_file.isna()]
+    for name, d in zip(["Actigraphy", "Without Actigraphy"], [data, ukbb_without_actigraphy]):
+        demographics[name] = {
+            "Male": (d.sex == "Male").mean(),
+            "Female": (d.sex == "Female").mean(),
+
+            "White": (d.ethnicity.isin(["British", "Any other white background", "Irish", "White"])).mean(),
+            "Nonwhite": (~d.ethnicity.isin(["British", "Any other white background", "Irish", "White"])).mean(),
+
+            "Birth Year": (d.birth_year).mean(),
+            "Birth Year (SD)": (d.birth_year).std(),
+
+            "BMI": (d.BMI).mean(),
+            "BMI (SD)": (d.BMI).std(),
+        }
+    demographics = pandas.DataFrame(demographics)
+    demographics.to_csv(OUTDIR+"demographics.txt", sep="\t")
+    return
 
 if __name__ == '__main__':
     import argparse
@@ -880,3 +902,5 @@ if __name__ == '__main__':
 
         ## Summarize everything
         generate_results_table()
+
+    demographics_table()
