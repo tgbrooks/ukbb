@@ -516,6 +516,7 @@ class Plotter:
             ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
             ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
         fig.legend()
+        fig.suptitle(var_label)
         return fig, {cat: pandas.DataFrame(counts) for cat,counts in yearly_counts.items()}
 
     def categorical_survival_plot(self, data, var, var_label=None, min_N=None):

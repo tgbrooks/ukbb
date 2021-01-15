@@ -353,21 +353,13 @@ def survival_curves():
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "phase_adjusted", "phase")
     fig.savefig(OUTDIR+"survival.phase.png")
 
-    # Survival by RA and sex
-    fig, axes = pylab.subplots(ncols=2, sharey=True, sharex=True, figsize=(10,5))
-    RA_quintiles = pandas.qcut(data.acceleration_RA, 5)
-    for ax, sex in zip(axes, ["Male", "Female"]):
-        for quintile, label in list(zip(RA_quintiles.cat.categories, phewas_plots.quintile_labels))[::-1]:
-            phewas_plots.survival_curve(data[(data.sex == sex) & (RA_quintiles == quintile)], ax,
-                            label=("RA " + label + " Quintile" if sex == "Male" else None))
-            ax.set_title(sex)
-    ax1, ax2 = axes
-    ax1.xaxis.set_major_locator(matplotlib.dates.YearLocator())
-    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%Y'))
-    ax1.set_ylabel("Survival Probability")
-    ax1.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
-    fig.legend()
+    # Survival by sex
+    fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "acceleration_RA", "sex", "RA")
     fig.savefig(OUTDIR+"survival.RA.by_sex.png")
+    fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "main_sleep_ratio_mean", "sex", "Sleep Ratio")
+    fig.savefig(OUTDIR+"survival.main_sleep_ratio.by_sex.png")
+    fig, death_counts = phewas_plots.quintile_survival_plot_by_cat(data, "acceleration_hourly_SD", "sex", "Acceleration Hourly SD")
+    fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.by_sex.png")
 
 def survival_plots():
     ### Plot survival assocations versus inter/intra personal variance for validation
