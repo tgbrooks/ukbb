@@ -43,7 +43,7 @@ def compute_phecode_test(activity_variable, phecode, data):
              "N_cases": N_cases,
     }, fit 
 
-def phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE=True):
+def phecode_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE=True):
     if not RECOMPUTE:
         try:
             phecode_tests = pandas.read_csv(OUTDIR+"phecodes.txt", sep="\t")
@@ -70,6 +70,10 @@ def phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR
     phecode_tests['q'] = BH_FDR(phecode_tests.p)
     phecode_tests["phecode_meaning"] = phecode_tests.phecode.map(phecode_info.phenotype)
     phecode_tests["phecode_category"] = phecode_tests.phecode.map(phecode_info.category)
+
+    phecode_tests['Activity Category'] = phecode_tests.activity_var.map(activity_variable_descriptions["Category"])
+    phecode_tests['Activity Subcategory'] = phecode_tests.activity_var.map(activity_variable_descriptions["Subcategory"])
+    phecode_tests['Activity Units'] = phecode_tests.activity_var.map(activity_variable_descriptions["Units"])
 
     phecode_tests.to_csv(OUTDIR+f"phecodes.txt", sep="\t", index=False)
 
@@ -133,10 +137,14 @@ def phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR
     phecode_tests_by_sex['differential_std_coeff'] = phecode_tests_by_sex.std_male_coeff - phecode_tests_by_sex.std_female_coeff
     phecode_tests_by_sex.sort_values(by="p_diff", inplace=True)
 
+    phecode_tests_by_sex['Activity Category'] = phecode_tests_by_sex.activity_var.map(activity_variable_descriptions["Category"])
+    phecode_tests_by_sex['Activity Subcategory'] = phecode_tests_by_sex.activity_var.map(activity_variable_descriptions["Subcategory"])
+    phecode_tests_by_sex['Activity Units'] = phecode_tests_by_sex.activity_var.map(activity_variable_descriptions["Units"])
+
     phecode_tests_by_sex.to_csv(OUTDIR+"/all_phenotypes.by_sex.txt", sep="\t", index=False)
     return phecode_tests, phecode_tests_by_sex
 
-def quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR, RECOMPUTE=True):
+def quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE=True):
     if not RECOMPUTE:
         try:
             quantitative_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
@@ -209,6 +217,10 @@ def quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR,
     quantitative_tests['age_55_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 55) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
     quantitative_tests['age_70_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 70) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
 
+    quantitative_tests['Activity Category'] = quantitative_tests.activity_var.map(activity_variable_descriptions["Category"])
+    quantitative_tests['Activity Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions["Subcategory"])
+    quantitative_tests['Activity Units'] = quantitative_tests.activity_var.map(activity_variable_descriptions["Units"])
+
     def base_name(x):
         if "_V" in x:
             return x.split("_V")[0]
@@ -219,7 +231,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR,
     return quantitative_tests
 
 ##### Age-associations
-def age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE):
+def age_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE):
     if not RECOMPUTE:
         try:
             age_tests = pandas.read_csv(OUTDIR+"phecodes.age_effects.txt", sep="\t")
@@ -263,6 +275,10 @@ def age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RE
     age_tests['age_70_std_effect'] = (age_tests["main_coeff"] + age_tests['age_effect_coeff'] * 70) / age_tests.activity_var.map(stds)
     age_tests["phecode_meaning"] = age_tests.phecode.map(phecode_info.phenotype)
     age_tests["phecode_category"] = age_tests.phecode.map(phecode_info.category)
+
+    age_tests['Activity Category'] = age_tests.activity_var.map(activity_variable_descriptions["Category"])
+    age_tests['Activity Subcategory'] = age_tests.activity_var.map(activity_variable_descriptions["Subcategory"])
+    age_tests['Activity Units'] = age_tests.activity_var.map(activity_variable_descriptions["Units"])
 
     age_tests.to_csv(OUTDIR+f"phecodes.age_effects.txt", sep="\t", index=False)
     return age_tests

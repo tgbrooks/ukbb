@@ -245,9 +245,6 @@ def age_difference_plots():
 
     ## age effect for quantitative traits
     dage = quantitative_tests.copy()
-    phenotype_stds = data[dage.phenotype.unique()].std()
-    dage['age_55_effect'] = (dage["age_main_coeff"] + dage['age_effect_coeff'] * 55) * dage.activity_var.map(stds) / dage.phenotype.map(phenotype_stds)
-    dage['age_70_effect'] = (dage["age_main_coeff"] + dage['age_effect_coeff'] * 70) * dage.activity_var.map(stds) / dage.phenotype.map(phenotype_stds)
     dage['p_overall'] = dage.p
     dage['p_age'] = dage.age_difference_p
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
@@ -834,17 +831,17 @@ if __name__ == '__main__':
 
     #### Run (or load from disk if they already exist) 
     #### the statistical tests
-    phecode_tests, phecode_tests_by_sex = phewas_tests.phecode_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
+    phecode_tests, phecode_tests_by_sex = phewas_tests.phecode_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE)
     phecode_tests_raw = phecode_tests.copy()
     phecode_tests['activity_var_category'] = phecode_tests['activity_var'].map(activity_variable_descriptions.Category)
     phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
 
-    quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR, RECOMPUTE)
+    quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
     quantitative_tests_raw  = quantitative_tests.copy()
     quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
     quantitative_tests['Activity Var Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions.Subcategory)
 
-    age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
+    age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, activity_variable_descriptions, OUTDIR, RECOMPUTE)
     age_tests_raw = age_tests.copy()
     age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
 
