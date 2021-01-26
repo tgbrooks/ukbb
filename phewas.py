@@ -204,17 +204,15 @@ def sex_difference_plots():
 def age_difference_plots():
     ## Plot summary of age tests
     N_CUTOFF = {1: 500, 2: 1250}[COHORT] # Get cutoff by cohort number
-    mean_age = data.age_at_actigraphy.mean()
-    young_offset = 55 - mean_age
-    old_offset = 70 - mean_age
     d = pandas.merge(
             age_tests,
             phecode_tests[['phecode', 'activity_var', 'std_effect', 'p', 'q']],
             suffixes=["_age", "_overall"],
             on=["activity_var", "phecode"]).reset_index()
     d = d[d.N_cases > N_CUTOFF]
-    d['age_55_effect'] = d["std_effect"] + d['std_age_effect'] * young_offset
-    d['age_75_effect'] = d["std_effect"] + d['std_age_effect'] * old_offset
+    stds = data[activity_variables].std()
+    d['age_55_effect'] = (d["main_coeff"] + d['age_effect_coeff'] * 55) / d.activity_var.map(stds)
+    d['age_70_effect'] = (d["main_coeff"] + d['age_effect_coeff'] * 70) / d.activity_var.map(stds)
 
 
     fig, ax = phewas_plots.age_effect_plot(d)
@@ -249,8 +247,9 @@ def age_difference_plots():
 
     ## age effect for quantitative traits
     dage = quantitative_tests.copy()
-    dage['age_55_effect'] = dage["std_effect"] + dage['std_age_effect'] * young_offset
-    dage['age_75_effect'] = dage["std_effect"] + dage['std_age_effect'] * old_offset
+    phenotype_stds = data[dage.phenotype.unique()].std()
+    dage['age_55_effect'] = (dage["age_main_coeff"] + dage['age_effect_coeff'] * 55) * dage.activity_var.map(stds) / dage.phenotype.map(phenotype_stds)
+    dage['age_70_effect'] = (dage["age_main_coeff"] + dage['age_effect_coeff'] * 70) * dage.activity_var.map(stds) / dage.phenotype.map(phenotype_stds)
     dage['p_overall'] = dage.p
     dage['p_age'] = dage.age_difference_p
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
