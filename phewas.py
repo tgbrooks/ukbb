@@ -185,6 +185,8 @@ def sex_difference_plots():
     # Run sex-difference and age-difference plots on the quantitative tests
     fig, ax = phewas_plots.sex_difference_plot(quantitative_tests.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
+    fig, ax = phewas_plots.sex_difference_plot(quantitative_tests.sample(frac=1), color_by="Activity Var Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
+    fig.savefig(OUTDIR+"sex_differences.quantitative.by_activity_var.png")
 
     #Make 2x2 grid of quantitative sex differences
     fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
@@ -840,6 +842,7 @@ if __name__ == '__main__':
     quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR, RECOMPUTE)
     quantitative_tests_raw  = quantitative_tests.copy()
     quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
+    quantitative_tests['Activity Var Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions.Subcategory)
 
     age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RECOMPUTE)
     age_tests_raw = age_tests.copy()
