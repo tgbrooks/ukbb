@@ -204,6 +204,11 @@ def quantitative_tests(data, quantitative_variables, activity_variables, OUTDIR,
 
     quantitative_tests = pandas.DataFrame(quantitative_tests_list)
     quantitative_tests['q'] = BH_FDR(quantitative_tests.p)
+    stds = data[activity_variables].std()
+    phenotype_stds = data[quantitative_variables].std()
+    quantitative_tests['age_55_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 55) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
+    quantitative_tests['age_70_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 70) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
+
     def base_name(x):
         if "_V" in x:
             return x.split("_V")[0]
@@ -253,6 +258,9 @@ def age_tests(data, phecode_groups, activity_variables, phecode_info, OUTDIR, RE
     age_tests = pandas.DataFrame(age_tests_list)
 
     age_tests['q'] = BH_FDR(age_tests.p)
+    stds = data[activity_variables].std()
+    age_tests['age_55_std_effect'] = (age_tests["main_coeff"] + age_tests['age_effect_coeff'] * 55) / age_tests.activity_var.map(stds)
+    age_tests['age_70_std_effect'] = (age_tests["main_coeff"] + age_tests['age_effect_coeff'] * 70) / age_tests.activity_var.map(stds)
     age_tests["phecode_meaning"] = age_tests.phecode.map(phecode_info.phenotype)
     age_tests["phecode_category"] = age_tests.phecode.map(phecode_info.category)
 

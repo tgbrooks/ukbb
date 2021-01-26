@@ -210,10 +210,6 @@ def age_difference_plots():
             suffixes=["_age", "_overall"],
             on=["activity_var", "phecode"]).reset_index()
     d = d[d.N_cases > N_CUTOFF]
-    stds = data[activity_variables].std()
-    d['age_55_effect'] = (d["main_coeff"] + d['age_effect_coeff'] * 55) / d.activity_var.map(stds)
-    d['age_70_effect'] = (d["main_coeff"] + d['age_effect_coeff'] * 70) / d.activity_var.map(stds)
-
 
     fig, ax = phewas_plots.age_effect_plot(d)
     fig.savefig(f"{OUTDIR}/age_effects.png")

@@ -159,8 +159,8 @@ class Plotter:
         color = [colormap[c] for c in d[color_by]]
         # The points
         ax.scatter(
-            d.age_55_effect,
-            d.age_75_effect,
+            d.age_55_std_effect,
+            d.age_70_std_effect,
             s=p_to_size(numpy.minimum(d.p_overall, d.p_age)),
             c=color)
         ax.spines['bottom'].set_color(None)
