@@ -766,6 +766,27 @@ def chronotype_plots():
     util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
     fig.subplots_adjust(right=0.65)
 
+def temperature_calibration_plots():
+    # Plot the (mis)-calibration of the tempreature variables
+    device = activity_summary.loc[data.index, 'file-deviceID']
+    random_device = pandas.Series(device.sample(frac=1.0).values, index=device.index)
+    temp_mean = full_activity[full_activity.run == 0].set_index("id").loc[data.index, 'temp_mean_mean']
+    temp_RA = data['temp_RA']
+
+    fig, axes = pylab.subplots(figsize=(8,5), ncols=2)
+    for (name, measure), ax in zip({"act": data.acceleration_overall, "mean": temp_mean, "RA": temp_RA}.items(), axes):
+        device_mean = measure.groupby(device).mean()
+        random_mean = measure.groupby(random_device).mean()
+        m = device_mean.quantile(0.01)
+        M = device_mean.quantile(0.99)
+        bins = numpy.linspace(m,M,21)
+        ax.hist(random_mean, bins=bins, color='k', alpha=0.5, label="Randomized" if ax == axes[0] else None)
+        ax.hist(device_mean, bins=bins, color='r', alpha=0.5, label="True" if ax == axes[0] else None)
+        ax.set_xlabel(f"Temperature {name}")
+    fig.legend()
+    fig.savefig(OUTDIR+"temperature_calibration.png")
+
+
 def demographics_table():
     # Create a table of demographics of the population studied, compared to the overall UK Biobank
     demographics = {}
@@ -886,6 +907,7 @@ if __name__ == '__main__':
         objective_subjective_plots()
         circadian_component_plots()
         temperature_trace_plots()
+        temperature_calibration_plots()
         chronotype_plots()
         if args.all:
             # Note: slow to run: performs many regressions
