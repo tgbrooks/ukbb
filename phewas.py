@@ -743,6 +743,11 @@ def temperature_trace_plots():
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.age.png")
 
+    fig = temp_trace_by_cat(data.sex, colors={'Male': '#1f77b4', 'Female': '#ff7f0e'})
+    fig.gca().set_title("Sex")
+    fig.tight_layout()
+    fig.savefig(OUTDIR+"temperature.sex.png")
+
     napping = data.nap_during_day.cat.remove_categories(["Prefer not to answer"])
     fig = temp_trace_by_cat(napping, show_variance=False)
     fig.gca().set_title("Nap During Day")
