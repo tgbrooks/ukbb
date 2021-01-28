@@ -743,6 +743,12 @@ def temperature_trace_plots():
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.age.png")
 
+    napping = data.nap_during_day.cat.remove_categories(["Prefer not to answer"])
+    fig = temp_trace_by_cat(napping, show_variance=False)
+    fig.gca().set_title("Nap During Day")
+    fig.tight_layout()
+    fig.savefig(OUTDIR+"temperature.nap.png")
+
 def chronotype_plots():
     # Chronotype by sex+age plot
     age_cutoffs = numpy.arange(40,80,5) # every 5 years from 40 to 75
