@@ -23,6 +23,11 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
             print(f"Skipping {id}")
             continue
 
+        # Trim the first and last 6 hours of data
+        # due to apparent discontinuities around them
+        tracedata = tracedata[tracedata.index.min() + pandas.to_timedelta("6H"):
+                              tracedata.index.max() - pandas.to_timedelta("6H")]
+
         # Time since midnight
         timeofday = (tracedata.index - tracedata.index.normalize())
         average_trace = tracedata.set_index(timeofday).resample("1min").mean()
