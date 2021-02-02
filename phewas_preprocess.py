@@ -207,20 +207,28 @@ def load_phecode(selected_ids):
     # i.e. if they convert to the same integer
     phecode_groups = phecode_info.index.astype(int).unique()
 
+    phecode_group_details = {}
     phecode_data_icd10 = {}
     phecode_data_icd9 = {}
     phecode_data_self_report = {}
     for group in phecode_groups:
+        print(group)
         group_data = phecode_info[phecode_info.index.astype(int) == group]
         icd10_codes = phecode_map[phecode_map.PHECODE.isin(group_data.index)].index
         icd9_codes = phecode_map_icd9[phecode_map_icd9.PHECODE.isin(group_data.index)].index
         in_block = icd10_entries.ICD10.isin(icd10_codes)
         in_block_icd9 = icd9_entries.ICD9.isin(icd9_codes)
-        
+
         diagnosed = in_block.groupby(icd10_entries.ID).any()
         phecode_data_icd10[group] = diagnosed
         phecode_data_icd9[group] =  in_block_icd9.groupby(icd9_entries.ID).any()
         phecode_data_self_report[group] = self_reported.phecode.isin(group_data.index)
+        phecode_group_details[group] = {
+            "phecodes": ';'.join(group_data.index.astype(str)),
+            "ICD10_codes": ';'.join(icd10_codes),
+            "ICD9_codes": ';'.join(icd9_codes),
+            "self_reported_condition_codes": ';'.join(self_report_phecode_map.loc[self_report_phecode_map.PheCODE.isin(group_data.index),'Meaning'])
+        }
 
     phecode_data_icd10 = pandas.DataFrame(phecode_data_icd10)
     phecode_data_icd9 = pandas.DataFrame(phecode_data_icd9)
@@ -229,16 +237,21 @@ def load_phecode(selected_ids):
 
     # ### Display which sources the cases come from for the top codes
 
-    phecode_counts = pandas.DataFrame({"counts": phecode_data.sum(axis=0)})
-    for name, d in {"icd10": phecode_data_icd10, "icd9": phecode_data_icd9, "self_report": phecode_data_self_report}.items():
+    phecode_counts = pandas.DataFrame({"total_counts": phecode_data.sum(axis=0)})
+    for name, d in {"icd10_counts": phecode_data_icd10, "icd9_counts": phecode_data_icd9, "self_report_counts": phecode_data_self_report}.items():
         cases = d.reset_index().groupby(by="ID").any()
         phecode_counts[name + "_cases"] = cases.sum(axis=0)
     phecode_counts["phecode_meaning"] = phecode_counts.index.map(phecode_info.phenotype)
     print("Most frequent phecodes by source")
     print(phecode_counts.sort_values(by="counts", ascending=False).head(20))
 
+    phecode_details = pandas.DataFrame({
+        "Meaning": phecode_groups.map(phecode_info['phenotype']),
+        "Category": phecode_groups.map(phecode_info['category']),
+    }, index = phecode_groups,
+    ).join(phecode_counts.drop(columns=["phecode_meaning"])).join(pandas.DataFrame(phecode_group_details).T)
 
-    return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all
+    return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
 
 def phecode_count_summary():
     # TODO: do we want to use this anymore?
@@ -308,14 +321,14 @@ def load_data(cohort):
 
 
     # Load phecode data
-    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = load_phecode(selected_ids)
+    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_phecode(selected_ids)
 
     # Gather phecode diagnosis information for each subject
     for group in phecode_groups:
         # Note that those without any ICD10 entries at all should be marked as non-case, hence the fillna()
         data[group] = data.index.map(phecode_data[group].astype(int)).fillna(0)
     
-    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all
+    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
 
 if __name__ == "__main__":
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = load_data(1)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_data(1)

@@ -735,6 +735,7 @@ def generate_results_table():
         quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
+        phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
 def temperature_trace_plots():
     ids = day_plots.get_ids_of_traces_available()
@@ -896,7 +897,7 @@ if __name__ == '__main__':
     FDR_CUTOFF_VALUE = 0.05
 
     #### Load and preprocess the underlying data
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all = phewas_preprocess.load_data(COHORT)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
 
     # Load descriptions + categorization of activity variables and quantitative variables
     activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
