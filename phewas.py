@@ -108,7 +108,7 @@ def summary():
     icd10_entries_at_assessment_without_actigraphy = icd10_entries_without_actigraphy[pandas.to_datetime(icd10_entries_without_actigraphy.first_date) < pandas.to_datetime(icd10_entries_without_actigraphy.ID.map(ukbb['blood_sample_time_collected_V0']))]
     num_diagnoses_at_assessment_without_actigraphy = icd10_entries_at_assessment_without_actigraphy.groupby(pandas.Categorical(icd10_entries_at_assessment_without_actigraphy.ID, categories=ID_without_actigraphy)).size()
     fig,ax = pylab.subplots()
-    color_by_actigraphy = {"With Actigraphy": "#AAA", "Without Actigraphy": "#C33"}
+    color_by_actigraphy = {"With Actigraphy": "#CCC", "Without Actigraphy": "#C33"}
     actigraphy_boxes = ax.boxplot([num_diagnoses_at_assessment, num_diagnoses_at_actigraphy, num_diagnoses],
                                    showfliers=False, positions=[0,1.2,2], widths=0.4, patch_artist=True,
                                    boxprops={"color": "k", "facecolor": color_by_actigraphy['With Actigraphy']},
@@ -630,6 +630,7 @@ def objective_subjective_plots():
         ax.set_xlim(0,20)
         ax.set_ylim(0,20)
     fig.tight_layout()
+    legend_from_colormap(fig, color_by_phecode_cat, ncol=2)
     fig.savefig(OUTDIR+"objective_subjective_comparison.png")
 
 
@@ -701,7 +702,7 @@ def temperature_trace_plots():
                         var="temp",
                         transform = temp_to_C,
                         normalize_mean = True,
-                        set_mean = temp_mean,
+                        set_mean = 0,
                         ax=ax,
                         color=colors[cat] if colors is not None else None,
                         label=cat,
