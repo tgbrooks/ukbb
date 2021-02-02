@@ -1,6 +1,7 @@
 import pandas
 import numpy
 import matplotlib
+import re
 
 def read_actigraphy(file):
     data = pandas.read_csv(file, sep=",", index_col=0, parse_dates=[0])
@@ -78,3 +79,7 @@ def wrap(string, N):
     lines.append(' '.join(current_line))
     return '\n'.join(lines)
 
+def capitalize(string):
+    # Capitalize first letter in each word, broken by any of a large number of characters
+    split = re.split(r"([\s&,\\/]*)", string)
+    return ''.join(s.capitalize() for s in split)
