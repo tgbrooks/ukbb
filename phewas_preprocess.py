@@ -243,7 +243,7 @@ def load_phecode(selected_ids):
         phecode_counts[name + "_cases"] = cases.sum(axis=0)
     phecode_counts["phecode_meaning"] = phecode_counts.index.map(phecode_info.phenotype)
     print("Most frequent phecodes by source")
-    print(phecode_counts.sort_values(by="counts", ascending=False).head(20))
+    print(phecode_counts.sort_values(by="total_counts", ascending=False).head(20))
 
     phecode_details = pandas.DataFrame({
         "Meaning": phecode_groups.map(phecode_info['phenotype']),
