@@ -49,64 +49,66 @@ def summary():
     legend_from_colormap(ax, color_by_phecode_cat, ncol=2, fontsize="small")
     fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
-    # "Manhattan" plot of the PheWAS
-    fig, ax = pylab.subplots(figsize=(12,7))
-    x = 0
-    x_ticks = []
-    x_minorticks = [-0.5]
-    x_ticklabels = []
+    def manhattan_plot(tests_df, group_on="phecode", group_by=None, color_on=None, color_by=None, y_break=80):
+        # "Manhattan" plot of the PheWAS
+        fig, ax = pylab.subplots(figsize=(12,7))
+        x = 0
+        x_ticks = []
+        x_minorticks = [-0.5]
+        x_ticklabels = []
+        for key, pt in tests_df.groupby(group_by):
+            x_ticks.append(x+pt[group_on].nunique()/2-0.5)
+            x_ticklabels.append(util.capitalize(key))
+            for variable, tests in pt.groupby(group_on):
+                ax.scatter([x for i in range(len(tests))], -numpy.log10(tests.p), color=tests[color_on].map(color_by))
+                x += 1
+            x_minorticks.append(x-0.5)
+        ax.set_ylabel("-log10(p-value)")
+        ax.axhline(-numpy.log10(bonferonni_cutoff), c="k", zorder = 2)
+        ax.axhline(-numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = 2)
+        ax.set_xticks(x_ticks)
+        ax.set_xticks(x_minorticks, minor=True)
+        ax.set_xticklabels(x_ticklabels, rotation=90)
+        ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
+        ax.xaxis.set_tick_params(which="minor", length=10)
+        legend_from_colormap(fig, color_by, ncol=2, fontsize="small")
+        ax.set_ylim(0,80)
+        ax.set_xmargin(0.01)
+        fig.tight_layout()
+        return fig
+
+    # Manhattan plot by phecode
     cats = phecode_tests.phecode_category.fillna("N/A").astype('category')
     cats.cat.reorder_categories([k if k == k else 'N/A' for k in color_by_phecode_cat.keys()], inplace=True)
-    for key, pt in phecode_tests.groupby(cats):
-        x_ticks.append(x+pt.phecode.nunique()/2-0.5)
-        x_ticklabels.append(util.capitalize(key))
-        for phecode, tests in pt.groupby("phecode"):
-            ax.scatter([x for i in range(len(tests))], -numpy.log10(tests.p), color=tests['Activity Subcategory'].map(color_by_actigraphy_subcat))
-            x += 1
-        x_minorticks.append(x-0.5)
-    ax.set_ylabel("-log10(p-value)")
-    ax.axhline(-numpy.log10(bonferonni_cutoff), c="k", zorder = 2)
-    ax.axhline(-numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = 2)
-    ax.set_xticks(x_ticks)
-    ax.set_xticks(x_minorticks, minor=True)
-    ax.set_xticklabels(x_ticklabels, rotation=90)
-    ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
-    ax.xaxis.set_tick_params(which="minor", length=10)
-    legend_from_colormap(fig, color_by_actigraphy_subcat, ncol=2, fontsize="small")
-    ax.set_ylim(0,80)
-    ax.set_xmargin(0.01)
-    fig.tight_layout()
+    fig = manhattan_plot(
+        phecode_tests,
+        group_on="phecode",
+        group_by=cats,
+        color_on="Activity Subcategory",
+        color_by=color_by_actigraphy_subcat)
     fig.savefig(OUTDIR+"manhattan_plot.png")
 
+    # Manhattan plot by activity variable
+    cats = phecode_tests['Activity Subcategory'].fillna("N/A").astype('category')
+    cats.cat.reorder_categories([k if k == k else 'N/A' for k in color_by_actigraphy_subcat.keys()], inplace=True)
+    fig = manhattan_plot(
+        phecode_tests,
+        group_on="activity_var",
+        group_by=cats,
+        color_on="phecode_category",
+        color_by=color_by_phecode_cat)
+    fig.savefig(OUTDIR+"manhattan_plot.by_activity_var.png")
+
+    # TODO: bonferroni and FDR cutoffs change for quantitative
     # "Manhattan" plot of the PheWAS in QUANTITATIVE
-    fig, ax = pylab.subplots(figsize=(12,7))
-    x = 0
-    x_ticks = []
-    x_minorticks = [-0.5]
-    x_ticklabels = []
     cats = quantitative_tests['Functional Category'].astype('category')
     cats.cat.reorder_categories(color_by_quantitative_function.keys(), inplace=True)
-    for key, pt in quantitative_tests.groupby(cats):
-        if key == "Metadata":
-            continue
-        x_ticks.append(x+pt.phenotype.nunique()/2-0.5)
-        x_ticklabels.append(util.capitalize(key))
-        for phenotype, tests in pt.groupby("phenotype"):
-            ax.scatter([x for i in range(len(tests))], -numpy.log10(tests.p), color=tests['Activity Subcategory'].map(color_by_actigraphy_subcat))
-            x += 1
-        x_minorticks.append(x-0.5)
-    ax.set_ylabel("-log10(p-value)")
-    ax.axhline(-numpy.log10(bonferonni_cutoff), c="k", zorder = 2)
-    ax.axhline(-numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = 2)
-    ax.set_xticks(x_ticks)
-    ax.set_xticks(x_minorticks, minor=True)
-    ax.set_xticklabels(x_ticklabels, rotation=90)
-    ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
-    ax.xaxis.set_tick_params(which="minor", length=20)
-    legend_from_colormap(fig, color_by_actigraphy_subcat, ncol=2, fontsize="small")
-    ax.set_ylim(0,100)
-    ax.set_xmargin(0.01)
-    fig.tight_layout()
+    fig = manhattan_plot(
+        quantitative_tests,
+        group_on="phenotype",
+        group_by=cats,
+        color_on="Activity Subcategory",
+        color_by=color_by_actigraphy_subcat)
     fig.savefig(OUTDIR+"manhattan_plot.quantitative.png")
 
     ### TIMELINE
@@ -935,7 +937,7 @@ if __name__ == '__main__':
     quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
     quantitative_tests['Activity Var Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions.Subcategory)
 
-    age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, phecode_info, activity_variable_descriptions, OUTDIR, RECOMPUTE)
+    age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE)
     age_tests_raw = age_tests.copy()
     age_tests['activity_var_category'] = age_tests['activity_var'].map(activity_variable_descriptions.Category)
 
