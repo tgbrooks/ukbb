@@ -49,32 +49,36 @@ def summary():
     legend_from_colormap(ax, color_by_phecode_cat, ncol=2, fontsize="small")
     fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
-    def manhattan_plot(tests_df, group_on="phecode", group_by=None, color_on=None, color_by=None, y_break=80):
+    def manhattan_plot(tests_df, group_on="phecode", group_by=None, color_on=None, color_by=None, y_break=20):
         # "Manhattan" plot of the PheWAS
-        fig, ax = pylab.subplots(figsize=(12,7))
+        fig, axes = pylab.subplots(nrows=2, figsize=(12,7), sharex=True)
         x = 0
         x_ticks = []
         x_minorticks = [-0.5]
         x_ticklabels = []
-        for key, pt in tests_df.groupby(group_by):
+        for key, pt in tests_df.sample(frac=1).groupby(group_by):
             x_ticks.append(x+pt[group_on].nunique()/2-0.5)
             x_ticklabels.append(util.capitalize(key))
             for variable, tests in pt.groupby(group_on):
-                ax.scatter([x for i in range(len(tests))], -numpy.log10(tests.p), color=tests[color_on].map(color_by))
+                for ax in axes:
+                    ax.scatter([x for i in range(len(tests))], -numpy.log10(tests.p), color=tests[color_on].map(color_by))
                 x += 1
             x_minorticks.append(x-0.5)
-        ax.set_ylabel("-log10(p-value)")
-        ax.axhline(-numpy.log10(bonferonni_cutoff), c="k", zorder = 2)
-        ax.axhline(-numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = 2)
-        ax.set_xticks(x_ticks)
-        ax.set_xticks(x_minorticks, minor=True)
-        ax.set_xticklabels(x_ticklabels, rotation=90)
-        ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
-        ax.xaxis.set_tick_params(which="minor", length=10)
+        ax_top, ax_bottom = axes
+        ax_bottom.set_ylabel("-log10(p-value)")
+        ax_bottom.axhline(-numpy.log10(bonferonni_cutoff), c="k", zorder = 2)
+        ax_bottom.axhline(-numpy.log10(FDR_cutoff), c="k", linestyle="--", zorder = 2)
+        ax_bottom.set_xticks(x_ticks)
+        ax_bottom.set_xticks(x_minorticks, minor=True)
+        ax_bottom.set_xticklabels(x_ticklabels, rotation=90)
+        ax_bottom.xaxis.set_tick_params(which="major", bottom=False, top=False)
+        ax_bottom.xaxis.set_tick_params(which="minor", length=10)
+        ax_bottom.set_ylim(0,y_break)
+        ax_top.set_xmargin(0.01)
+        ax_top.set_ylim(y_break)
+        ax_top.tick_params(bottom=False, which='both')
         legend_from_colormap(fig, color_by, ncol=2, fontsize="small")
-        ax.set_ylim(0,80)
-        ax.set_xmargin(0.01)
-        fig.tight_layout()
+        fig.tight_layout(h_pad=0.01)
         return fig
 
     # Manhattan plot by phecode
@@ -108,8 +112,21 @@ def summary():
         group_on="phenotype",
         group_by=cats,
         color_on="Activity Subcategory",
-        color_by=color_by_actigraphy_subcat)
+        color_by=color_by_actigraphy_subcat,
+        y_break=40)
     fig.savefig(OUTDIR+"manhattan_plot.quantitative.png")
+
+    cats = quantitative_tests['Activity Subcategory'].astype('category')
+    cats.cat.reorder_categories(color_by_actigraphy_subcat.keys(), inplace=True)
+    fig = manhattan_plot(
+        quantitative_tests,
+        group_on="activity_var",
+        group_by=cats,
+        color_on="Functional Category",
+        color_by=color_by_quantitative_function,
+        y_break=40)
+    fig.savefig(OUTDIR+"manhattan_plot.quantitative.by_activity_var.png")
+
 
     ### TIMELINE
     # Make a timeline of the study design timing so that readers can easily see when data was collected
