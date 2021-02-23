@@ -909,16 +909,16 @@ def activity_var_comparisons():
     fig.savefig(OUTDIR+"activity_var_types.L5_vars.std_effect.png")
 
     # Comparison plots of overall versus hourly_SD
-    base_vars = [v for v in activity_variables if (v.endswith("_overall") and v[:-8] + "_hourly_SD" in activity_variables)]
-    other_vars = [v[:-8]+"_hourly_SD" for v in base_vars]
+    other_vars = [v for v in activity_variables if "hourly_SD" in v]
+    base_vars = [re.sub("hourly_SD", "overall", v) for v in other_vars]
     fig = facet_chart(base_vars, other_vars, other_label="hourly_SD")
     fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.pvalues.png")
     fig = facet_chart(base_vars, other_vars, other_label="hourly_SD", kind="std_effect")
     fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.std_effect.png")
 
     # Comparison plots of overall versus between_day_SD
-    base_vars = [v for v in activity_variables if (v.endswith("_overall") and v[:-8] + "_between_day_SD" in activity_variables)]
-    other_vars = [v[:-8]+"_between_day_SD" for v in base_vars]
+    other_vars = [v for v in activity_variables if "between_day_SD" in v]
+    base_vars = [re.sub("between_day_SD", "overall", v) for v in other_vars]
     fig = facet_chart(base_vars, other_vars, other_label="hourly_SD")
     #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.pvalues.png")
     fig = facet_chart(base_vars, other_vars, other_label="hourly_SD", kind="std_effect")
