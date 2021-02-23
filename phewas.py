@@ -1,4 +1,5 @@
 import math
+import re
 import pandas
 import numpy
 import pylab
@@ -924,6 +925,42 @@ def activity_var_comparisons():
     #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.std_effect.png")
 
 
+    # Stability comparison plots of variables
+    def stability_comparison(base_vars, other_vars, other_label):
+        fig, ax = pylab.subplots(figsize=(8,8))
+        ax.scatter(
+            activity_variance.loc[base_vars, "corrected_intra_personal_normalized"],
+            activity_variance.loc[other_vars, "corrected_intra_personal_normalized"],
+        )
+        diag = numpy.array([0, numpy.max([ax.get_xlim(), ax.get_ylim()])])
+        ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+        ax.set_xlim(diag[0], diag[1])
+        ax.set_ylim(diag[0], diag[1])
+        ax.axhline(1, linestyle="--", c='k', zorder=-1)
+        ax.axvline(1, linestyle="--", c='k', zorder=-1)
+        ax.set_xlabel(f"Variance ratio\nbase variable")
+        ax.set_ylabel(f"Variance ratio\n{other_label} variable")
+        return fig
+
+    base_vars = [v for v in activity_variance.index if v + "_M10" in activity_variance.index]
+    other_vars = [v+"_M10" for v in base_vars]
+    fig = stability_comparison(base_vars, other_vars, other_label="M10")
+    fig.savefig(OUTDIR+"activity_var_types.M10.stability.png")
+
+    base_vars = [v for v in activity_variance.index if v + "_L5" in activity_variance.index]
+    other_vars = [v+"_L5" for v in base_vars]
+    fig = stability_comparison(base_vars, other_vars, other_label="L5")
+    fig.savefig(OUTDIR+"activity_var_types.L5.stability.png")
+
+    other_vars = [v for v in activity_variance.index if "hourly_SD" in v]
+    base_vars = [re.sub("hourly_SD", "overall", v) for v in other_vars]
+    fig = stability_comparison(base_vars, other_vars, other_label="hourly SD")
+    fig.savefig(OUTDIR+"activity_var_types.hourly_SD.stability.png")
+
+    base_vars = [v for v in activity_variance.index if (v.endswith("_overall") and v[:-8] + "_between_day_SD" in activity_variance.index)]
+    other_vars = [v[:-8]+"_between_day_SD" for v in base_vars]
+    fig = stability_comparison(base_vars, other_vars, other_label="between-day SD")
+    fig.savefig(OUTDIR+"activity_var_types.between_day_SD.stability.png")
 
 def age_interaction_plots():
     age_cutoffs = numpy.arange(45,80,5) # every 5 years from 40 to 75
