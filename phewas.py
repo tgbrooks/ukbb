@@ -1,3 +1,4 @@
+import math
 import pandas
 import numpy
 import pylab
@@ -858,6 +859,69 @@ def chronotype_plots():
     util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
     fig.subplots_adjust(right=0.65)
 
+def activity_var_comparisons():
+
+    def facet_chart(base_vars, other_vars, other_label="other", kind="pvalue"):
+        fig, axes = pylab.subplots(ncols=4, nrows=math.ceil(len(base_vars)/4), figsize=(10,8), sharex=True, sharey=True, squeeze=False)
+        for base_var, other_var, ax in zip(base_vars, other_vars, axes.flatten()):
+            pt = phecode_tests[phecode_tests.activity_var == base_var].join(
+                phecode_tests[phecode_tests.activity_var == other_var].set_index("phecode"),
+                on="phecode",
+                lsuffix="_base",
+                rsuffix="_other")
+            if kind == "pvalue":
+                ax.scatter(-numpy.log10(pt.p_base), -numpy.log10(pt.p_other), alpha=0.3)
+                if ax in axes[-1,:]:
+                    ax.set_xlabel("-log10 p-value\nbase variable")
+                if ax in axes[:,0]:
+                    ax.set_ylabel(f"-log10 p-value\n{other_label} variable")
+            else:
+                ax.scatter(pt.std_effect_base, pt.std_effect_other, alpha=0.3)
+                if ax in axes[-1,:]:
+                    ax.set_xlabel("Std Effect Size\nbase variable")
+                if ax in axes[:,0]:
+                    ax.set_ylabel(f"Std Effect Size\n{other_label} variable")
+            ax.set_title(base_var)
+            #ax.set_aspect('equal')
+        for base_var, ax in zip(base_vars, axes.flatten()):
+            diag = numpy.array([numpy.min([ax.get_xlim(), ax.get_ylim()]), numpy.max([ax.get_xlim(), ax.get_ylim()])])
+            ax.plot(diag, diag, linestyle="--", c='k', zorder=-1, label="diagonal")
+            ax.set_xlim(diag[0], diag[1])
+            ax.set_ylim(diag[0], diag[1])
+        fig.tight_layout()
+        return fig
+
+    # Comparison plots for M10 versus whole day
+    base_vars = [v for v in activity_variables if v + "_M10" in activity_variables]
+    other_vars = [v+"_M10" for v in base_vars]
+    fig = facet_chart(base_vars, other_vars, other_label="M10")
+    fig.savefig(OUTDIR+"activity_var_types.M10_vars.pvalues.png")
+    fig = facet_chart(base_vars, other_vars, other_label="M10", kind="std_effect")
+    fig.savefig(OUTDIR+"activity_var_types.M10_vars.std_effect.png")
+
+    # Comparison plots for L5 versus whole day
+    base_vars = [v for v in activity_variables if v + "_L5" in activity_variables]
+    other_vars = [v+"_L5" for v in base_vars]
+    fig = facet_chart(base_vars, other_vars, other_label="L5")
+    fig.savefig(OUTDIR+"activity_var_types.L5_vars.pvalues.png")
+    fig = facet_chart(base_vars, other_vars, other_label="L5", kind="std_effect")
+    fig.savefig(OUTDIR+"activity_var_types.L5_vars.std_effect.png")
+
+    # Comparison plots of overall versus hourly_SD
+    base_vars = [v for v in activity_variables if (v.endswith("_overall") and v[:-8] + "_hourly_SD" in activity_variables)]
+    other_vars = [v[:-8]+"_hourly_SD" for v in base_vars]
+    fig = facet_chart(base_vars, other_vars, other_label="hourly_SD")
+    fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.pvalues.png")
+    fig = facet_chart(base_vars, other_vars, other_label="hourly_SD", kind="std_effect")
+    fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.std_effect.png")
+
+    # Comparison plots of overall versus between_day_SD
+    base_vars = [v for v in activity_variables if (v.endswith("_overall") and v[:-8] + "_between_day_SD" in activity_variables)]
+    other_vars = [v[:-8]+"_between_day_SD" for v in base_vars]
+    fig = facet_chart(base_vars, other_vars, other_label="hourly_SD")
+    #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.pvalues.png")
+    fig = facet_chart(base_vars, other_vars, other_label="hourly_SD", kind="std_effect")
+    #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.std_effect.png")
 def temperature_calibration_plots():
     # Plot the (mis)-calibration of the tempreature variables
     device = activity_summary.loc[data.index, 'file-deviceID']
