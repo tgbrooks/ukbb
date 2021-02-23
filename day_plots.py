@@ -13,7 +13,9 @@ def get_ids_of_traces_available(directory="../processed/acc_analysis"):
     dir = pathlib.Path(directory)
     return [int(f.name.split("_")[0]) for f in dir.glob("*_90001_0_0-timeSeries.csv.gz")]
 
-def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x, normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True):
+def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
+            normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
+            show_confidence_intervals=False):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
@@ -53,9 +55,21 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
         ax.fill_between(low_average.index / pandas.to_timedelta("1H"),
                         low_average,
                         high_average,
-                        color=color,
+                        facecolor=color,
                         alpha=0.3,
                         )
+
+    if show_confidence_intervals:
+        sem = resampled.sem()
+        low = grand_average - 1.96 * sem
+        high = grand_average + 1.96 * sem
+        ax.fill_between(low.index / pandas.to_timedelta("1H"),
+                        low,
+                        high,
+                        facecolor=color,
+                        alpha=0.3,
+                        )
+
     #ax.plot(low_average.index / pandas.to_timedelta("1H"), low_average, label="75th percentile")
     #ax.plot(high_average.index / pandas.to_timedelta("1H"), high_average, label="25th percentile")
     ax.set_xlim(0, 24)
