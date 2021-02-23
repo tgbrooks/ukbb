@@ -957,8 +957,8 @@ def activity_var_comparisons():
     fig = stability_comparison(base_vars, other_vars, other_label="hourly SD")
     fig.savefig(OUTDIR+"activity_var_types.hourly_SD.stability.png")
 
-    base_vars = [v for v in activity_variance.index if (v.endswith("_overall") and v[:-8] + "_between_day_SD" in activity_variance.index)]
-    other_vars = [v[:-8]+"_between_day_SD" for v in base_vars]
+    other_vars = [v for v in activity_variance.index if "between_day_SD" in v]
+    base_vars = [re.sub("between_day_SD", "overall", v) for v in other_vars]
     fig = stability_comparison(base_vars, other_vars, other_label="between-day SD")
     fig.savefig(OUTDIR+"activity_var_types.between_day_SD.stability.png")
 
