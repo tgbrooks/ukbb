@@ -817,7 +817,7 @@ def temperature_trace_plots():
     fig = temp_trace_by_cat(morning_evening, show_variance=False)
     fig.gca().set_title("Chronotype")
     fig.tight_layout()
-    fig.savefig(OUTDIR+"tempreature.chronotype.png")
+    fig.savefig(OUTDIR+"temperature.chronotype.png")
 
     age_cutoffs = numpy.arange(45,75,5) # every 5 years from 40 to 75
     age_categories = pandas.cut(data.age_at_actigraphy, age_cutoffs)
