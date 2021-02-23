@@ -922,6 +922,60 @@ def activity_var_comparisons():
     #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.pvalues.png")
     fig = facet_chart(base_vars, other_vars, other_label="hourly_SD", kind="std_effect")
     #fig.savefig(OUTDIR+"activity_var_types.hourly_SD_vars.std_effect.png")
+
+
+
+def age_interaction_plots():
+    age_cutoffs = numpy.arange(45,80,5) # every 5 years from 40 to 75
+
+    phecode = 296 # mood disorders
+    #responses = ['Not at all easy', 'Not very easy', 'Fairly easy', 'Very easy']
+    responses = ['Not at all easy', 'Very easy']
+    cmap = pylab.get_cmap("viridis")
+    colors = [cmap(0), cmap(0.33), cmap(0.67), cmap(1.0)]
+    fig, ax = pylab.subplots(figsize=(8,6))
+    for status in ['Control', 'Case']:
+        in_status = data[phecode] == (1 if status == 'Case' else 0)
+        d = data[in_status]
+        age_buckets = pandas.cut(data.age_at_actigraphy[in_status], age_cutoffs, right=True)
+        for i, (bucket, age_data) in enumerate(d.groupby(age_buckets).getting_up_in_morning):
+            counts = age_data.value_counts()
+            counts /= counts[responses].sum()
+            base = 0
+            for response, color in zip(responses, colors):
+                ax.bar(i + (-0.2 if status == "Control" else 0.2),
+                        counts[response],
+                        bottom=base,
+                        color = tuple(c * (1 if status == "Control" else 0.8) for c in color[:3]),
+                        width=0.4)
+                base += counts[response]
+        ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
+        ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
+    util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
+    fig.subplots_adjust(right=0.65)
+
+
+def plot_case_control_by_age(phecode, activity_variable):
+    age_cutoffs = numpy.arange(45,81,5) # every 5 years from 40 to 75
+    fig, ax = pylab.subplots(figsize=(8,6))
+    age_buckets = pandas.cut(data.age_at_actigraphy, age_cutoffs, right=True)
+    colors = {"Control": "k", "Case": "r"}
+    for status in ['Control', 'Case']:
+        in_status = data[phecode] == (1 if status == 'Case' else 0)
+        means = data[in_status].groupby(age_buckets[in_status])[activity_variable].mean()
+        sems = data[in_status].groupby(age_buckets[in_status])[activity_variable].sem()
+        ax.plot(numpy.arange(len(means)), means,
+            c=colors[status])
+        ax.errorbar(numpy.arange(len(means)), means,
+            yerr=sems,
+            c=colors[status])
+    ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
+    ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
+    util.legend_from_colormap(fig, colors)
+    ax.set_title(f"{phecode_info.loc[phecode].phenotype} - {activity_variable}")
+
+
+
 def temperature_calibration_plots():
     # Plot the (mis)-calibration of the tempreature variables
     device = activity_summary.loc[data.index, 'file-deviceID']
@@ -1062,6 +1116,7 @@ if __name__ == '__main__':
         survival_plots()
         objective_subjective_plots()
         circadian_component_plots()
+        age_interaction_plots()
         temperature_trace_plots()
         temperature_calibration_plots()
         chronotype_plots()

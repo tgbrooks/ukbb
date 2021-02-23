@@ -212,7 +212,6 @@ def load_phecode(selected_ids):
     phecode_data_icd9 = {}
     phecode_data_self_report = {}
     for group in phecode_groups:
-        print(group)
         group_data = phecode_info[phecode_info.index.astype(int) == group]
         icd10_codes = phecode_map[phecode_map.PHECODE.isin(group_data.index)].index
         icd9_codes = phecode_map_icd9[phecode_map_icd9.PHECODE.isin(group_data.index)].index

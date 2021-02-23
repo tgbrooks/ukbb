@@ -193,6 +193,8 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
             main_coeff = age_fit.params[activity_var]
             age_coeff = age_fit.params[f"{activity_var}:age_at_actigraphy"]
             std_age_effect = age_coeff * activity_var_std / phenotype_std
+            age_55_pvalue = age_fit.f_test(f"{activity_var}:age_at_actigraphy*55 + {activity_var}").pvalue
+            age_70_pvalue = age_fit.f_test(f"{activity_var}:age_at_actigraphy*70 + {activity_var}").pvalue
             quantitative_tests_list.append({"phenotype": phenotype,
                                     "activity_var": activity_var,
                                     "p": p,
@@ -208,6 +210,8 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
                                     "age_effect_coeff": age_coeff,
                                     "std_age_effect": std_age_effect,
                                     "N": N,
+                                    "age_55_p": age_55_pvalue,
+                                    "age_70_p": age_70_pvalue,
                                    })
 
     quantitative_tests = pandas.DataFrame(quantitative_tests_list)
@@ -216,6 +220,8 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     phenotype_stds = data[quantitative_variables].std()
     quantitative_tests['age_55_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 55) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
     quantitative_tests['age_70_std_effect'] = (quantitative_tests["age_main_coeff"] + quantitative_tests['age_effect_coeff'] * 70) * quantitative_tests.activity_var.map(stds) / quantitative_tests.phenotype.map(phenotype_stds)
+    quantitative_tests['age_55_q'] = BH_FDR(quantitative_tests['age_55_p'])
+    quantitative_tests['age_70_q'] = BH_FDR(quantitative_tests['age_70_p'])
 
     quantitative_tests['Activity Category'] = quantitative_tests.activity_var.map(activity_variable_descriptions["Category"])
     quantitative_tests['Activity Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions["Subcategory"])
@@ -259,6 +265,8 @@ def age_tests(data, phecode_groups, activity_variables, activity_variable_descri
             main_coeff = fit.params[f"Q({group})"]
             age_coeff = fit.params[f"Q({group}):age_at_actigraphy"]
             std_effect = age_coeff / data[activity_variable].std()
+            age_55_pvalue = fit.f_test(f"Q({group}):age_at_actigraphy*55 + Q({group})").pvalue
+            age_70_pvalue = fit.f_test(f"Q({group}):age_at_actigraphy*70 + Q({group})").pvalue
             age_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
                                     "p": p,
@@ -266,6 +274,8 @@ def age_tests(data, phecode_groups, activity_variables, activity_variable_descri
                                     "age_effect_coeff": age_coeff,
                                     "std_age_effect": std_effect,
                                     "N_cases": N,
+                                    "age_55_p": age_55_pvalue,
+                                    "age_70_p": age_70_pvalue,
                                    })
     age_tests = pandas.DataFrame(age_tests_list)
 
@@ -273,6 +283,8 @@ def age_tests(data, phecode_groups, activity_variables, activity_variable_descri
     stds = data[activity_variables].std()
     age_tests['age_55_std_effect'] = (age_tests["main_coeff"] + age_tests['age_effect_coeff'] * 55) / age_tests.activity_var.map(stds)
     age_tests['age_70_std_effect'] = (age_tests["main_coeff"] + age_tests['age_effect_coeff'] * 70) / age_tests.activity_var.map(stds)
+    age_tests['age_55_q'] = BH_FDR(age_tests.age_55_p)
+    age_tests['age_70_q'] = BH_FDR(age_tests.age_70_p)
     age_tests["phecode_meaning"] = age_tests.phecode.map(phecode_info.phenotype)
     age_tests["phecode_category"] = age_tests.phecode.map(phecode_info.category)
 
