@@ -264,9 +264,10 @@ def sex_difference_plots():
     fig.savefig(OUTDIR+"sex_differences.2x2.png")
 
     # Run sex-difference and age-difference plots on the quantitative tests
-    fig, ax = phewas_plots.sex_difference_plot(quantitative_tests.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
+    qt = quantitative_sex_tests.sample(frac=1)
+    fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
-    fig, ax = phewas_plots.sex_difference_plot(quantitative_tests.sample(frac=1), color_by="Activity Var Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
+    fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Activity Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.by_activity_var.png")
 
     #Make 2x2 grid of quantitative sex differences
@@ -274,7 +275,7 @@ def sex_difference_plots():
     ij = [[0,0], [0,1], [1,0], [1,1]]
     SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
     for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
-        tests = quantitative_tests[quantitative_tests['Functional Category'] == cat]
+        tests = quantitative_sex_tests[quantitative_sex_tests['Functional Category'] == cat]
         phewas_plots.sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r", names=quantitative_variable_descriptions.Name)
         ax.set_title(cat)
         if j == 0:
@@ -325,8 +326,12 @@ def age_difference_plots():
 
 
     ## age effect for quantitative traits
-    dage = quantitative_tests.copy()
-    dage['p_overall'] = dage.p
+    dage = quantitative_age_tests.copy()
+    dage['p_overall'] = pandas.merge(
+        dage,
+        quantitative_tests,
+        on=["phenotype", "activity_var"],
+    ).p
     dage['p_age'] = dage.age_difference_p
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
     fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
@@ -754,6 +759,8 @@ def generate_results_table():
         survival_tests.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
         phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Phecode Associations", index=False)
         quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
+        quantitative_sex_tests.sort_values(by="sex_difference_p").to_excel(writer, sheet_name="Quantitative Sex Differences", index=False)
+        quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="Quantitative Age Differences", index=False)
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
@@ -1105,10 +1112,8 @@ if __name__ == '__main__':
     phecode_tests['activity_var_category'] = phecode_tests['activity_var'].map(activity_variable_descriptions.Category)
     phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
 
-    quantitative_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
+    quantitative_tests, quantitative_age_tests, quantitative_sex_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
     quantitative_tests_raw  = quantitative_tests.copy()
-    quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
-    quantitative_tests['Activity Var Subcategory'] = quantitative_tests.activity_var.map(activity_variable_descriptions.Subcategory)
 
     age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE)
     age_tests_raw = age_tests.copy()
