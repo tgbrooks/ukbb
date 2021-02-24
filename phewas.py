@@ -774,7 +774,7 @@ def temperature_trace_plots():
     ax.set_ylabel("Temperature (C)")
 
     ## By categories
-    def temp_trace_by_cat(cats, colors=None, show_variance=True):
+    def temp_trace_by_cat(cats, colors=None, show_variance=True, show_confidence_intervals=False):
         temp_mean = temp_to_C(full_activity.temp_mean_mean.mean())
         fig, ax = pylab.subplots()
         for cat in cats.cat.categories:
@@ -788,7 +788,8 @@ def temperature_trace_plots():
                         ax=ax,
                         color=colors[cat] if colors is not None else None,
                         label=cat,
-                        show_variance=show_variance)
+                        show_variance=show_variance,
+                        show_confidence_intervals=show_confidence_intervals)
         ax.set_ylabel("Temperature (C)")
         fig.legend()
         fig.tight_layout()
@@ -1153,6 +1154,7 @@ if __name__ == '__main__':
         survival_plots()
         objective_subjective_plots()
         circadian_component_plots()
+        activity_var_comparisons()
         age_interaction_plots()
         temperature_trace_plots()
         temperature_calibration_plots()
