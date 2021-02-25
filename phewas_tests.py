@@ -191,19 +191,25 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
             _, sex_difference_p, _ = sex_fit.compare_f_test(fit)
             female_coeff = sex_fit.params[f'C(sex, Treatment(reference=-1))[Female]:{activity_var}']
             male_coeff = sex_fit.params[f'C(sex, Treatment(reference=-1))[Male]:{activity_var}']
+            sex_coeff = male_coeff - female_coeff
             p_female = sex_fit.pvalues[f'C(sex, Treatment(reference=-1))[Female]:{activity_var}']
             p_male = sex_fit.pvalues[f'C(sex, Treatment(reference=-1))[Male]:{activity_var}']
             #diff_test = sex_fit.t_test(f'C(sex, Treatment(reference=-1))[Male]:{activity_var} = C(sex, Treatment(reference=-1))[Female]:{activity_var}')
             #p_diff = diff_test.pvalue
             male_std_ratio = data.loc[data.sex == "Male", activity_var].std() / data.loc[data.sex == "Male", phenotype].std()
             female_std_ratio = data.loc[data.sex == "Female", activity_var].std() / data.loc[data.sex == "Female", phenotype].std()
+            overall_std_ratio = data[activity_var].std() / data[phenotype].std()
             quantitative_sex_tests_list.append({"phenotype": phenotype,
                                     "activity_var": activity_var,
                                     "sex_difference_p": sex_difference_p,
+                                    "sex_coeff": sex_coeff,
+                                    "std_sex_effect": sex_coeff * overall_std_ratio,
                                     "p_male": p_male,
                                     "p_female": p_female,
-                                    "std_male_coeff": male_coeff * male_std_ratio,
-                                    "std_female_coeff": female_coeff * female_std_ratio,
+                                    "male_coeff": male_coeff,
+                                    "female_coeff": female_coeff,
+                                    "std_male_effect": male_coeff * male_std_ratio,
+                                    "std_female_effect": female_coeff * female_std_ratio,
                                     "N": N,
                                    })
 
@@ -219,7 +225,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
             quantitative_age_tests_list.append({"phenotype": phenotype,
                                     "activity_var": activity_var,
                                     "age_difference_p": age_difference_p,
-                                    "age_main_coeff": main_coeff,
+                                    "main_coeff": main_coeff,
                                     "age_effect_coeff": age_coeff,
                                     "std_age_effect": std_age_effect,
                                     "N": N,
@@ -247,8 +253,8 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     quantitative_age_tests = pandas.DataFrame(quantitative_age_tests_list)
     stds = data[activity_variables].std()
     phenotype_stds = data[quantitative_variables].std()
-    quantitative_age_tests['age_55_std_effect'] = (quantitative_age_tests["age_main_coeff"] + quantitative_age_tests['age_effect_coeff'] * 55) * quantitative_age_tests.activity_var.map(stds) / quantitative_age_tests.phenotype.map(phenotype_stds)
-    quantitative_age_tests['age_70_std_effect'] = (quantitative_age_tests["age_main_coeff"] + quantitative_age_tests['age_effect_coeff'] * 70) * quantitative_age_tests.activity_var.map(stds) / quantitative_age_tests.phenotype.map(phenotype_stds)
+    quantitative_age_tests['age_55_std_effect'] = (quantitative_age_tests["main_coeff"] + quantitative_age_tests['age_effect_coeff'] * 55) * quantitative_age_tests.activity_var.map(stds) / quantitative_age_tests.phenotype.map(phenotype_stds)
+    quantitative_age_tests['age_70_std_effect'] = (quantitative_age_tests["main_coeff"] + quantitative_age_tests['age_effect_coeff'] * 70) * quantitative_age_tests.activity_var.map(stds) / quantitative_age_tests.phenotype.map(phenotype_stds)
     quantitative_age_tests['age_55_q'] = BH_FDR(quantitative_age_tests['age_55_p'])
     quantitative_age_tests['age_70_q'] = BH_FDR(quantitative_age_tests['age_70_p'])
     quantitative_age_tests['age_difference_q'] = BH_FDR(quantitative_age_tests['age_difference_p'])
