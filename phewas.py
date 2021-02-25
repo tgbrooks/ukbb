@@ -970,35 +970,6 @@ def activity_var_comparisons():
     fig = stability_comparison(base_vars, other_vars, other_label="between-day SD")
     fig.savefig(OUTDIR+"activity_var_types.between_day_SD.stability.png")
 
-def age_interaction_plots():
-    age_cutoffs = numpy.arange(45,80,5) # every 5 years from 40 to 75
-
-    phecode = 296 # mood disorders
-    #responses = ['Not at all easy', 'Not very easy', 'Fairly easy', 'Very easy']
-    responses = ['Not at all easy', 'Very easy']
-    cmap = pylab.get_cmap("viridis")
-    colors = [cmap(0), cmap(0.33), cmap(0.67), cmap(1.0)]
-    fig, ax = pylab.subplots(figsize=(8,6))
-    for status in ['Control', 'Case']:
-        in_status = data[phecode] == (1 if status == 'Case' else 0)
-        d = data[in_status]
-        age_buckets = pandas.cut(data.age_at_actigraphy[in_status], age_cutoffs, right=True)
-        for i, (bucket, age_data) in enumerate(d.groupby(age_buckets).getting_up_in_morning):
-            counts = age_data.value_counts()
-            counts /= counts[responses].sum()
-            base = 0
-            for response, color in zip(responses, colors):
-                ax.bar(i + (-0.2 if status == "Control" else 0.2),
-                        counts[response],
-                        bottom=base,
-                        color = tuple(c * (1 if status == "Control" else 0.8) for c in color[:3]),
-                        width=0.4)
-                base += counts[response]
-        ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
-        ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
-    util.legend_from_colormap(fig, dict(list(zip(responses, colors))[::-1]))
-    fig.subplots_adjust(right=0.65)
-
 
 def plot_case_control_by_age(phecode, activity_variable):
     age_cutoffs = numpy.arange(45,81,5) # every 5 years from 40 to 75
@@ -1016,9 +987,100 @@ def plot_case_control_by_age(phecode, activity_variable):
             c=colors[status])
     ax.set_xticks(numpy.arange(len(age_buckets.cat.categories)))
     ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
+    phenotype_name = phecode_info.loc[phecode].phenotype
+    ax.set_ylabel(activity_variable)
+    ax.set_xlabel("Age")
     util.legend_from_colormap(fig, colors)
-    ax.set_title(f"{phecode_info.loc[phecode].phenotype} - {activity_variable}")
+    ax.set_title(f"{phenotype_name} - {activity_variable}")
+    return fig
 
+
+def plot_quantitative_by_age(phenotype, activity_var, df=None, name=None):
+    if df is not None:
+        data = df
+    cmap = pylab.get_cmap("viridis")
+    colors = [cmap(t) for t in numpy.linspace(0,1,5)]
+    d = data.copy()
+    age_cutoffs = numpy.arange(45,81,5) # every 5 years from 45 to 80
+    fig, ax = pylab.subplots(figsize=(8,6))
+    d['age_bucket'] = pandas.cut(d.age_at_actigraphy, age_cutoffs, right=True)
+    activity_var_quintiles = pandas.qcut(d[activity_var], 5)
+    for i, (quintile, quintile_data) in enumerate(d.groupby(activity_var_quintiles)):
+        means = quintile_data.groupby("age_bucket")[phenotype].mean()
+        sems = quintile_data.groupby("age_bucket")[phenotype].sem()
+        ax.plot(numpy.arange(len(means)), means,
+            c=colors[i])
+        ax.errorbar(numpy.arange(len(means)), means,
+            yerr=sems,
+            c=colors[i])
+    ax.set_xticks(numpy.arange(len(d.age_bucket.cat.categories)))
+    phenotype_name = name if name is not None else quantitative_variable_descriptions.loc[phenotype].Name
+    ax.set_ylabel(phenotype_name)
+    ax.set_xlabel("Age at Actigraphy")
+    ax.set_xticklabels([f"{c.left} - {c.right}" for c in d.age_bucket.cat.categories])
+    util.legend_from_colormap(fig,
+        {label:color for label, color in zip(["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"], colors)},
+        title=f"{activity_var} Quintile")
+    ax.set_title(f"{phenotype_name} by {activity_var}")
+    return fig
+
+def age_by_categorical_question(phecode, question, responses):
+    age_cutoffs = numpy.arange(45,85,5) # every 5 years from 40 to 80
+    cmap = pylab.get_cmap("viridis")
+    colors = [cmap(t) for t in numpy.linspace(0,1,len(responses))]
+    fig, ax = pylab.subplots(figsize=(8,6))
+    for status in ['Control', 'Case']:
+        in_status = data[phecode] == (1 if status == 'Case' else 0)
+        d = data[in_status]
+        age_buckets = pandas.cut(data.age_at_actigraphy[in_status], age_cutoffs, right=True)
+        for i, (bucket, age_data) in enumerate(d.groupby(age_buckets)[question]):
+            counts = age_data.value_counts()
+            counts /= counts[responses].sum()
+            base = 0
+            for response, color in zip(responses, colors):
+                ax.bar(i + (-0.2 if status == "Control" else 0.2),
+                        counts[response],
+                        bottom=base,
+                        color = color,
+                        alpha = 0.5 if status == "Control" else 1,
+                        width=0.35)
+                base += counts[response]
+        xticks = numpy.arange(len(age_buckets.cat.categories))
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([f"{c.left}-{c.right}" for c in age_buckets.cat.categories])
+        ax.set_xlabel("Age")
+        ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(xmax=1))
+    legend =  dict(list(zip(responses, colors))[::-1])
+    legend.update(dict(Control= [0.5,0.5,0.5,0.5], Case=[0.5,0.5,0.5,1]))
+    util.legend_from_colormap(fig, legend)
+    fig.subplots_adjust(right=0.9)
+    return fig
+
+def age_interaction_plots():
+    lipoprotein_vars = ["cholesterol", "hdl_cholesterol", "ldl_direct", "triglycerides", "apolipoprotein_A", "apolipoprotein_B", "lipoprotein_A"]
+    for var in lipoprotein_vars:
+        fig = plot_quantitative_by_age(var, "acceleration_overall")
+        fig.savefig(OUTDIR+f"by_age.{var}.vs.acceleration_overall.png")
+    df = data.copy()
+    df['cholesterol_ratio'] = data.cholesterol / data.hdl_cholesterol
+    fig = plot_quantitative_by_age("cholesterol_ratio", "acceleration_overall", df=df, name="Cholesterol Ratio")
+    fig.savefig(OUTDIR+"by_age.cholesterol_ratio.vs.acceleration_overall.png")
+
+    # Plot multiple response questions by age and case-control
+    responses = ['Not at all easy', 'Very easy']
+    fig = age_by_categorical_question(296, 'getting_up_in_morning', responses)
+    fig.savefig(OUTDIR+"by_age.mood_disorder.vs.getting_up_in_morning.png")
+    responses = ['Not at all easy', 'Not very easy', 'Fairly easy', 'Very easy']
+    fig = age_by_categorical_question(296, 'getting_up_in_morning', responses)
+    fig.savefig(OUTDIR+"by_age.mood_disorder.vs.getting_up_in_morning.full.png")
+
+    # Plot case-control plots
+    fig = plot_case_control_by_age(401, "walking_overall_M10")
+    fig.savefig("by_age.hypertension.vs.walking_overall_M10.png")
+    fig = plot_case_control_by_age(401, "acceleration_overall")
+    fig.savefig("by_age.hypertension.vs.acceleration_overall.png")
+    fig = plot_case_control_by_age(296, "main_sleep_duration_mean")
+    fig.savefig("by_age.mood_disorders.vs.main_sleep_duration_mean.png")
 
 
 def temperature_calibration_plots():
