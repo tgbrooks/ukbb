@@ -1216,7 +1216,7 @@ if __name__ == '__main__':
     phecode_tests['activity_var_category'] = phecode_tests['activity_var'].map(activity_variable_descriptions.Category)
     phecode_tests['q_significant'] = (phecode_tests.q < FDR_CUTOFF_VALUE).astype(int)
 
-    quantitative_tests, quantitative_age_tests, quantitative_sex_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
+    quantitative_tests, quantitative_age_tests, quantitative_sex_tests = phewas_tests.quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions, OUTDIR, RECOMPUTE)
     quantitative_tests_raw  = quantitative_tests.copy()
 
     age_tests = phewas_tests.age_tests(data, phecode_groups, activity_variables, activity_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE)
