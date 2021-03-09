@@ -1171,7 +1171,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if not args.no_display:
+    if args.no_display:
         # Use the non-graphical backend Agg
         import matplotlib
         matplotlib.use("Agg")
