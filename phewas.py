@@ -1186,8 +1186,8 @@ if __name__ == '__main__':
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
 
     # Load descriptions + categorization of activity variables and quantitative variables
-    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
-    quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0)
+    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables", engine="openpyxl")
+    quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0, engine="openpyxl")
 
     # Gather list of the
     import fields_of_interest

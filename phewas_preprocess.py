@@ -86,7 +86,7 @@ def load_activity(ukbb):
     print(f"Selected {len(activity.columns)} after discarding those with poor intra-personal variance")
 
     # Load descriptions + categorization of activity variables
-    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables")
+    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables", engine="openpyxl")
 
     # drop activity for people who fail basic QC
     calibrated = activity_summary['quality-goodCalibration'].astype(bool)
