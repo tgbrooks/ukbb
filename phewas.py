@@ -995,34 +995,44 @@ def plot_case_control_by_age(phecode, activity_variable):
     return fig
 
 
-def plot_quantitative_by_age(phenotype, activity_var, df=None, name=None):
-    if df is not None:
-        data = df
-    cmap = pylab.get_cmap("viridis")
-    colors = [cmap(t) for t in numpy.linspace(0,1,5)]
-    d = data.copy()
+def plot_quantitative_by_age(phenotype, activity_var, df=None, name=None, categorical=False, ax=None):
+    if df is None:
+        df = data
+    df = df.copy()
     age_cutoffs = numpy.arange(45,81,5) # every 5 years from 45 to 80
-    fig, ax = pylab.subplots(figsize=(8,6))
-    d['age_bucket'] = pandas.cut(d.age_at_actigraphy, age_cutoffs, right=True)
-    activity_var_quintiles = pandas.qcut(d[activity_var], 5)
-    for i, (quintile, quintile_data) in enumerate(d.groupby(activity_var_quintiles)):
-        means = quintile_data.groupby("age_bucket")[phenotype].mean()
-        sems = quintile_data.groupby("age_bucket")[phenotype].sem()
+    df['age_bucket'] = pandas.cut(df.age_at_actigraphy, age_cutoffs, right=True)
+    if  categorical:
+        group_by = df[activity_var].astype("category")
+    else:
+        activity_var_quintiles = pandas.qcut(df[activity_var], 5)
+        group_by = activity_var_quintiles
+    cmap = pylab.get_cmap("viridis")
+    colors = {group: cmap(t) for group, t in zip(group_by.cat.categories, numpy.linspace(0,1,len(group_by.cat.categories)))}
+    if ax is None:
+        fig, ax = pylab.subplots(figsize=(8,6))
+    else:
+        fig = None
+    for (group_name, group_data) in df.groupby(group_by):
+        means = group_data.groupby("age_bucket")[phenotype].mean()
+        sems = group_data.groupby("age_bucket")[phenotype].sem()
         ax.plot(numpy.arange(len(means)), means,
-            c=colors[i])
+            c=colors[group_name])
         ax.errorbar(numpy.arange(len(means)), means,
             yerr=sems,
-            c=colors[i])
-    ax.set_xticks(numpy.arange(len(d.age_bucket.cat.categories)))
+            c=colors[group_name])
+    ax.set_xticks(numpy.arange(len(df.age_bucket.cat.categories)))
     phenotype_name = name if name is not None else quantitative_variable_descriptions.loc[phenotype].Name
     ax.set_ylabel(phenotype_name)
     ax.set_xlabel("Age at Actigraphy")
-    ax.set_xticklabels([f"{c.left} - {c.right}" for c in d.age_bucket.cat.categories])
-    util.legend_from_colormap(fig,
-        {label:color for label, color in zip(["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"], colors)},
-        title=f"{activity_var} Quintile")
+    ax.set_xticklabels([f"{c.left} - {c.right}" for c in df.age_bucket.cat.categories])
+    if categorical:
+        util.legend_from_colormap(ax, colors)
+    else:
+        util.legend_from_colormap(ax,
+            {label:color for label, color in zip(["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"], colors.values())},
+            title=f"{activity_var} Quintile")
     ax.set_title(f"{phenotype_name} by {activity_var}")
-    return fig
+    return fig, ax
 
 def age_by_categorical_question(phecode, question, responses):
     age_cutoffs = numpy.arange(45,85,5) # every 5 years from 40 to 80
@@ -1061,10 +1071,37 @@ def age_interaction_plots():
     for var in lipoprotein_vars:
         fig = plot_quantitative_by_age(var, "acceleration_overall")
         fig.savefig(OUTDIR+f"by_age.{var}.vs.acceleration_overall.png")
+        fig = plot_quantitative_by_age(var, "IPAQ_activity_group", categorical=True)
+        fig.savefig(OUTDIR+f"by_age_.{var}.vs.IPAQ_activity_group.png")
     df = data.copy()
     df['cholesterol_ratio'] = data.cholesterol / data.hdl_cholesterol
     fig = plot_quantitative_by_age("cholesterol_ratio", "acceleration_overall", df=df, name="Cholesterol Ratio")
     fig.savefig(OUTDIR+"by_age.cholesterol_ratio.vs.acceleration_overall.png")
+
+    # By sex
+    no_cholesterol_meds = ((data.medication_cholesterol_bp_diabetes_or_exog_hormones_Cholesterol_lowering_medication == 0) # For males
+                            | (data.medication_cholesterol_bp_diabetes_Cholesterol_lowering_medication == 0)) # For females
+    for meds_status in ['no_meds', 'with_meds', 'all']:
+        if meds_status == 'no_meds':
+            df = data[no_cholesterol_meds]
+        elif meds_status == 'with_meds':
+            df = data[~no_cholesterol_meds]
+        else:
+            df = data
+        for var in lipoprotein_vars:
+            fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(10,10))
+            for i, sex in enumerate(["Male", "Female"]):
+                _, ax = plot_quantitative_by_age(var, "acceleration_overall", df=df[df.sex==sex], ax=axes[i, 0])
+                ax.set_title(f"{sex} - by acceleration_overall")
+                _, ax = plot_quantitative_by_age(var, "IPAQ_activity_group", df=df[df.sex==sex], ax=axes[i, 1], categorical=True)
+                ax.set_title(f"{sex} - by IPAQ_activity_group")
+            fig.savefig(OUTDIR+f"by_age.by_sex.{var}.combined.{meds_status}.png")
+
+
+    renal_function_vars = quantitative_variable_descriptions.index[quantitative_variable_descriptions['Functional Categories'] == 'Renal Function']
+    for var in renal_function_vars:
+        fig = plot_quantitative_by_age(var, "acceleration_overall")
+        fig.savefig(OUTDIR+f"by_age.{var}.vs.acceleration_overall.png")
 
     # Plot multiple response questions by age and case-control
     responses = ['Not at all easy', 'Very easy']
@@ -1076,11 +1113,11 @@ def age_interaction_plots():
 
     # Plot case-control plots
     fig = plot_case_control_by_age(401, "walking_overall_M10")
-    fig.savefig("by_age.hypertension.vs.walking_overall_M10.png")
+    fig.savefig(OUTDIR+"by_age.hypertension.vs.walking_overall_M10.png")
     fig = plot_case_control_by_age(401, "acceleration_overall")
-    fig.savefig("by_age.hypertension.vs.acceleration_overall.png")
+    fig.savefig(OUTDIR+"by_age.hypertension.vs.acceleration_overall.png")
     fig = plot_case_control_by_age(296, "main_sleep_duration_mean")
-    fig.savefig("by_age.mood_disorders.vs.main_sleep_duration_mean.png")
+    fig.savefig(OUTDIR+"by_age.mood_disorders.vs.main_sleep_duration_mean.png")
 
 
 def temperature_calibration_plots():
