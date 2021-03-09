@@ -2,9 +2,7 @@ import math
 import re
 import pandas
 import numpy
-import pylab
 import seaborn as sns
-import matplotlib
 import statsmodels.formula.api as smf
 
 
@@ -1170,8 +1168,16 @@ if __name__ == '__main__':
     parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
     parser.add_argument("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
     parser.add_argument("--noplots", help="Disable running plots, useful for just loading the data", default=False, action="store_const", const=True)
+    parser.add_argument("--no_display", help="Disable visual output, uses non-graphical backend such as when running on a server", default=False, action="store_const", const=True)
 
     args = parser.parse_args()
+
+    if not args.no_display:
+        # Use the non-graphical backend Agg
+        import matplotlib
+        matplotlib.use("Agg")
+    import pylab
+
     COHORT = args.cohort
     RECOMPUTE = args.force_recompute
     OUTDIR = f"../global_phewas/cohort{COHORT}/"
