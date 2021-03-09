@@ -763,9 +763,8 @@ def generate_results_table():
         quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="Quantitative Age Differences", index=False)
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
-def temperature_trace_plots():
+def temperature_trace_plots(N_IDS=500):
     ids = day_plots.get_ids_of_traces_available()
-    N_IDS = 500
 
     def temp_to_C(temp):
         return (500*temp - 2550)/256 # Convert "temp" units to Celsius
