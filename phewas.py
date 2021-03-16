@@ -817,6 +817,8 @@ def temperature_trace_plots(N_IDS=500):
     fig.savefig(OUTDIR+"temperature.peripheral_vascular_disease.png")
     fig = case_control(495)
     fig.savefig(OUTDIR+"temperature.asthma.png")
+    fig = case_control(480)
+    fig.savefig(OUTDIR+"temperature.pneumonia.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
     fig = temp_trace_by_cat(morning_evening, show_variance=False)
@@ -1115,6 +1117,10 @@ def age_interaction_plots():
     fig.savefig(OUTDIR+"by_age.hypertension.vs.acceleration_overall.png")
     fig = plot_case_control_by_age(296, "main_sleep_duration_mean")
     fig.savefig(OUTDIR+"by_age.mood_disorders.vs.main_sleep_duration_mean.png")
+    fig = plot_case_control_by_age(296, "main_sleep_offset_mean")
+    fig.savefig(OUTDIR+"by_age.mood_disorders.vs.main_sleep_offset_mean.png")
+    fig = plot_case_control_by_age(300, "main_sleep_offset_mean")
+    fig.savefig(OUTDIR+"by_age.anxiety_disorders.vs.main_sleep_offset_mean.png")
 
 
 def temperature_calibration_plots():
