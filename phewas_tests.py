@@ -490,3 +490,38 @@ def beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OU
                             right_index=True)
     beyond_RA_tests.to_csv(OUTDIR+"beyond_RA_tests.txt", sep="\t", index=False)
     return beyond_RA_tests
+
+def assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE=True):
+    out_file = OUTDIR+"medication_differences.txt"
+    if not RECOMPUTE:
+        try:
+            med_differences = pandas.read_csv(out_file, sep="\t")
+            return med_differences
+        except FileNotFoundError:
+            pass
+
+    med_counts = medications.medication.value_counts()
+    top_meds = med_counts[med_counts > 200].index
+    results = []
+    d = data.copy()
+    for med in top_meds:
+        has_med = medications.ID[medications.medication == med]
+        d['has_med'] = d.index.isin(has_med)
+        for var in quantitative_variables:
+            with_med = d.loc[d.has_med, var].mean()
+            without_med = d.loc[~d.has_med, var].mean()
+            std = data[var].std()
+            fit = smf.ols(f"{var} ~ has_med + sex *(birth_year + BMI)", data=d).fit()
+            p_value = fit.pvalues['has_med[T.True]']
+            std_effect_size = fit.params['has_med[T.True]'] / std
+            results.append({
+                "phenotype": var,
+                "medication": med,
+                "difference": with_med - without_med,
+                "z_score": (with_med - without_med) / std,
+                "std_effect_size": std_effect_size,
+                "p": p_value,
+            })
+    med_differences = pandas.DataFrame(results)
+    med_differences.to_csv(out_file, index=False, sep="\t")
+    return med_differences

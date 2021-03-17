@@ -266,6 +266,19 @@ def phecode_count_summary():
     #phecode_count_details.to_csv("phecode_counts.txt", sep="\t", header=True)
     return phecode_count_details
 
+def load_medications(cohort_ids):
+    medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t",
+         dtype=dict(medication_code=int))
+    data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
+    codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
+    medication_code_to_meaning = codings[codings.Coding  == data_fields.loc[20003].Coding].drop_duplicates(subset=["Value"], keep=False)
+    medication_code_to_meaning.Value = medication_code_to_meaning.Value.astype(int)
+    medication_code_to_meaning.set_index("Value", inplace=True)
+    medications['medication'] = medications.medication_code.map(medication_code_to_meaning.Meaning)
+
+    medications = medications[medications.ID.isin(cohort_ids)]
+    return medications
+
 def load_data(cohort):
     ukbb = load_ukbb()
     activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = load_activity(ukbb)

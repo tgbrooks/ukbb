@@ -1191,6 +1191,8 @@ if __name__ == '__main__':
     #### Load and preprocess the underlying data
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
 
+    medications = phewas_preprocess.load_medications(data.index)
+
     # Load descriptions + categorization of activity variables and quantitative variables
     activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables", engine="openpyxl")
     quantitative_variable_descriptions = pandas.read_excel("../quantitative_variables.xlsx", index_col=0, engine="openpyxl")
@@ -1235,6 +1237,9 @@ if __name__ == '__main__':
 
     beyond_RA_tests = phewas_tests.beyond_RA_tests(data, activity_variables, activity_variable_descriptions, OUTDIR, RECOMPUTE)
 
+    med_differences = phewas_tests.assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE)
+
+
     #### Prepare color maps for the plots
     color_by_phecode_cat = {cat:color for cat, color in
                                 zip(phecode_tests.phecode_category.unique(),
@@ -1274,6 +1279,7 @@ if __name__ == '__main__':
         temperature_trace_plots()
         temperature_calibration_plots()
         chronotype_plots()
+        assess_medications()
         if args.all:
             # Note: slow to run: performs many regressions
             by_date_plots()
