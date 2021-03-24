@@ -1166,6 +1166,148 @@ def demographics_table():
     demographics.to_csv(OUTDIR+"demographics.txt", sep="\t")
     return
 
+def associations_by_meds():
+    med_list = ["metformin", "aspirin", "simvastatin"]
+    med_status = {med: data.index.isin(medications.ID[medications.medication ==  med]) for med in med_list}
+    med_status['combined'] = numpy.any([status for status in med_status.values()], axis=0)
+    activity_var = "acceleration_overall"
+    phenotype = "cholesterol"
+    phenotype_std = data[phenotype].std()
+    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    d = data.copy()
+
+    results = []
+    for med, status in med_status.items():
+        d['med_status'] = status
+        N = (~d[[activity_var, phenotype]].isna().any(axis=1)).sum()
+        fit = OLS(f"{phenotype} ~ {activity_var} + med_status + sex * ({covariate_formula})",
+                        data=d)
+        p = fit.pvalues[activity_var]
+        medication_p = fit.pvalues["med_status[T.True]"]
+        coeff = fit.params[activity_var]
+        activity_var_std = data[activity_var].std()
+        std_effect = coeff * activity_var_std / phenotype_std
+        results.append({
+                        "phenotype": phenotype,
+                        "activity_var": activity_var,
+                        "medication": med,
+                        "medication_p": medication_p,
+                        "p": p,
+                        "coeff": coeff,
+                        "std_effect": std_effect,
+                        "med_stat"
+                        "N": N,
+                    })
+    results = pandas.DataFrame(results)
+
+def quantitative_traits_with_medications():
+
+    categories = {
+        "cholesterol" : {
+            "category": ["Lipoprotein Profile"],
+            "med": ['medication_cholesterol_bp_diabetes_Cholesterol_lowering_medication', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Cholesterol_lowering_medication'],
+        },
+        "BP": {
+            "category": ["Cardiovascular Function"],
+            "med": ['medication_cholesterol_bp_diabetes_Blood_pressure_medication', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Blood_pressure_medication'],
+        },
+        "insulin": {
+            "category": ["Glucose Metabolism"],
+            "med": ['medication_cholesterol_bp_diabetes_Insulin', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Insulin'],
+        },
+    }
+
+    with_meds = []
+    with_meds_by_age = []
+    with_meds_by_sex = []
+    for name, values in categories.items():
+        quant_vars = quantitative_variable_descriptions[quantitative_variable_descriptions['Functional Categories'].isin(values['category'])].index
+        med_covariate = data[values['med']].any(axis=1)
+        d = data.copy()
+        d['med_covariate'] = med_covariate
+        results, age_results, sex_results = phewas_tests.quantitative_tests(
+            d,
+            quantitative_variables=quant_vars,
+            activity_variables = activity_variables,
+            activity_variable_descriptions=activity_variable_descriptions,
+            quantitative_variable_descriptions=quantitative_variable_descriptions,
+            extra_covariates = ['med_covariate'],
+            OUTDIR = OUTDIR + f"{name}.",
+            RECOMPUTE=RECOMPUTE,
+            )
+        with_meds.append(results)
+        with_meds_by_age.append(age_results)
+        with_meds_by_sex.append(sex_results)
+    with_meds = pandas.concat(with_meds)
+    with_meds['original_p'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').p
+    with_meds['original_std_effect'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').std_effect
+    with_meds.to_csv(OUTDIR+"quantitative_traits.with_meds.txt", sep="\t")
+
+    with_meds_by_sex = pandas.concat(with_meds_by_sex)
+    with_meds_by_sex['original_p'] = pandas.merge(with_meds_by_sex[['phenotype', 'activity_var']], quantitative_sex_tests, on=["phenotype", "activity_var"], how='inner').sex_difference_p
+    with_meds_by_sex.to_csv(OUTDIR+"quantitative_traits.by_sex.with_meds.txt", sep="\t")
+
+    with_meds_by_age = pandas.concat(with_meds_by_age)
+    with_meds_by_age['original_p'] = pandas.merge(with_meds_by_age[['phenotype', 'activity_var']], quantitative_age_tests, on=["phenotype", "activity_var"], how='inner').age_difference_p
+    with_meds_by_age.to_csv(OUTDIR+"quantitative_traits.by_age.with_meds.txt", sep="\t")
+
+    # Display results in figures
+    # with/without medication controls for quant variables
+    fig, ax = pylab.subplots(figsize=(8,8))
+    ax.scatter(-numpy.log10(with_meds.original_p), -numpy.log10(with_meds.p), c = with_meds['Functional Category'].map(color_by_quantitative_function))
+    legend_from_colormap(ax, color_by_quantitative_function)
+    ax.set_xlabel("-log10 p without medication controls")
+    ax.set_ylabel("-log10 p with medication controls")
+    # by effect size
+    fig, ax = pylab.subplots(figsize=(8,8))
+    ax.scatter((with_meds.original_std_effect), (with_meds.std_effect), c = with_meds['Functional Category'].map(color_by_quantitative_function))
+    legend_from_colormap(ax, color_by_quantitative_function)
+    ax.set_xlabel("std effect size without medication controls")
+    ax.set_ylabel("std effect size with medication controls")
+
+    # by sex
+    fig, ax = pylab.subplots(figsize=(8,8))
+    ax.scatter(-numpy.log10(with_meds_by_sex.original_p), -numpy.log10(with_meds_by_sex.sex_difference_p), c = with_meds_by_sex['Functional Category'].map(color_by_quantitative_function))
+    legend_from_colormap(ax, color_by_quantitative_function)
+    ax.set_xlabel("-log10 p without medication controls")
+    ax.set_ylabel("-log10 p with medication controls")
+    ax.set_title("Sex-differences")
+
+    # by age
+    fig, ax = pylab.subplots(figsize=(8,8))
+    ax.scatter(-numpy.log10(with_meds_by_age.original_p), -numpy.log10(with_meds_by_age.age_difference_p), c = with_meds_by_age['Functional Category'].map(color_by_quantitative_function))
+    legend_from_colormap(ax, color_by_quantitative_function)
+    ax.set_xlabel("-log10 p without medication controls")
+    ax.set_ylabel("-log10 p with medication controls")
+    ax.set_title("Age-differences")
+
+def med_differences_plots():
+    d = -numpy.log10(med_differences.pivot_table(columns=["medication"], index=["phenotype"], values="p") + 1e-20)
+
+    import scipy.cluster.hierarchy
+    Z = scipy.cluster.hierarchy.linkage(d.values)
+    #leaves = scipy.cluster.hierarchy.optimal_leaf_ordering(Z, d.values)
+    leaves_list = scipy.cluster.hierarchy.leaves_list(Z)
+    d = d.iloc[leaves_list,:]
+    ZT = scipy.cluster.hierarchy.linkage(d.values.T)
+    #leavesT = scipy.cluster.hierarchy.optimal_leaf_ordering(ZT, d.values.T)
+    leaves_list_T = scipy.cluster.hierarchy.leaves_list(ZT)
+    d = d.iloc[:, leaves_list_T]
+
+    fig, ax = pylab.subplots(figsize=(10,10))
+    h = ax.imshow(d.values, vmax=20)
+    ax.set_xticks(range(len(d.columns)))
+    ax.set_xticklabels(d.columns, rotation=90)
+    ax.set_yticks(range(len(d.index)))
+    ax.set_yticklabels(d.index)
+    fig.colorbar(h)
+    fig.tight_layout()
+
+medication_groups = {
+    "beta_agonist": ["ventolin 100micrograms inhaler", "seretide 50 evohaler",],
+    "beta_blocker": ["atenolol"],
+}
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run phewas pipeline on actigraphy\nOutputs to ../global_phewas/cohort#/")

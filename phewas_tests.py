@@ -144,12 +144,12 @@ def phecode_tests(data, phecode_groups, activity_variables, activity_variable_de
     phecode_tests_by_sex.to_csv(OUTDIR+"/all_phenotypes.by_sex.txt", sep="\t", index=False)
     return phecode_tests, phecode_tests_by_sex
 
-def quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions, OUTDIR, RECOMPUTE=True):
+def quantitative_tests(data, quantitative_variables, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions, OUTDIR, RECOMPUTE=True, extra_covariates=[]):
     if not RECOMPUTE:
         try:
-            quantitative_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.txt", sep="\t")
-            quantitative_age_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.by_age.txt", sep="\t")
-            quantitative_sex_tests = pandas.read_csv(OUTDIR+"/quantitative_traits.by_sex.txt", sep="\t")
+            quantitative_tests = pandas.read_csv(OUTDIR+"quantitative_traits.txt", sep="\t")
+            quantitative_age_tests = pandas.read_csv(OUTDIR+"quantitative_traits.by_age.txt", sep="\t")
+            quantitative_sex_tests = pandas.read_csv(OUTDIR+"quantitative_traits.by_sex.txt", sep="\t")
             return quantitative_tests, quantitative_age_tests, quantitative_sex_tests
         except FileNotFoundError:
             pass
@@ -158,7 +158,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     quantitative_tests_list = []
     quantitative_sex_tests_list = []
     quantitative_age_tests_list = []
-    covariate_formula = ' + '.join(c for c in covariates if c != 'sex')
+    covariate_formula = ' + '.join(c for c in (covariates + extra_covariates) if c != 'sex')
     for phenotype in quantitative_variables:
         if phenotype in covariates:
             # Can't regress a variable that is also a exogenous variable (namely, BMI)
@@ -247,7 +247,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     base_variable_name = quantitative_tests.phenotype.apply(base_name)
     quantitative_tests['ukbb_field'] = base_variable_name.map(fields_of_interest.all_fields)
     quantitative_tests['Functional Category'] = quantitative_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
-    quantitative_tests.to_csv(OUTDIR+"/quantitative_traits.txt", sep="\t", index=False)
+    quantitative_tests.to_csv(OUTDIR+"quantitative_traits.txt", sep="\t", index=False)
 
     # Final prep of age effects dataframe
     quantitative_age_tests = pandas.DataFrame(quantitative_age_tests_list)
@@ -264,7 +264,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     base_variable_name = quantitative_age_tests.phenotype.apply(base_name)
     quantitative_age_tests['ukbb_field'] = base_variable_name.map(fields_of_interest.all_fields)
     quantitative_age_tests['Functional Category'] = quantitative_age_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
-    quantitative_age_tests.to_csv(OUTDIR+"/quantitative_traits.by_age.txt", sep="\t", index=False)
+    quantitative_age_tests.to_csv(OUTDIR+"quantitative_traits.by_age.txt", sep="\t", index=False)
 
     # Final prep of sex difference dataframe
     quantitative_sex_tests = pandas.DataFrame(quantitative_sex_tests_list)
@@ -277,7 +277,7 @@ def quantitative_tests(data, quantitative_variables, activity_variables, activit
     base_variable_name = quantitative_sex_tests.phenotype.apply(base_name)
     quantitative_sex_tests['ukbb_field'] = base_variable_name.map(fields_of_interest.all_fields)
     quantitative_sex_tests['Functional Category'] = quantitative_sex_tests.phenotype.map(quantitative_variable_descriptions['Functional Categories'])
-    quantitative_sex_tests.to_csv(OUTDIR+"/quantitative_traits.by_sex.txt", sep="\t", index=False)
+    quantitative_sex_tests.to_csv(OUTDIR+"quantitative_traits.by_sex.txt", sep="\t", index=False)
 
     return quantitative_tests, quantitative_age_tests, quantitative_sex_tests
 
