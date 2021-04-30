@@ -525,3 +525,68 @@ def assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMP
     med_differences = pandas.DataFrame(results)
     med_differences.to_csv(out_file, index=False, sep="\t")
     return med_differences
+
+
+def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOMPUTE=True):
+    def test(phenotypes, quantitative):
+        top_circ = "temp_RA"
+        top_sleep = "main_sleep_ratio_mean"
+        top_physical = "acceleration_overall"
+        results_list = []
+        for phenotype in phenotypes:
+            covariate_formula = ' + '.join(c for c in covariates)
+            if not quantitative:
+                if data[phenotype].sum() < 1000:
+                    # Require at least N = 1000 cases
+                    continue
+                # Logistic model
+                results = smf.logit(f"Q({phenotype}) ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
+                marginals = results.get_margeff()
+                ps = pandas.Series(results.pvalues, index=results.model.exog_names)[[top_circ, top_physical, top_sleep]]
+                overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
+                effs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]].abs()
+                effs *= data[effs.index].std() # Standardize by the actigraphy variables used
+                effs /= data[phenotype].mean() # Standardize by the overall prevalence
+                ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]]
+                ses *= data[effs.index].std() # Standardized SEs too
+                ses /= data[phenotype].mean()
+            else:
+                results = smf.ols(f"{phenotype} ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
+                ps = results.pvalues[[top_circ, top_physical, top_sleep]]
+                overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
+                effs = results.params[[top_circ, top_physical, top_sleep]].abs()
+                effs *= data[effs.index].std() # Standardize by the actigraphy variables used
+                effs /= data[phenotype].std() # Standardize by the phenotype variance
+                ses = results.bse[[top_circ, top_physical, top_sleep]].abs()
+                ses *= data[effs.index].std() # Standardize by the actigraphy variables used
+                ses /= data[phenotype].std() # Standardize by the phenotype variance
+            results_list.append({
+                'overall_p': overall_p,
+                'circ_p': ps[top_circ],
+                'sleep_p': ps[top_sleep],
+                'physical_p': ps[top_physical],
+                'circ_eff': effs[top_circ],
+                'sleep_eff': effs[top_sleep],
+                'physical_eff': effs[top_physical],
+                'circ_ses': ses[top_circ],
+                'sleep_ses': ses[top_sleep],
+                'physical_ses': ses[top_physical],
+            })
+        results = pandas.DataFrame(results_list)
+        return results
+
+    if not RECOMPUTE:
+        try:
+            phecode_three_component_tests = pandas.read_csv(OUTDIR+"phecodes.three_components.txt", sep="\t")
+            quantitative_three_component_tests = pandas.read_csv(OUTDIR+"quantitative.three_components.txt", sep="\t")
+            return phecode_three_component_tests, quantitative_three_component_tests
+        except FileNotFoundError:
+            pass
+    
+    phecode_three_component_tests = test(phecodes, quantitative=False)
+    phecode_three_component_tests.to_csv(OUTDIR+"phecodes.three_components.txt", sep="\t", index=False)
+
+    quantitative_three_component_tests = test(quantitative_variables, quantitative=True)
+    quantitative_three_component_tests.to_csv(OUTDIR+"quantitative.three_components.txt", sep="\t", index=False)
+
+    return phecode_three_component_tests, quantitative_three_component_tests

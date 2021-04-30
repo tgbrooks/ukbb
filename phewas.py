@@ -9,7 +9,7 @@ import statsmodels.formula.api as smf
 import phewas_preprocess
 from phewas_preprocess import self_report_circadian_variables
 import phewas_tests
-from phewas_tests import covariates, survival_covariates, OLS
+from phewas_tests import covariates, quantitative_tests, survival_covariates, OLS
 import phewas_plots as plots
 import day_plots
 
@@ -263,6 +263,7 @@ def sex_difference_plots():
 
     # Run sex-difference and age-difference plots on the quantitative tests
     qt = quantitative_sex_tests.sample(frac=1)
+    #TODO: I believe the above needs to rename columns std_male_effect -> std_male_coeff and same for female to work below
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Activity Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
@@ -396,6 +397,8 @@ def fancy_plots():
     fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
     fig = phewas_plots.fancy_case_control_plot(data, 332, normalize=True, confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
+    fig = phewas_plots.fancy_case_control_plot(data, 480, normalize=True, confidence_interval=True)
+    fig.savefig(OUTDIR+"phenotypes.pneumonia.png")
 
 def survival_curves():
     # Survival by RA
@@ -554,11 +557,11 @@ def circadian_component_plots():
     fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
     top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
-    fig, axes = phewas_plots.circadian_component_plot(data, top_phenotypes[:20], len(phecode_groups))
+    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, top_phenotypes[:20], quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
 
     top_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
-    fig, axes = phewas_plots.circadian_component_plot(data, top_phenotypes[:20], len(quantitative_variables), quantitative=True)
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_phenotypes[:20], quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
 
 def objective_subjective_plots():
@@ -843,6 +846,17 @@ def temperature_trace_plots(N_IDS=500):
     fig.gca().set_title("Nap During Day")
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.nap.png")
+
+    ## Asthma
+    obese = data.BMI > 30
+    normal = (data.BMI < 25) & (data.BMI > 18.5)
+    cats = data[495].map({1: "Asthma", 0: "Control"}) + obese.map({True: " Obese", False: " Normal"})
+    cats[(~normal) & (~obese)] = float("NaN") # Remove 'overweight-but-not-obese' middle category
+    cats = cats.astype("category")
+    fig = temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=True)
+    fig.gca().set_title("Asthma by Weight")
+    fig.tight_layout()
+    fig.savefig(OUTDIR+"temperature.asthma.by_bmi.png")
 
 def chronotype_plots():
     # Chronotype by sex+age plot
@@ -1131,7 +1145,7 @@ def temperature_calibration_plots():
     temp_RA = data['temp_RA']
 
     fig, axes = pylab.subplots(figsize=(8,5), ncols=2)
-    for (name, measure), ax in zip({"act": data.acceleration_overall, "mean": temp_mean, "RA": temp_RA}.items(), axes):
+    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA}.items(), axes):
         device_mean = measure.groupby(device).mean()
         random_mean = measure.groupby(random_device).mean()
         m = device_mean.quantile(0.01)
@@ -1217,39 +1231,49 @@ def quantitative_traits_with_medications():
         },
     }
 
-    with_meds = []
-    with_meds_by_age = []
-    with_meds_by_sex = []
-    for name, values in categories.items():
-        quant_vars = quantitative_variable_descriptions[quantitative_variable_descriptions['Functional Categories'].isin(values['category'])].index
-        med_covariate = data[values['med']].any(axis=1)
-        d = data.copy()
-        d['med_covariate'] = med_covariate
-        results, age_results, sex_results = phewas_tests.quantitative_tests(
-            d,
-            quantitative_variables=quant_vars,
-            activity_variables = activity_variables,
-            activity_variable_descriptions=activity_variable_descriptions,
-            quantitative_variable_descriptions=quantitative_variable_descriptions,
-            extra_covariates = ['med_covariate'],
-            OUTDIR = OUTDIR + f"{name}.",
-            RECOMPUTE=RECOMPUTE,
-            )
-        with_meds.append(results)
-        with_meds_by_age.append(age_results)
-        with_meds_by_sex.append(sex_results)
-    with_meds = pandas.concat(with_meds)
-    with_meds['original_p'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').p
-    with_meds['original_std_effect'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').std_effect
-    with_meds.to_csv(OUTDIR+"quantitative_traits.with_meds.txt", sep="\t")
 
-    with_meds_by_sex = pandas.concat(with_meds_by_sex)
-    with_meds_by_sex['original_p'] = pandas.merge(with_meds_by_sex[['phenotype', 'activity_var']], quantitative_sex_tests, on=["phenotype", "activity_var"], how='inner').sex_difference_p
-    with_meds_by_sex.to_csv(OUTDIR+"quantitative_traits.by_sex.with_meds.txt", sep="\t")
+    recompute = RECOMPUTE
+    if not recompute:
+        try:
+            with_meds = pandas.read_csv(OUTDIR+"quantitative_traits.with_meds.txt", sep="\t", index_col=0)
+            with_meds_by_sex = pandas.read_csv(OUTDIR+"quantitative_traits.by_sex.with_meds.txt", sep="\t", index_col=0)
+            with_meds_by_age = pandas.read_csv(OUTDIR+"quantitative_traits.by_age.with_meds.txt", sep="\t", index_col=0)
+        except FileNotFoundError:
+            recompute = True
+    if recompute:
+        with_meds = []
+        with_meds_by_age = []
+        with_meds_by_sex = []
+        for name, values in categories.items():
+            quant_vars = quantitative_variable_descriptions[quantitative_variable_descriptions['Functional Categories'].isin(values['category'])].index
+            med_covariate = data[values['med']].any(axis=1)
+            d = data.copy()
+            d['med_covariate'] = med_covariate
+            results, age_results, sex_results = phewas_tests.quantitative_tests(
+                d,
+                quantitative_variables=quant_vars,
+                activity_variables = activity_variables,
+                activity_variable_descriptions=activity_variable_descriptions,
+                quantitative_variable_descriptions=quantitative_variable_descriptions,
+                extra_covariates = ['med_covariate'],
+                OUTDIR = OUTDIR + f"{name}.",
+                RECOMPUTE=RECOMPUTE,
+                )
+            with_meds.append(results)
+            with_meds_by_age.append(age_results)
+            with_meds_by_sex.append(sex_results)
+        with_meds = pandas.concat(with_meds)
+        with_meds['original_p'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').p
+        with_meds['original_std_effect'] = pandas.merge(with_meds[['phenotype', 'activity_var']], quantitative_tests, on=["phenotype", "activity_var"], how='inner').std_effect
+        with_meds.to_csv(OUTDIR+"quantitative_traits.with_meds.txt", sep="\t")
 
-    with_meds_by_age = pandas.concat(with_meds_by_age)
-    with_meds_by_age['original_p'] = pandas.merge(with_meds_by_age[['phenotype', 'activity_var']], quantitative_age_tests, on=["phenotype", "activity_var"], how='inner').age_difference_p
-    with_meds_by_age.to_csv(OUTDIR+"quantitative_traits.by_age.with_meds.txt", sep="\t")
+        with_meds_by_sex = pandas.concat(with_meds_by_sex)
+        with_meds_by_sex['original_p'] = pandas.merge(with_meds_by_sex[['phenotype', 'activity_var']], quantitative_sex_tests, on=["phenotype", "activity_var"], how='inner').sex_difference_p
+        with_meds_by_sex.to_csv(OUTDIR+"quantitative_traits.by_sex.with_meds.txt", sep="\t")
+
+        with_meds_by_age = pandas.concat(with_meds_by_age)
+        with_meds_by_age['original_p'] = pandas.merge(with_meds_by_age[['phenotype', 'activity_var']], quantitative_age_tests, on=["phenotype", "activity_var"], how='inner').age_difference_p
+        with_meds_by_age.to_csv(OUTDIR+"quantitative_traits.by_age.with_meds.txt", sep="\t")
 
     # Display results in figures
     # with/without medication controls for quant variables
@@ -1280,6 +1304,61 @@ def quantitative_traits_with_medications():
     ax.set_xlabel("-log10 p without medication controls")
     ax.set_ylabel("-log10 p with medication controls")
     ax.set_title("Age-differences")
+
+    ## Plot the by-sex plot
+    qt = with_meds_by_sex.rename(columns={"std_male_effect": "std_male_coeff", "std_female_effect":"std_female_coeff"}).sample(frac=1)
+    fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
+    fig.savefig(OUTDIR+"sex_differences.with_meds.quantitative.png")
+
+    # Just lipoproteins
+    # With medications
+    qt_restricted = qt[qt['Functional Category'] == 'Lipoprotein Profile']
+    color_by_lipoproteins = dict(zip(qt_restricted.phenotype.unique(),
+                                    [pylab.get_cmap("tab20")(i) for i in range(20)]))
+    fig, ax = phewas_plots.sex_difference_plot(qt_restricted, color_by="phenotype", cmap=color_by_lipoproteins, lim=0.25)
+    fig.savefig(f"{OUTDIR}/sex_differences.with_meds.quantitative.lipoproteins.png")
+    # without medications
+    qt2_restricted = pandas.merge(
+        qt_restricted[['phenotype', 'activity_var']],
+        quantitative_sex_tests,
+        on=['phenotype', 'activity_var'],
+        how='left',
+    ).rename(columns={"std_male_effect": "std_male_coeff", "std_female_effect":"std_female_coeff"})
+    fig, ax = phewas_plots.sex_difference_plot(qt2_restricted, color_by="phenotype", cmap=color_by_lipoproteins, lim=0.25)
+    fig.savefig(f"{OUTDIR}/sex_differences.quantitative.lipoproteins.png")
+
+    ## Plot the by-age plot
+    dage = with_meds_by_age.copy().sample(frac=1)
+    dage['p_overall'] = pandas.merge(
+        dage,
+        with_meds,
+        on=["phenotype", "activity_var"],
+    ).p
+    dage['p_age'] = dage.age_difference_p
+    fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
+    fig.savefig(f"{OUTDIR}/age_effects.with_meds.quantitative.png")
+
+    # Just lipoproteins
+    dage_restricted = dage[dage['Functional Category'] == 'Lipoprotein Profile'].sample(frac=1)
+    fig, ax = phewas_plots.age_effect_plot(dage_restricted, color_by="phenotype", cmap=color_by_lipoproteins, lim=0.3)
+    fig.savefig(f"{OUTDIR}/age_effects.with_meds.quantitative.lipoproteins.png")
+    # without medications
+    dage2_restricted = pandas.merge(
+        dage_restricted[['phenotype', 'activity_var']],
+        quantitative_age_tests,
+        on=['phenotype', 'activity_var'],
+        how='left',
+    )
+    dage2_restricted['p_overall'] = pandas.merge(
+        dage2_restricted,
+        quantitative_tests,
+        on=['phenotype', 'activity_var']
+    ).p
+    dage2_restricted['p_age'] = dage2_restricted.age_difference_p
+    fig, ax = phewas_plots.age_effect_plot(dage2_restricted, color_by="phenotype", cmap=color_by_lipoproteins, lim=0.3)
+    fig.savefig(f"{OUTDIR}/age_effects.quantitative.lipoproteins.png")
+
+
 
 def med_differences_plots():
     d = -numpy.log10(med_differences.pivot_table(columns=["medication"], index=["phenotype"], values="p") + 1e-20)
@@ -1381,6 +1460,8 @@ if __name__ == '__main__':
 
     med_differences = phewas_tests.assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE)
 
+    phecode_three_component_tests, quantitative_three_component_tests = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, OUTDIR, RECOMPUTE)
+
 
     #### Prepare color maps for the plots
     color_by_phecode_cat = {cat:color for cat, color in
@@ -1421,7 +1502,7 @@ if __name__ == '__main__':
         temperature_trace_plots()
         temperature_calibration_plots()
         chronotype_plots()
-        assess_medications()
+        quantitative_traits_with_medications()
         if args.all:
             # Note: slow to run: performs many regressions
             by_date_plots()

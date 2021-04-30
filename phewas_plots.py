@@ -599,7 +599,7 @@ class Plotter:
         util.legend_from_colormap(fig, self.colormaps['actigraphy_subcat'], fontsize="small", loc="upper left")
         return fig, ax, by_date
 
-    def circadian_component_plot(self, data, phenotypes, total_phenotypes, quantitative=False):
+    def circadian_component_plot(self, test_results, phenotypes, quantitative=False):
         ## Plot comparison of circadian versus sleep and physical activity
         colors = {c: self.colormaps['actigraphy_cat'][c] if c in self.colormaps['actigraphy_cat'] else (0.3, 0.3, 0.3, 1.0)
                     for c in ["Circadianness", "Physical activity", "Sleep", "Overall"]}
@@ -613,41 +613,20 @@ class Plotter:
             if rank > 20:
                 continue # Skip all but the most significant
 
-            # or use hand-selected variables for all
-            top_circ = "temp_RA"
-            top_sleep = "main_sleep_ratio_mean"
-            top_physical = "acceleration_overall"
+        test_results = test_results.set_index("phenotype")
 
-            covariate_formula = ' + '.join(c for c in covariates)
-            if not quantitative:
-                # Logistic model
-                results = smf.logit(f"Q({phenotype}) ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
-                marginals = results.get_margeff()
-                ps = pandas.Series(results.pvalues, index=results.model.exog_names)[[top_circ, top_physical, top_sleep]]
-                overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
-                effs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]].abs()
-                effs *= data[effs.index].std() # Standardize by the actigraphy variables used
-                effs /= data[phenotype].mean() # Standardize by the overall prevalence
-                ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]]
-                ses *= data[effs.index].std() # Standardized SEs too
-                ses /= data[phenotype].mean()
-            else:
-                results = smf.ols(f"{phenotype} ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
-                ps = results.pvalues[[top_circ, top_physical, top_sleep]]
-                overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
-                effs = results.params[[top_circ, top_physical, top_sleep]].abs()
-                effs *= data[effs.index].std() # Standardize by the actigraphy variables used
-                effs /= data[phenotype].std() # Standardize by the phenotype variance
-                ses = results.bse[[top_circ, top_physical, top_sleep]].abs()
-                ses *= data[effs.index].std() # Standardize by the actigraphy variables used
-                ses /= data[phenotype].std() # Standardize by the phenotype variance
-
+        for rank, phenotype in enumerate(phenotypes):
+            results = test_results.loc[phenotype]
+            phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
             height = 0.15 #Height of the bar plots (1 unit is the spacing between variables)
             ys = numpy.linspace(rank-height*1.5, rank+height*1.5, 4)
+            effs = [results.circ_eff, results.physical_eff, results.sleep_eff]
+            ps = [results.circ_p, results.physical_p, results.sleep_p]
+            ses = [results.circ_ses, results.physical_ses, results.sleep_ses]
             ax2.scatter(effs, ys[:3], c=colors_list[:3])
             for eff, se, y, c, p in zip(effs, ses, ys, colors_list, ps):
                 ax2.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c) # Draw effect sizes
-            for y, c, p in zip(ys, colors_list, numpy.concatenate((ps, [overall_p]))):
+            for y, c, p in zip(ys, colors_list, numpy.concatenate((ps, [results.overall_p]))):
                 ax1.barh([y], height=height, width=[-numpy.log10(p)], color=c) # Draw p value bars
 
             yticks[rank] = util.wrap(phenotype_name, 30)
@@ -656,15 +635,17 @@ class Plotter:
         # Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
         # so we will assume worst case, all others ps are 1
         #pvalues = numpy.array(pvalues + [1]*(phenotype_tests.phenotype.nunique() - len(pvalues)))
-        pvalues = numpy.concatenate([pvalues, numpy.random.uniform(size=(total_phenotypes - len(pvalues)))])
+        pvalues = test_results.circ_p
         qvalues = util.BH_FDR(pvalues)
-        qvalue_dict = {rank: q for rank, q in zip(ranks, qvalues[:len(ranks)])}
+        qvalues = pandas.Series(qvalues, index=pvalues.index).loc[phenotypes]
+        pvalues = pvalues.loc[phenotypes]
+        qvalue_dict = {rank: q for rank, q in enumerate(qvalues)}
         # Cut off half way between pvalues of worst gene passing FDR < 0.05 and best gene not passing
         pvalue_cutoff = 0.5*pvalues[qvalues < 0.05].max() + 0.5*pvalues[qvalues >= 0.05].min()
         ax1.axvline(-numpy.log10(pvalue_cutoff), linestyle="--", color="k")
         ax1.set_yticks(list(yticks.keys()))
-        ax1.set_yticklabels([name if qvalue_dict[rank] >= 0.05 else name + " (*)"
-                                for rank, name in yticks.items()])
+        ax1.set_yticklabels([name if qvalue >= 0.05 else name + " (*)"
+                                for qvalue, name in zip(qvalues, yticks.values())])
         ax1.set_xlabel("-log10 p-value")
         ax1.set_xlim(left=0, right=min(ax1.get_xlim()[1], 40)) # Cap log p-values at 40
         ax2.set_xlabel("Standardized Effect Size")
