@@ -551,6 +551,10 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 ses *= data[effs.index].std() # Standardized SEs too
                 ses /= data[phenotype].mean()
             else:
+                if data[phenotype].count() < 1000:
+                        #  Most quantitative variables are available in nearly everyone
+                        # but we can't run the regression if there are a tiny number: we use 1000 to be safe
+                        continue
                 results = smf.ols(f"{phenotype} ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
                 ps = results.pvalues[[top_circ, top_physical, top_sleep]]
                 overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
@@ -561,6 +565,7 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 ses *= data[effs.index].std() # Standardize by the actigraphy variables used
                 ses /= data[phenotype].std() # Standardize by the phenotype variance
             results_list.append({
+                'phenotype': phenotype,
                 'overall_p': overall_p,
                 'circ_p': ps[top_circ],
                 'sleep_p': ps[top_sleep],
