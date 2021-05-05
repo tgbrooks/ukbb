@@ -27,7 +27,7 @@ plot_config = {
         "label": "Amplitude",
     },
     "temp_RA": {
-        "xbottom": -0.12,
+        "xbottom": -0.15,
         "xtop": 0.0,
         "point_width": 0.01,
         "bandwidth": 0.15,
@@ -606,12 +606,6 @@ class Plotter:
         colors_list = list(colors.values())
         fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
         yticks = {}
-        pvalues = []
-        ranks = []
-        for rank, phenotype in enumerate(phenotypes):
-            phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
-            if rank > 20:
-                continue # Skip all but the most significant
 
         test_results = test_results.set_index("phenotype")
 
@@ -620,7 +614,7 @@ class Plotter:
             phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
             height = 0.15 #Height of the bar plots (1 unit is the spacing between variables)
             ys = numpy.linspace(rank-height*1.5, rank+height*1.5, 4)
-            effs = [results.circ_eff, results.physical_eff, results.sleep_eff]
+            effs = numpy.abs([results.circ_eff, results.physical_eff, results.sleep_eff])
             ps = [results.circ_p, results.physical_p, results.sleep_p]
             ses = [results.circ_ses, results.physical_ses, results.sleep_ses]
             ax2.scatter(effs, ys[:3], c=colors_list[:3])
@@ -630,8 +624,6 @@ class Plotter:
                 ax1.barh([y], height=height, width=[-numpy.log10(p)], color=c) # Draw p value bars
 
             yticks[rank] = util.wrap(phenotype_name, 30)
-            pvalues.append(ps[top_circ])
-            ranks.append(rank)
         # Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
         # so we will assume worst case, all others ps are 1
         #pvalues = numpy.array(pvalues + [1]*(phenotype_tests.phenotype.nunique() - len(pvalues)))

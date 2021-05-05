@@ -564,6 +564,121 @@ def circadian_component_plots():
     fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_phenotypes[:20], quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
 
+    # Plot the components in a triangular plot
+    def trianglize(coords):
+        # Take values summing to 1 and convert to the equilateral triangle of length 1 in the plane
+        coords = numpy.maximum(coords,0)
+        norm_factors = coords.sum(axis=len(coords.shape)-1)
+        norm_effs = (coords.T/norm_factors).T
+        return norm_effs @ numpy.array([[0,1,0.5], [0,0,numpy.sqrt(3/4)]]).T
+    def triangle_frame(ax):
+        # Draw axis frame in a triangle
+        ax.set_aspect('equal')
+        ax.plot([0,1,0.5,0], [0,0,numpy.sqrt(3/4),0], c="k")
+        ax.annotate("Circadian", (0,0), horizontalalignment="right")
+        ax.annotate("PA", (1,0))
+        ax.annotate("Sleep", (0.5,numpy.sqrt(3/4)))
+        ax.axis('off')
+    def plot_triangular_ses(ax, effs, seses, colors):
+        #color = "#999"
+        for eff, ses, color in zip(effs.values, seses.values, colors):
+            base_point = trianglize(eff)
+            circ_point = trianglize(eff + [ses[0],0,0])
+            physical_point = trianglize(eff + [0,ses[1],0])
+            sleep_point = trianglize(eff + [0,0,ses[2]])
+            #ax.plot(*numpy.array([base_point, circ_point]).T, c=color, zorder=-1)
+            #ax.plot(*numpy.array([base_point, physical_point]).T, c=color, zorder=-1)
+            #ax.plot(*numpy.array([base_point, sleep_point]).T, c=color, zorder=-1)
+            #The negative directions
+            neg_circ_point = trianglize(eff + [-ses[0],0,0])
+            neg_physical_point = trianglize(eff + [0,-ses[1],0])
+            neg_sleep_point = trianglize(eff + [0,0,-ses[2]])
+            ax.plot(*numpy.array([base_point, neg_circ_point]).T, c=color, zorder=-1)
+            ax.plot(*numpy.array([base_point, neg_physical_point]).T, c=color, zorder=-1)
+            ax.plot(*numpy.array([base_point, neg_sleep_point]).T, c=color, zorder=-1)
+            #poly_x, poly_y= numpy.array([
+            #    #base_point,
+            #    circ_point,
+            #    neg_physical_point,
+            #    sleep_point,
+            #    neg_circ_point,
+            #    physical_point,
+            #    neg_sleep_point,
+            #]).T
+            #print(poly_x, poly_y)
+            #ax.fill(
+            #    poly_x,
+            #    poly_y,
+            #    color=color,
+            #    alpha=0.2,
+            #    zorder=-1)
+
+    effs_cols = ['circ_eff', 'physical_eff', 'sleep_eff']
+    ses_cols = ['circ_ses', 'physical_ses', 'sleep_ses']
+    effs = phecode_three_component_tests[effs_cols].abs()
+    effs.set_index(phecode_three_component_tests.phenotype, inplace=True)
+    ses = phecode_three_component_tests[ses_cols].abs()
+    ses.set_index(phecode_three_component_tests.phenotype, inplace=True)
+
+    coords = trianglize(effs.values)
+    fig, ax = pylab.subplots()
+    c = phecode_three_component_tests.phenotype.map(phecode_info.category.map(color_by_phecode_cat))
+    s = -numpy.log10(phecode_three_component_tests.overall_p.astype(float)) + 8
+    ax.scatter(*coords.T, c=c, s=s)
+    plot_triangular_ses(ax, effs, ses, c)
+    triangle_frame(ax)
+    legend_from_colormap(fig, color_by_phecode_cat)
+
+    # Plot the sex differences
+    fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
+    vars = ['circ', 'physical', 'sleep']
+    phecode = phecode_three_component_tests_by_sex.phenotype
+    #colormap = {cat:color for cat, color in
+    #                    zip(phecode.unique(),
+    #                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
+    c = phecode.map(phecode_info.category).map(color_by_phecode_cat)
+    for ax, var in zip(axes, vars):
+        males = phecode_three_component_tests_by_sex[f"male_{var}_eff"]
+        females = phecode_three_component_tests_by_sex[f"female_{var}_eff"]
+        ax.scatter(
+            males, females,
+            c=c
+        )
+        m = min(numpy.min(males), numpy.min(females))
+        M = max(numpy.max(males), numpy.max(females))
+        ax.plot([m,M], [m,M], color='k')
+        ax.set_title(var)
+        ax.set_aspect('equal')
+    axes[0].set_ylabel("Female effect size")
+    legend_from_colormap(fig, color_by_phecode_cat)
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.8) # Make room for legend
+    fig.savefig(OUTDIR+"three_components.phecodes.by_sex.png")
+
+    # Plot the sex differences
+    fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
+    vars = ['circ', 'physical', 'sleep']
+    phenotype = quantitative_three_component_tests_by_sex.phenotype
+    c = phenotype.map(quantitative_variable_descriptions['Functional Categories']).map(color_by_quantitative_function)
+    for ax, var in zip(axes, vars):
+        males = quantitative_three_component_tests_by_sex[f"male_{var}_eff"]
+        females = quantitative_three_component_tests_by_sex[f"female_{var}_eff"]
+        ax.scatter(
+            males, females,
+            c=c
+        )
+        m = min(numpy.min(males), numpy.min(females))
+        M = max(numpy.max(males), numpy.max(females))
+        ax.plot([m,M], [m,M], color='k')
+        ax.set_title(var)
+        ax.set_xlabel("Male effect size")
+        ax.set_aspect('equal')
+    axes[0].set_ylabel("Female effect size")
+    legend_from_colormap(fig, color_by_quantitative_function)
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.8) # Make room for legend
+    fig.savefig(OUTDIR+"three_components.quantitative.by_sex.png")
+
 def objective_subjective_plots():
     ### Comparisons of self-reported versus objectively derived variables
     # Some self-reported variables are closely matched by objectively derived variables
@@ -1460,7 +1575,7 @@ if __name__ == '__main__':
 
     med_differences = phewas_tests.assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE)
 
-    phecode_three_component_tests, quantitative_three_component_tests = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, OUTDIR, RECOMPUTE)
+    phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, OUTDIR, RECOMPUTE)
 
 
     #### Prepare color maps for the plots
