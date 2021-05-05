@@ -532,9 +532,17 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
         top_circ = "temp_RA"
         top_sleep = "main_sleep_ratio_mean"
         top_physical = "acceleration_overall"
+        vars = [top_circ, top_sleep, top_physical]
+        female_vars = ["C(sex, Treatment(reference=-1))[Female]:"+var for var in vars]
+        male_vars = ["C(sex, Treatment(reference=-1))[Male]:"+var for var in vars]
+        covariate_formula = ' + '.join(c for c in covariates)
+        covariate_formula_by_sex = ' + '.join(c for c in covariates if c != 'sex')
+
+
         results_list = []
+        results_by_sex_list = []
+        results_by_age_list = []
         for phenotype in phenotypes:
-            covariate_formula = ' + '.join(c for c in covariates)
             if not quantitative:
                 if data[phenotype].sum() < 1000:
                     # Require at least N = 1000 cases
@@ -542,12 +550,12 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 # Logistic model
                 results = smf.logit(f"Q({phenotype}) ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
                 marginals = results.get_margeff()
-                ps = pandas.Series(results.pvalues, index=results.model.exog_names)[[top_circ, top_physical, top_sleep]]
+                ps = pandas.Series(results.pvalues, index=results.model.exog_names)[vars]
                 overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
-                effs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]].abs()
+                effs = pandas.Series(marginals.margeff, index=results.model.exog_names[1:])[vars]
                 effs *= data[effs.index].std() # Standardize by the actigraphy variables used
                 effs /= data[phenotype].mean() # Standardize by the overall prevalence
-                ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[[top_circ, top_physical, top_sleep]]
+                ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[vars]
                 ses *= data[effs.index].std() # Standardized SEs too
                 ses /= data[phenotype].mean()
             else:
@@ -556,14 +564,15 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                         # but we can't run the regression if there are a tiny number: we use 1000 to be safe
                         continue
                 results = smf.ols(f"{phenotype} ~ {top_circ} + {top_sleep} + {top_physical} + {covariate_formula}", data=data).fit()
-                ps = results.pvalues[[top_circ, top_physical, top_sleep]]
+                ps = results.pvalues[vars]
                 overall_p = results.f_test(f"{top_circ} = 0, {top_sleep} = 0, {top_physical} = 0").pvalue
-                effs = results.params[[top_circ, top_physical, top_sleep]].abs()
+                effs = results.params[vars]
                 effs *= data[effs.index].std() # Standardize by the actigraphy variables used
                 effs /= data[phenotype].std() # Standardize by the phenotype variance
-                ses = results.bse[[top_circ, top_physical, top_sleep]].abs()
+                ses = results.bse[vars].abs()
                 ses *= data[effs.index].std() # Standardize by the actigraphy variables used
                 ses /= data[phenotype].std() # Standardize by the phenotype variance
+
             results_list.append({
                 'phenotype': phenotype,
                 'overall_p': overall_p,
@@ -577,21 +586,119 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 'sleep_ses': ses[top_sleep],
                 'physical_ses': ses[top_physical],
             })
+
+
+            # Sex differences
+            if quantitative:
+                if data.groupby("sex")[phenotype].count().min() < 1000:
+                    # Want at least 1000 per sex with this measurement (most have nearly all)
+                    continue
+                # Sex-difference tests
+                # TODO: should we be normalizing by the sex-specific standard deviations and means?
+                results_by_sex = smf.ols(f"{phenotype} ~ 0 + C(sex, Treatment(reference=-1)) : ({top_circ} + {top_sleep} + {top_physical}) + {covariate_formula_by_sex}", data=data).fit()
+                any_sex_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_circ} = C(sex, Treatment(reference=-1))[Male]:{top_circ}, C(sex, Treatment(reference=-1))[Female]:{top_sleep} = C(sex, Treatment(reference=-1))[Male]:{top_sleep}, C(sex, Treatment(reference=-1))[Female]:{top_physical} = C(sex, Treatment(reference=-1))[Male]:{top_physical}").pvalue
+                circ_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_circ} = C(sex, Treatment(reference=-1))[Male]:{top_circ}").pvalue
+                physical_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_physical} = C(sex, Treatment(reference=-1))[Male]:{top_physical}").pvalue
+                sleep_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_sleep} = C(sex, Treatment(reference=-1))[Male]:{top_sleep}").pvalue
+                ps_females = pandas.Series(results_by_sex.pvalues, index=results_by_sex.model.exog_names)[female_vars]
+                ps_females.index = vars
+                ps_males = pandas.Series(results_by_sex.pvalues, index=results_by_sex.model.exog_names)[male_vars]
+                ps_males.index = vars
+                effs_females = pandas.Series(results_by_sex.params, index=results_by_sex.model.exog_names)[female_vars]
+                effs_females.index = vars
+                effs_females *= data[effs_females.index].std() # Standardize by the actigraphy variables used
+                effs_females /= data[phenotype].std() # Standardize by the phenotype variance
+                effs_males = pandas.Series(results_by_sex.params, index=results_by_sex.model.exog_names)[male_vars]
+                effs_males.index = vars
+                effs_males *= data[effs_males.index].std() # Standardize by the actigraphy variables used
+                effs_males /= data[phenotype].std() # Standardize by the phenotype variance
+                ses_females = pandas.Series(results_by_sex.bse, index=results_by_sex.model.exog_names)[female_vars]
+                ses_females.index = vars
+                ses_females *= data[ses_females.index].std() # Standardized SEs too
+                ses_females /= data[phenotype].std() # Standardize by the phenotype variance
+                ses_males = pandas.Series(results_by_sex.bse, index=results_by_sex.model.exog_names)[male_vars]
+                ses_males.index = vars
+                ses_males *= data[ses_males.index].std() # Standardized SEs too
+                ses_males /= data[phenotype].std() # Standardize by the phenotype variance
+
+            else:
+                if data.groupby('sex')[phenotype].sum().min() < 1000:
+                    # Want at least 1000 cases in each sex
+                    continue
+                # Sex-difference tests
+                # TODO: should we be normalizing by the sex-specific standard deviations and means?
+                results_by_sex = smf.logit(f"Q({phenotype}) ~ 0 + C(sex, Treatment(reference=-1)) : ({top_circ} + {top_sleep} + {top_physical}) + {covariate_formula_by_sex}", data=data).fit()
+                any_sex_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_circ} = C(sex, Treatment(reference=-1))[Male]:{top_circ}, C(sex, Treatment(reference=-1))[Female]:{top_sleep} = C(sex, Treatment(reference=-1))[Male]:{top_sleep}, C(sex, Treatment(reference=-1))[Female]:{top_physical} = C(sex, Treatment(reference=-1))[Male]:{top_physical}").pvalue
+                circ_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_circ} = C(sex, Treatment(reference=-1))[Male]:{top_circ}").pvalue
+                physical_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_physical} = C(sex, Treatment(reference=-1))[Male]:{top_physical}").pvalue
+                sleep_difference_p = results_by_sex.f_test(f"C(sex, Treatment(reference=-1))[Female]:{top_sleep} = C(sex, Treatment(reference=-1))[Male]:{top_sleep}").pvalue
+                ps_females = pandas.Series(results_by_sex.pvalues, index=results_by_sex.model.exog_names)[female_vars]
+                ps_females.index = vars
+                ps_males = pandas.Series(results_by_sex.pvalues, index=results_by_sex.model.exog_names)[male_vars]
+                ps_males.index = vars
+                marginals_by_sex = results_by_sex.get_margeff()
+                effs_females = pandas.Series(marginals_by_sex.margeff, index=results_by_sex.model.exog_names)[female_vars]
+                effs_females.index = vars
+                effs_females *= data[effs_females.index].std() # Standardize by the actigraphy variables used
+                effs_females /= data[phenotype].mean() # Standardize by the overall prevalence
+                effs_males = pandas.Series(marginals_by_sex.margeff, index=results_by_sex.model.exog_names)[male_vars]
+                effs_males.index = vars
+                effs_males *= data[effs_males.index].std() # Standardize by the actigraphy variables used
+                effs_males /= data[phenotype].mean() # Standardize by the overall prevalence
+                ses_females = pandas.Series(marginals_by_sex.margeff_se, index=results_by_sex.model.exog_names)[female_vars]
+                ses_females.index = vars
+                ses_females *= data[ses_females.index].std() # Standardized SEs too
+                ses_females /= data[phenotype].mean()
+                ses_males = pandas.Series(marginals_by_sex.margeff_se, index=results_by_sex.model.exog_names)[male_vars]
+                ses_males.index = vars
+                ses_males *= data[ses_males.index].std() # Standardized SEs too
+                ses_males /= data[phenotype].mean()
+
+            results_by_sex_list.append({
+                'phenotype': phenotype,
+                'any_sex_difference_p': any_sex_difference_p,
+                'circ_sex_difference_p': circ_difference_p,
+                'sleep_sex_difference_p': sleep_difference_p,
+                'physical_sex_difference_p': physical_difference_p,
+                'male_circ_p': ps_males[top_circ],
+                'male_sleep_p': ps_males[top_sleep],
+                'male_physical_p': ps_males[top_physical],
+                'male_circ_eff': effs_males[top_circ],
+                'male_sleep_eff': effs_males[top_sleep],
+                'male_physical_eff': effs_males[top_physical],
+                'male_circ_ses': ses_males[top_circ],
+                'male_sleep_ses': ses_males[top_sleep],
+                'male_physical_ses': ses_males[top_physical],
+                'female_circ_p': ps_females[top_circ],
+                'female_sleep_p': ps_females[top_sleep],
+                'female_physical_p': ps_females[top_physical],
+                'female_circ_eff': effs_females[top_circ],
+                'female_sleep_eff': effs_females[top_sleep],
+                'female_physical_eff': effs_females[top_physical],
+                'female_circ_ses': ses_females[top_circ],
+                'female_sleep_ses': ses_females[top_sleep],
+                'female_physical_ses': ses_females[top_physical],
+            })
         results = pandas.DataFrame(results_list)
-        return results
+        results_by_sex = pandas.DataFrame(results_by_sex_list)
+        return results, results_by_sex
 
     if not RECOMPUTE:
         try:
             phecode_three_component_tests = pandas.read_csv(OUTDIR+"phecodes.three_components.txt", sep="\t")
+            phecode_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t")
             quantitative_three_component_tests = pandas.read_csv(OUTDIR+"quantitative.three_components.txt", sep="\t")
-            return phecode_three_component_tests, quantitative_three_component_tests
+            quantitative_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t")
+            return phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex
         except FileNotFoundError:
             pass
     
-    phecode_three_component_tests = test(phecodes, quantitative=False)
+    phecode_three_component_tests, phecode_three_component_tests_by_sex = test(phecodes, quantitative=False)
     phecode_three_component_tests.to_csv(OUTDIR+"phecodes.three_components.txt", sep="\t", index=False)
+    phecode_three_component_tests_by_sex.to_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t", index=False)
 
-    quantitative_three_component_tests = test(quantitative_variables, quantitative=True)
+    quantitative_three_component_tests, quantitative_three_component_tests_by_sex = test(quantitative_variables, quantitative=True)
     quantitative_three_component_tests.to_csv(OUTDIR+"quantitative.three_components.txt", sep="\t", index=False)
+    quantitative_three_component_tests_by_sex.to_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t", index=False)
 
-    return phecode_three_component_tests, quantitative_three_component_tests
+    return phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex
