@@ -7,6 +7,14 @@ import pandas
 from util import BH_FDR
 import fields_of_interest
 
+def ps_to_qs(df):
+    for col in df:
+        if col.endswith("_p"):
+            # Generate a _q column too
+            q_col = col[:-2] + "_q"
+            df[q_col] = BH_FDR(df[col])
+    return df
+
 # List of covariates we will controll for in the linear model
 covariates = ["sex", "ethnicity_white", "overall_health_good", "high_income", "smoking_ever", "age_at_actigraphy", "BMI", "college_education"]
 survival_covariates = ["BMI", "smoking_ever"]
@@ -527,7 +535,7 @@ def assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMP
     return med_differences
 
 
-def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOMPUTE=True):
+def three_components_tests(data, phecodes, quantitative_variables, phecode_info, OUTDIR, RECOMPUTE=True):
     def test(phenotypes, quantitative):
         top_circ = "temp_RA"
         top_sleep = "main_sleep_ratio_mean"
@@ -535,6 +543,7 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
         vars = [top_circ, top_sleep, top_physical]
         female_vars = ["C(sex, Treatment(reference=-1))[Female]:"+var for var in vars]
         male_vars = ["C(sex, Treatment(reference=-1))[Male]:"+var for var in vars]
+        age_vars = ["age_at_actigraphy:"+var for var in vars]
         covariate_formula = ' + '.join(c for c in covariates)
         covariate_formula_by_sex = ' + '.join(c for c in covariates if c != 'sex')
 
@@ -543,6 +552,10 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
         results_by_sex_list = []
         results_by_age_list = []
         for phenotype in phenotypes:
+            if phenotype in covariates:
+                # Meaningless regression to have it both exog and endog
+                continue
+
             if not quantitative:
                 if data[phenotype].sum() < 1000:
                     # Require at least N = 1000 cases
@@ -574,7 +587,7 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 ses /= data[phenotype].std() # Standardize by the phenotype variance
 
             results_list.append({
-                'phenotype': phenotype,
+                'phenotype': phenotype if quantitative else phecode_info.loc[phenotype].phenotype,
                 'overall_p': overall_p,
                 'circ_p': ps[top_circ],
                 'sleep_p': ps[top_sleep],
@@ -582,9 +595,81 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 'circ_eff': effs[top_circ],
                 'sleep_eff': effs[top_sleep],
                 'physical_eff': effs[top_physical],
-                'circ_ses': ses[top_circ],
-                'sleep_ses': ses[top_sleep],
-                'physical_ses': ses[top_physical],
+                'circ_se': ses[top_circ],
+                'sleep_se': ses[top_sleep],
+                'physical_se': ses[top_physical],
+            })
+
+            # Age-difference tests
+            if not quantitative:
+                if data[phenotype].sum() < 1000:
+                    # Require at least N = 1000 cases
+                    continue
+                # Logistic model
+                try:
+                    results = smf.logit(f"Q({phenotype}) ~ age_at_actigraphy*({top_circ} + {top_sleep} + {top_physical}) + {covariate_formula}", data=data).fit()
+                except numpy.linalg.LinAlgError:
+                    print(f"LinAlgError on {phenotype} age effects")
+                    continue
+                marginals = pandas.Series(results.get_margeff().margeff, index=results.model.exog_names[1:])
+                any_age_difference_p = results.f_test(f"age_at_actigraphy:{top_circ} = 0, age_at_actigraphy:{top_sleep} = 0, age_at_actigraphy:{top_physical} = 0").pvalue
+                circ_age_difference_p = results.f_test(f"age_at_actigraphy:{top_circ} = 0").pvalue
+                sleep_age_difference_p = results.f_test(f"age_at_actigraphy:{top_sleep} = 0").pvalue
+                physical_age_difference_p = results.f_test(f"age_at_actigraphy:{top_physical} = 0").pvalue
+                base_effs = marginals[vars]
+                base_effs.index = vars
+                base_effs *= data[vars].std() # Standardize by the actigraphy variables used
+                base_effs /= data[phenotype].mean() # Standardize by the overall prevalence
+                age_effs = marginals[age_vars]
+                age_effs.index = vars
+                age_effs *= data[vars].std() # Standardize by the actigraphy variables used
+                age_effs /= data[phenotype].mean() # Standardize by the overall prevalence
+                age_ses = results.bse[age_vars].abs()
+                age_ses.index = vars
+                age_ses *= data[vars].std() # Standardize by the actigraphy variables used
+                age_ses /= data[phenotype].mean()
+                age55_effs = age_effs*55 + base_effs
+                age70_effs = age_effs*70 + base_effs
+            else:
+                if data[phenotype].count() < 1000:
+                        #  Most quantitative variables are available in nearly everyone
+                        # but we can't run the regression if there are a tiny number: we use 1000 to be safe
+                        continue
+                results = smf.ols(f"{phenotype} ~ age_at_actigraphy*({top_circ} + {top_sleep} + {top_physical}) + {covariate_formula}", data=data).fit()
+                any_age_difference_p = results.f_test(f"age_at_actigraphy:{top_circ} = 0, age_at_actigraphy:{top_sleep} = 0, age_at_actigraphy:{top_physical} = 0").pvalue
+                circ_age_difference_p = results.f_test(f"age_at_actigraphy:{top_circ} = 0").pvalue
+                sleep_age_difference_p = results.f_test(f"age_at_actigraphy:{top_sleep} = 0").pvalue
+                physical_age_difference_p = results.f_test(f"age_at_actigraphy:{top_physical} = 0").pvalue
+                base_effs = results.params[vars]
+                base_effs.index = vars
+                base_effs *= data[effs.index].std() # Standardize by the actigraphy variables used
+                base_effs /= data[phenotype].std() # Standardize by the phenotype variance
+                age_effs = results.params[age_vars]
+                age_effs.index = vars
+                age_effs *= data[effs.index].std() # Standardize by the actigraphy variables used
+                age_effs /= data[phenotype].std() # Standardize by the phenotype variance
+                age_ses = results.bse[age_vars].abs()
+                age_ses.index = vars
+                age_ses *= data[effs.index].std() # Standardize by the actigraphy variables used
+                age_ses /= data[phenotype].std() # Standardize by the phenotype variance
+                age55_effs = age_effs*55 + base_effs
+                age70_effs = age_effs*70 + base_effs
+
+            results_by_age_list.append({
+                'phenotype': phenotype if quantitative else phecode_info.loc[phenotype].phenotype,
+                'any_age_difference_p': any_age_difference_p,
+                'circ_age_difference_p': circ_age_difference_p,
+                'sleep_age_difference_p': sleep_age_difference_p,
+                'physical_age_difference_p': physical_age_difference_p,
+                'age55_circ_eff': age55_effs[top_circ],
+                'age55_sleep_eff': age55_effs[top_sleep],
+                'age55_physical_eff': age55_effs[top_physical],
+                'age70_circ_eff': age70_effs[top_circ],
+                'age70_sleep_eff': age70_effs[top_sleep],
+                'age70_physical_eff': age70_effs[top_physical],
+                'age_circ_se': ses[top_circ],
+                'age_sleep_se': ses[top_sleep],
+                'age_physical_se': ses[top_physical],
             })
 
 
@@ -655,7 +740,7 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 ses_males /= data[phenotype].mean()
 
             results_by_sex_list.append({
-                'phenotype': phenotype,
+                'phenotype': phenotype if quantitative else phecode_info.loc[phenotype].phenotype,
                 'any_sex_difference_p': any_sex_difference_p,
                 'circ_sex_difference_p': circ_difference_p,
                 'sleep_sex_difference_p': sleep_difference_p,
@@ -666,39 +751,51 @@ def three_components_tests(data, phecodes, quantitative_variables, OUTDIR, RECOM
                 'male_circ_eff': effs_males[top_circ],
                 'male_sleep_eff': effs_males[top_sleep],
                 'male_physical_eff': effs_males[top_physical],
-                'male_circ_ses': ses_males[top_circ],
-                'male_sleep_ses': ses_males[top_sleep],
-                'male_physical_ses': ses_males[top_physical],
+                'male_circ_se': ses_males[top_circ],
+                'male_sleep_se': ses_males[top_sleep],
+                'male_physical_se': ses_males[top_physical],
                 'female_circ_p': ps_females[top_circ],
                 'female_sleep_p': ps_females[top_sleep],
                 'female_physical_p': ps_females[top_physical],
                 'female_circ_eff': effs_females[top_circ],
                 'female_sleep_eff': effs_females[top_sleep],
                 'female_physical_eff': effs_females[top_physical],
-                'female_circ_ses': ses_females[top_circ],
-                'female_sleep_ses': ses_females[top_sleep],
-                'female_physical_ses': ses_females[top_physical],
+                'female_circ_se': ses_females[top_circ],
+                'female_sleep_se': ses_females[top_sleep],
+                'female_physical_se': ses_females[top_physical],
             })
+
         results = pandas.DataFrame(results_list)
         results_by_sex = pandas.DataFrame(results_by_sex_list)
-        return results, results_by_sex
+        results_by_age = pandas.DataFrame(results_by_age_list)
+        return results, results_by_sex, results_by_age
 
     if not RECOMPUTE:
         try:
             phecode_three_component_tests = pandas.read_csv(OUTDIR+"phecodes.three_components.txt", sep="\t")
             phecode_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t")
+            phecode_three_component_tests_by_age = pandas.read_csv(OUTDIR+"phecodes.three_components.by_age.txt", sep="\t")
             quantitative_three_component_tests = pandas.read_csv(OUTDIR+"quantitative.three_components.txt", sep="\t")
             quantitative_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t")
-            return phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex
+            quantitative_three_component_tests_by_age = pandas.read_csv(OUTDIR+"quantitative.three_components.by_age.txt", sep="\t")
+            return phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age
         except FileNotFoundError:
             pass
     
-    phecode_three_component_tests, phecode_three_component_tests_by_sex = test(phecodes, quantitative=False)
+    phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age = test(phecodes, quantitative=False)
+    ps_to_qs(phecode_three_component_tests)
+    ps_to_qs(phecode_three_component_tests_by_sex)
+    ps_to_qs(phecode_three_component_tests_by_age)
     phecode_three_component_tests.to_csv(OUTDIR+"phecodes.three_components.txt", sep="\t", index=False)
     phecode_three_component_tests_by_sex.to_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t", index=False)
+    phecode_three_component_tests_by_age.to_csv(OUTDIR+"phecodes.three_components.by_age.txt", sep="\t", index=False)
 
-    quantitative_three_component_tests, quantitative_three_component_tests_by_sex = test(quantitative_variables, quantitative=True)
+    quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = test(quantitative_variables, quantitative=True)
+    ps_to_qs(phecode_three_component_tests)
+    ps_to_qs(phecode_three_component_tests_by_sex)
+    ps_to_qs(phecode_three_component_tests_by_age)
     quantitative_three_component_tests.to_csv(OUTDIR+"quantitative.three_components.txt", sep="\t", index=False)
     quantitative_three_component_tests_by_sex.to_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t", index=False)
+    quantitative_three_component_tests_by_age.to_csv(OUTDIR+"quantitative.three_components.by_age.txt", sep="\t", index=False)
 
-    return phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex
+    return phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age

@@ -636,7 +636,7 @@ def circadian_component_plots():
     #colormap = {cat:color for cat, color in
     #                    zip(phecode.unique(),
     #                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
-    c = phecode.map(phecode_info.category).map(color_by_phecode_cat)
+    c = phecode.map(phecode_info.set_index('phenotype').category).map(color_by_phecode_cat)
     for ax, var in zip(axes, vars):
         males = phecode_three_component_tests_by_sex[f"male_{var}_eff"]
         females = phecode_three_component_tests_by_sex[f"female_{var}_eff"]
@@ -649,13 +649,14 @@ def circadian_component_plots():
         ax.plot([m,M], [m,M], color='k')
         ax.set_title(var)
         ax.set_aspect('equal')
+        ax.set_xlabel("Male effect size")
     axes[0].set_ylabel("Female effect size")
     legend_from_colormap(fig, color_by_phecode_cat)
     fig.tight_layout()
     fig.subplots_adjust(right=0.8) # Make room for legend
     fig.savefig(OUTDIR+"three_components.phecodes.by_sex.png")
 
-    # Plot the sex differences
+    # Plot the sex differences in quantitative
     fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
     vars = ['circ', 'physical', 'sleep']
     phenotype = quantitative_three_component_tests_by_sex.phenotype
@@ -678,6 +679,55 @@ def circadian_component_plots():
     fig.tight_layout()
     fig.subplots_adjust(right=0.8) # Make room for legend
     fig.savefig(OUTDIR+"three_components.quantitative.by_sex.png")
+
+    # Plot the age differences
+    fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
+    vars = ['circ', 'physical', 'sleep']
+    phecode = phecode_three_component_tests_by_age.phenotype
+    c = phecode.map(phecode_info.set_index('phenotype').category).map(color_by_phecode_cat)
+    for ax, var in zip(axes, vars):
+        age55 = phecode_three_component_tests_by_age[f"age55_{var}_eff"]
+        age70 = phecode_three_component_tests_by_age[f"age70_{var}_eff"]
+        ax.scatter(
+            age55, age70,
+            c=c
+        )
+        m = min(numpy.min(age55), numpy.min(age70))
+        M = max(numpy.max(age55), numpy.max(age70))
+        ax.plot([m,M], [m,M], color='k')
+        ax.set_title(var)
+        ax.set_aspect('equal')
+        ax.set_xlabel("Age 55 effect size")
+    axes[0].set_ylabel("Age 70 effect size")
+    legend_from_colormap(fig, color_by_phecode_cat)
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.8) # Make room for legend
+    fig.savefig(OUTDIR+"three_components.phecodes.by_age.png")
+
+    # Plot the age differences in quantitative
+    fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
+    vars = ['circ', 'physical', 'sleep']
+    phenotype = quantitative_three_component_tests_by_age.phenotype
+    c = phenotype.map(quantitative_variable_descriptions['Functional Categories']).map(color_by_quantitative_function)
+    for ax, var in zip(axes, vars):
+        age55 = quantitative_three_component_tests_by_age[f"age55_{var}_eff"]
+        age70 = quantitative_three_component_tests_by_age[f"age70_{var}_eff"]
+        ax.scatter(
+            age55, age70,
+            c=c
+        )
+        m = min(numpy.min(age55), numpy.min(age70))
+        M = max(numpy.max(age55), numpy.max(age70))
+        ax.plot([m,M], [m,M], color='k')
+        ax.set_title(var)
+        ax.set_aspect('equal')
+        ax.set_xlabel("Age 55 effect size")
+    axes[0].set_ylabel("Age 70 effect size")
+    legend_from_colormap(fig, color_by_quantitative_function)
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.8) # Make room for legend
+    fig.savefig(OUTDIR+"three_components.quantitative.by_age.png")
+
 
 def objective_subjective_plots():
     ### Comparisons of self-reported versus objectively derived variables
@@ -1575,7 +1625,7 @@ if __name__ == '__main__':
 
     med_differences = phewas_tests.assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE)
 
-    phecode_three_component_tests, phecode_three_component_tests_by_sex, quantitative_three_component_tests, quantitative_three_component_tests_by_sex = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, OUTDIR, RECOMPUTE)
+    phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, phecode_info, OUTDIR, RECOMPUTE)
 
 
     #### Prepare color maps for the plots
