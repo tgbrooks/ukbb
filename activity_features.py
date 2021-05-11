@@ -373,6 +373,40 @@ def detailed_stats(activity, M10_time=None, L5_time=None):
         "RA": (overall_M10 - overall_L5)/(overall_M10 + overall_L5),
     }
 
+def temp_features(temp):
+    ''' Features derived from the temperature curve '''
+
+    # Since the starts and ends are unreliable, we drop the first and last 6 hours
+    trimmed_start = temp.index[0] + pandas.to_timedelta("6H")
+    trimmed_end = temp.index[-1] - pandas.to_timedelta("6H")
+    temp = temp[(temp.index > trimmed_start) & (temp.index < trimmed_end)]
+
+    # Examine the trough, most often in early morning shortly after rising
+    TZ = temp.index[0].tz
+    time_since_midnight = temp.index - pandas.to_datetime(temp.index.date).tz_localize(TZ)
+    average = temp.groupby(time_since_midnight).mean()
+    L1_end = average.rolling(1 * HOURS_TO_COUNTS).sum().idxmin() - pandas.to_timedelta("1ms")
+    L1_start = L1_end - pandas.to_timedelta("1H")
+    L1_midpoint = L1_end - pandas.to_timedelta("1H")/2
+    L1_value = average[L1_start:L1_end].mean()
+
+    # Do the same trough but use the median instead of mean values to maximize
+    # in case there are outlier values driving the trough
+    L1_median_end = average.rolling(1 * HOURS_TO_COUNTS).median().idxmin() - pandas.to_timedelta("1ms")
+    L1_median_start = L1_median_end - pandas.to_timedelta("1H")
+    L1_median_midpoint = L1_median_end - pandas.to_timedelta("1H")/2
+    L1_median_value = average[L1_median_start:L1_median_end].mean()
+
+    cosinor_values = cosinor(temp)
+
+    return {
+        "temp_L1_time": L1_midpoint / pandas.to_timedelta("1H"),
+        "temp_l1_value": L1_value,
+        "temp_L1_median_time": L1_median_midpoint / pandas.to_timedelta("1H"),
+        "temp_l1_value": L1_median_value,
+        **{"temp_"+k:v for k,v in cosinor_values.items()},
+    }
+
 def activity_features(data):
     ''' return dictionary of result summary values '''
 
@@ -526,6 +560,9 @@ def activity_features(data):
 
     # Run cosinor on the activity variables
     results.update(cosinor(data.acceleration))
+
+    # Add the general temperature-base values
+    results.update(temp_features(data.temp))
 
     # Compute the MVPA and VPA columns from MET
     if 'MET' in data.columns:
