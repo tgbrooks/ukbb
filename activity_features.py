@@ -380,6 +380,8 @@ def temp_features(temp):
     trimmed_start = temp.index[0] + pandas.to_timedelta("6H")
     trimmed_end = temp.index[-1] - pandas.to_timedelta("6H")
     temp = temp[(temp.index > trimmed_start) & (temp.index < trimmed_end)]
+    if len(temp) == 0:
+        return {}
 
     # Examine the trough, most often in early morning shortly after rising
     TZ = temp.index[0].tz
