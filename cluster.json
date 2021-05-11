@@ -8,4 +8,10 @@
     "aggregate": {
         memory: 40000,
     },
+    "process_ukbb_table": {
+        memory: 40000,
+    },
+    "process_ukbb_table_general": {
+        memory: 40000,
+    },
 }
