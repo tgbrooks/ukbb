@@ -935,7 +935,8 @@ def temperature_trace_plots(N_IDS=500):
     ids = day_plots.get_ids_of_traces_available()
 
     def temp_to_C(temp):
-        return (500*temp - 2550)/256 # Convert "temp" units to Celsius
+        return temp
+        #return (500*temp - 2550)/256 # Convert "temp" units to Celsius
         #TODO: should we be doing this at another step??
 
     ## Overall temperature cycle

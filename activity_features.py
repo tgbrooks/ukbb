@@ -252,7 +252,7 @@ def IV(activity):
     IV = (hourly_avg.diff(1)**2).mean() / hourly_avg.var(ddof=0)
     return IV
 
-def cosinor(activity):
+def cosinor(activity, log=True):
     '''
     Cosine-fit phase, amplitude and mesor for a given measure
     '''
@@ -264,8 +264,10 @@ def cosinor(activity):
     const = numpy.ones(len(activity))
     exog = numpy.array([const, cos_term, sin_term]).T
 
-    #values = activity.values
-    values = numpy.log10(activity.values+1)
+    if log:
+        values = numpy.log10(activity.values+1)
+    else:
+        values = activity.values
     try:
         results = sm.OLS(values, exog, missing="drop").fit()
         reduced = sm.OLS(values, const, missing="drop").fit()
@@ -399,7 +401,7 @@ def temp_features(temp):
     L1_median_midpoint = L1_median_end - pandas.to_timedelta("1H")/2
     L1_median_value = average[L1_median_start:L1_median_end].mean()
 
-    cosinor_values = cosinor(temp)
+    cosinor_values = cosinor(temp, log=False)
 
     return {
         "temp_L1_time": L1_midpoint / pandas.to_timedelta("1H"),
@@ -697,6 +699,13 @@ def load_activity_file(input):
     imputed = data.imputed.copy()
     data[imputed == 1] = float("NaN")
     data.imputed = imputed
+
+    # Convert the temperature values to C
+    def temp_to_C(temp):
+        return (500*temp - 2550)/256 # Convert "temp" units to Celsius
+    if 'temp' in data:
+        data.temp = temp_to_C(data.temp)
+
     return data
 
 
