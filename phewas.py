@@ -1,5 +1,6 @@
 import math
 import re
+import pathlib
 import pandas
 import numpy
 import seaborn as sns
@@ -1248,14 +1249,14 @@ def age_by_categorical_question(phecode, question, responses):
 def age_interaction_plots():
     lipoprotein_vars = ["cholesterol", "hdl_cholesterol", "ldl_direct", "triglycerides", "apolipoprotein_A", "apolipoprotein_B", "lipoprotein_A"]
     for var in lipoprotein_vars:
-        fig = plot_quantitative_by_age(var, "acceleration_overall")
-        fig.savefig(OUTDIR+f"by_age.{var}.vs.acceleration_overall.png")
-        fig = plot_quantitative_by_age(var, "IPAQ_activity_group", categorical=True)
-        fig.savefig(OUTDIR+f"by_age_.{var}.vs.IPAQ_activity_group.png")
+        fig, ax = plot_quantitative_by_age(var, "acceleration_overall")
+        fig.savefig(OUTDIR+f"cholesterol.by_age.{var}.vs.acceleration_overall.png")
+        fig, ax = plot_quantitative_by_age(var, "IPAQ_activity_group", categorical=True)
+        fig.savefig(OUTDIR+f"cholesterol.by_age_.{var}.vs.IPAQ_activity_group.png")
     df = data.copy()
     df['cholesterol_ratio'] = data.cholesterol / data.hdl_cholesterol
-    fig = plot_quantitative_by_age("cholesterol_ratio", "acceleration_overall", df=df, name="Cholesterol Ratio")
-    fig.savefig(OUTDIR+"by_age.cholesterol_ratio.vs.acceleration_overall.png")
+    fig, ax = plot_quantitative_by_age("cholesterol_ratio", "acceleration_overall", df=df, name="Cholesterol Ratio")
+    fig.savefig(OUTDIR+"cholesterol/by_age.cholesterol_ratio.vs.acceleration_overall.png")
 
     # By sex
     no_cholesterol_meds = ((data.medication_cholesterol_bp_diabetes_or_exog_hormones_Cholesterol_lowering_medication == 0) # For males
@@ -1274,12 +1275,12 @@ def age_interaction_plots():
                 ax.set_title(f"{sex} - by acceleration_overall")
                 _, ax = plot_quantitative_by_age(var, "IPAQ_activity_group", df=df[df.sex==sex], ax=axes[i, 1], categorical=True)
                 ax.set_title(f"{sex} - by IPAQ_activity_group")
-            fig.savefig(OUTDIR+f"by_age.by_sex.{var}.combined.{meds_status}.png")
+            fig.savefig(OUTDIR+f"cholesterol/by_age.by_sex.{var}.combined.{meds_status}.png")
 
 
     renal_function_vars = quantitative_variable_descriptions.index[quantitative_variable_descriptions['Functional Categories'] == 'Renal Function']
     for var in renal_function_vars:
-        fig = plot_quantitative_by_age(var, "acceleration_overall")
+        fig, ax = plot_quantitative_by_age(var, "acceleration_overall")
         fig.savefig(OUTDIR+f"by_age.{var}.vs.acceleration_overall.png")
 
     # Plot multiple response questions by age and case-control
@@ -1574,6 +1575,10 @@ if __name__ == '__main__':
     RECOMPUTE = args.force_recompute
     OUTDIR = f"../global_phewas/cohort{COHORT}/"
     FDR_CUTOFF_VALUE = 0.05
+
+    # Prep sub directories
+    outdir = pathlib.Path(OUTDIR)
+    (outdir/"cholesterol").mkdir(exist_ok=True)
 
     #### Load and preprocess the underlying data
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
