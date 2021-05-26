@@ -607,16 +607,14 @@ class Plotter:
         fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
         yticks = {}
 
-        test_results = test_results.set_index("phenotype")
-
         for rank, phenotype in enumerate(phenotypes):
             results = test_results.loc[phenotype]
-            phenotype_name = self.phecode_info.loc[phenotype].phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
+            phenotype_name = phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
             height = 0.15 #Height of the bar plots (1 unit is the spacing between variables)
             ys = numpy.linspace(rank-height*1.5, rank+height*1.5, 4)
             effs = numpy.abs([results.circ_eff, results.physical_eff, results.sleep_eff])
             ps = [results.circ_p, results.physical_p, results.sleep_p]
-            ses = [results.circ_ses, results.physical_ses, results.sleep_ses]
+            ses = [results.circ_se, results.physical_se, results.sleep_se]
             ax2.scatter(effs, ys[:3], c=colors_list[:3])
             for eff, se, y, c, p in zip(effs, ses, ys, colors_list, ps):
                 ax2.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c) # Draw effect sizes
