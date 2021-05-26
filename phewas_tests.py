@@ -535,17 +535,28 @@ def assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMP
     return med_differences
 
 
-def three_components_tests(data, phecodes, quantitative_variables, phecode_info, OUTDIR, RECOMPUTE=True):
+def three_components_tests(data, phecodes, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE=True, include_medications=True, circ_var="temp_RA"):
+    # Categories of medication that we control for in quantitative traits
+    med_control_categories = {
+        "Lipoprotein Profile": {
+            "med": ['medication_cholesterol_bp_diabetes_Cholesterol_lowering_medication', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Cholesterol_lowering_medication'],
+        },
+        "Cardiovascular Function": {
+            "med": ['medication_cholesterol_bp_diabetes_Blood_pressure_medication', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Blood_pressure_medication'],
+        },
+        "Glucose Metabolism": {
+            "med": ['medication_cholesterol_bp_diabetes_Insulin', 'medication_cholesterol_bp_diabetes_or_exog_hormones_Insulin'],
+        },
+    }
+
     def test(phenotypes, quantitative):
-        top_circ = "temp_RA"
+        top_circ = circ_var
         top_sleep = "main_sleep_ratio_mean"
         top_physical = "acceleration_overall"
         vars = [top_circ, top_sleep, top_physical]
         female_vars = ["C(sex, Treatment(reference=-1))[Female]:"+var for var in vars]
         male_vars = ["C(sex, Treatment(reference=-1))[Male]:"+var for var in vars]
         age_vars = ["age_at_actigraphy:"+var for var in vars]
-        covariate_formula = ' + '.join(c for c in covariates)
-        covariate_formula_by_sex = ' + '.join(c for c in covariates if c != 'sex')
 
 
         results_list = []
@@ -555,6 +566,18 @@ def three_components_tests(data, phecodes, quantitative_variables, phecode_info,
             if phenotype in covariates:
                 # Meaningless regression to have it both exog and endog
                 continue
+
+            # Generate the covariate formulas
+            covariate_formula = ' + '.join(c for c in covariates)
+            covariate_formula_by_sex = ' + '.join(c for c in covariates if c != 'sex')
+            if quantitative and include_medications:
+                # Check if we need to include the medication covariate
+                functional_category = quantitative_variable_descriptions.loc[phenotype, 'Functional Categories'] 
+                if functional_category in med_control_categories:
+                    control = med_control_categories[functional_category]
+                    data['med_control'] = data[control['med']].any(axis=1)
+                    covariate_formula = covariate_formula + " + med_control"
+                    covariate_formula_by_sex = covariate_formula_by_sex  + "+ med_control"
 
             if not quantitative:
                 if data[phenotype].sum() < 1000:
@@ -571,6 +594,7 @@ def three_components_tests(data, phecodes, quantitative_variables, phecode_info,
                 ses = pandas.Series(marginals.margeff_se, index=results.model.exog_names[1:])[vars]
                 ses *= data[effs.index].std() # Standardized SEs too
                 ses /= data[phenotype].mean()
+
             else:
                 if data[phenotype].count() < 1000:
                         #  Most quantitative variables are available in nearly everyone
@@ -765,19 +789,19 @@ def three_components_tests(data, phecodes, quantitative_variables, phecode_info,
                 'female_physical_se': ses_females[top_physical],
             })
 
-        results = pandas.DataFrame(results_list)
-        results_by_sex = pandas.DataFrame(results_by_sex_list)
-        results_by_age = pandas.DataFrame(results_by_age_list)
+        results = pandas.DataFrame(results_list).set_index('phenotype')
+        results_by_sex = pandas.DataFrame(results_by_sex_list).set_index('phenotype')
+        results_by_age = pandas.DataFrame(results_by_age_list).set_index('phenotype')
         return results, results_by_sex, results_by_age
 
     if not RECOMPUTE:
         try:
-            phecode_three_component_tests = pandas.read_csv(OUTDIR+"phecodes.three_components.txt", sep="\t")
-            phecode_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t")
-            phecode_three_component_tests_by_age = pandas.read_csv(OUTDIR+"phecodes.three_components.by_age.txt", sep="\t")
-            quantitative_three_component_tests = pandas.read_csv(OUTDIR+"quantitative.three_components.txt", sep="\t")
-            quantitative_three_component_tests_by_sex = pandas.read_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t")
-            quantitative_three_component_tests_by_age = pandas.read_csv(OUTDIR+"quantitative.three_components.by_age.txt", sep="\t")
+            phecode_three_component_tests = pandas.read_csv(OUTDIR+f"phecodes.three_components.{circ_var}.txt", sep="\t", index_col=0)
+            phecode_three_component_tests_by_sex = pandas.read_csv(OUTDIR+f"phecodes.three_components.{circ_var}.by_sex.txt", sep="\t", index_col=0)
+            phecode_three_component_tests_by_age = pandas.read_csv(OUTDIR+f"phecodes.three_components.{circ_var}.by_age.txt", sep="\t", index_col=0)
+            quantitative_three_component_tests = pandas.read_csv(OUTDIR+f"quantitative.three_components.{circ_var}.txt", sep="\t", index_col=0)
+            quantitative_three_component_tests_by_sex = pandas.read_csv(OUTDIR+f"quantitative.three_components.{circ_var}.by_sex.txt", sep="\t", index_col=0)
+            quantitative_three_component_tests_by_age = pandas.read_csv(OUTDIR+f"quantitative.three_components.{circ_var}.by_age.txt", sep="\t", index_col=0)
             return phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age
         except FileNotFoundError:
             pass
@@ -786,16 +810,16 @@ def three_components_tests(data, phecodes, quantitative_variables, phecode_info,
     ps_to_qs(phecode_three_component_tests)
     ps_to_qs(phecode_three_component_tests_by_sex)
     ps_to_qs(phecode_three_component_tests_by_age)
-    phecode_three_component_tests.to_csv(OUTDIR+"phecodes.three_components.txt", sep="\t", index=False)
-    phecode_three_component_tests_by_sex.to_csv(OUTDIR+"phecodes.three_components.by_sex.txt", sep="\t", index=False)
-    phecode_three_component_tests_by_age.to_csv(OUTDIR+"phecodes.three_components.by_age.txt", sep="\t", index=False)
+    phecode_three_component_tests.to_csv(OUTDIR+f"phecodes.three_components.{circ_var}.txt", sep="\t", )
+    phecode_three_component_tests_by_sex.to_csv(OUTDIR+f"phecodes.three_components.{circ_var}.by_sex.txt", sep="\t", )
+    phecode_three_component_tests_by_age.to_csv(OUTDIR+f"phecodes.three_components.{circ_var}.by_age.txt", sep="\t", )
 
     quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = test(quantitative_variables, quantitative=True)
-    ps_to_qs(phecode_three_component_tests)
-    ps_to_qs(phecode_three_component_tests_by_sex)
-    ps_to_qs(phecode_three_component_tests_by_age)
-    quantitative_three_component_tests.to_csv(OUTDIR+"quantitative.three_components.txt", sep="\t", index=False)
-    quantitative_three_component_tests_by_sex.to_csv(OUTDIR+"quantitative.three_components.by_sex.txt", sep="\t", index=False)
-    quantitative_three_component_tests_by_age.to_csv(OUTDIR+"quantitative.three_components.by_age.txt", sep="\t", index=False)
+    ps_to_qs(quantitative_three_component_tests)
+    ps_to_qs(quantitative_three_component_tests_by_sex)
+    ps_to_qs(quantitative_three_component_tests_by_age)
+    quantitative_three_component_tests.to_csv(OUTDIR+f"quantitative.three_components.{circ_var}.txt", sep="\t", )
+    quantitative_three_component_tests_by_sex.to_csv(OUTDIR+f"quantitative.three_components.{circ_var}.by_sex.txt", sep="\t", )
+    quantitative_three_component_tests_by_age.to_csv(OUTDIR+f"quantitative.three_components.{circ_var}.by_age.txt", sep="\t", )
 
     return phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age

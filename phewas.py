@@ -264,6 +264,8 @@ def sex_difference_plots():
 
     # Run sex-difference and age-difference plots on the quantitative tests
     qt = quantitative_sex_tests.sample(frac=1)
+    qt['std_male_coeff'] = qt.std_male_effect
+    qt['std_female_coeff'] = qt.std_female_effect
     #TODO: I believe the above needs to rename columns std_male_effect -> std_male_coeff and same for female to work below
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
@@ -275,7 +277,9 @@ def sex_difference_plots():
     ij = [[0,0], [0,1], [1,0], [1,1]]
     SUBCATEGORIES = ["Metabolism", "Lipoprotein Profile", "Cardiovascular Function", "Renal Function"]
     for cat, ax, (i,j) in zip(SUBCATEGORIES, axes.flatten(), ij):
-        tests = quantitative_sex_tests[quantitative_sex_tests['Functional Category'] == cat]
+        tests = quantitative_sex_tests[quantitative_sex_tests['Functional Category'] == cat].copy()
+        tests['std_male_coeff'] = qt.std_male_effect
+        tests['std_female_coeff'] = qt.std_female_effect
         phewas_plots.sex_difference_plot(tests.sample(frac=1), color_by="phenotype", lim=0.25, ax=ax, legend=True, labels=False, cmap="tab20_r", names=quantitative_variable_descriptions.Name)
         ax.set_title(cat)
         if j == 0:
@@ -400,6 +404,8 @@ def fancy_plots():
     fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
     fig = phewas_plots.fancy_case_control_plot(data, 480, normalize=True, confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.pneumonia.png")
+    fig = phewas_plots.fancy_case_control_plot(data, 495, normalize=True, confidence_interval=True)
+    fig.savefig(OUTDIR+"phenotypes.asthma.png")
 
 def survival_curves():
     # Survival by RA
@@ -532,38 +538,9 @@ def survival_plots():
     fig, ax = sex_difference_survival_plot(d)
     fig.savefig(OUTDIR+"survival.by_sex.png")
 
-def circadian_component_plots():
-    ## Plot the amount RA goes "beyond" other variables
-    fig, (ax1, ax2) = pylab.subplots(ncols=2, figsize=(10,6))
-    c = beyond_RA_tests.Subcategory.map(color_by_actigraphy_subcat)
-    ax1.scatter(
-        beyond_RA_tests['standardized log Hazard Ratio'].abs(),
-        beyond_RA_tests['standardized log Hazard Ratio RA'].abs(),
-        c=c)
-    ax1.set_ylim(0, ax1.get_ylim()[1])
-    ax1.set_xlabel("log Hazard Ratio / SD of alternative variable")
-    ax1.set_ylabel("log Hazard Ratio / SD of RA")
-    ax1.axhline(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "standardized log Hazard Ratio"].abs().values,
-                linestyle="--", c="k")
-    ax2.scatter(
-        -numpy.log10(beyond_RA_tests.p),
-        -numpy.log10(beyond_RA_tests.p_RA),
-        c=c)
-    ax2.set_ylim(0, ax2.get_ylim()[1])
-    ax2.set_xlabel("-log10 p-value of alternative variable")
-    ax2.set_ylabel("-log10 p-value of RA")
-    ax2.axhline(-numpy.log10(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "p"].values),
-                linestyle="--", c="k")
-    legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
-    fig.savefig(OUTDIR+"additive_benefit_RA.png")
-
-    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
-    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, top_phenotypes[:20], quantitative=False)
-    fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
-
-    top_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
-    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_phenotypes[:20], quantitative=True)
-    fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
+def triangular_three_component_plots():
+    # Make triangular stype plots of the three-component tests
+    # however we currently don't use these since they are hard to read
 
     # Plot the components in a triangular plot
     def trianglize(coords):
@@ -615,25 +592,61 @@ def circadian_component_plots():
             #    zorder=-1)
 
     effs_cols = ['circ_eff', 'physical_eff', 'sleep_eff']
-    ses_cols = ['circ_ses', 'physical_ses', 'sleep_ses']
+    ses_cols = ['circ_se', 'physical_se', 'sleep_se']
     effs = phecode_three_component_tests[effs_cols].abs()
-    effs.set_index(phecode_three_component_tests.phenotype, inplace=True)
     ses = phecode_three_component_tests[ses_cols].abs()
-    ses.set_index(phecode_three_component_tests.phenotype, inplace=True)
 
     coords = trianglize(effs.values)
     fig, ax = pylab.subplots()
-    c = phecode_three_component_tests.phenotype.map(phecode_info.category.map(color_by_phecode_cat))
+    c = phecode_three_component_tests.index.map(phecode_info.set_index("phenotype").category.map(color_by_phecode_cat))
     s = -numpy.log10(phecode_three_component_tests.overall_p.astype(float)) + 8
     ax.scatter(*coords.T, c=c, s=s)
     plot_triangular_ses(ax, effs, ses, c)
     triangle_frame(ax)
     legend_from_colormap(fig, color_by_phecode_cat)
 
+
+def circadian_component_plots():
+    ## Plot the amount RA goes "beyond" other variables
+    fig, (ax1, ax2) = pylab.subplots(ncols=2, figsize=(10,6))
+    c = beyond_RA_tests.Subcategory.map(color_by_actigraphy_subcat)
+    ax1.scatter(
+        beyond_RA_tests['standardized log Hazard Ratio'].abs(),
+        beyond_RA_tests['standardized log Hazard Ratio RA'].abs(),
+        c=c)
+    ax1.set_ylim(0, ax1.get_ylim()[1])
+    ax1.set_xlabel("log Hazard Ratio / SD of alternative variable")
+    ax1.set_ylabel("log Hazard Ratio / SD of RA")
+    ax1.axhline(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "standardized log Hazard Ratio"].abs().values,
+                linestyle="--", c="k")
+    ax2.scatter(
+        -numpy.log10(beyond_RA_tests.p),
+        -numpy.log10(beyond_RA_tests.p_RA),
+        c=c)
+    ax2.set_ylim(0, ax2.get_ylim()[1])
+    ax2.set_xlabel("-log10 p-value of alternative variable")
+    ax2.set_ylabel("-log10 p-value of RA")
+    ax2.axhline(-numpy.log10(survival_tests.loc[survival_tests.activity_var == "acceleration_RA", "p"].values),
+                linestyle="--", c="k")
+    legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
+    fig.savefig(OUTDIR+"additive_benefit_RA.png")
+
+    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
+    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
+    fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
+    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests_amp, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
+    fig.savefig(OUTDIR+"circadian_vs_other_vars.temp_amplitude.png")
+
+    top_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_phenotypes[:20], quantitative=True)
+    fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_phenotypes[:20], quantitative=True)
+    fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.temp_amplitude.png")
+
     # Plot the sex differences
     fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
     vars = ['circ', 'physical', 'sleep']
-    phecode = phecode_three_component_tests_by_sex.phenotype
+    phecode = phecode_three_component_tests_by_sex.index
     #colormap = {cat:color for cat, color in
     #                    zip(phecode.unique(),
     #                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
@@ -660,7 +673,7 @@ def circadian_component_plots():
     # Plot the sex differences in quantitative
     fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
     vars = ['circ', 'physical', 'sleep']
-    phenotype = quantitative_three_component_tests_by_sex.phenotype
+    phenotype = quantitative_three_component_tests_by_sex.index
     c = phenotype.map(quantitative_variable_descriptions['Functional Categories']).map(color_by_quantitative_function)
     for ax, var in zip(axes, vars):
         males = quantitative_three_component_tests_by_sex[f"male_{var}_eff"]
@@ -708,7 +721,7 @@ def circadian_component_plots():
     # Plot the age differences in quantitative
     fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
     vars = ['circ', 'physical', 'sleep']
-    phenotype = quantitative_three_component_tests_by_age.phenotype
+    phenotype = quantitative_three_component_tests_by_age.index
     c = phenotype.map(quantitative_variable_descriptions['Functional Categories']).map(color_by_quantitative_function)
     for ax, var in zip(axes, vars):
         age55 = quantitative_three_component_tests_by_age[f"age55_{var}_eff"]
@@ -1310,9 +1323,10 @@ def temperature_calibration_plots():
     random_device = pandas.Series(device.sample(frac=1.0).values, index=device.index)
     temp_mean = full_activity[full_activity.run == 0].set_index("id").loc[data.index, 'temp_mean_mean']
     temp_RA = data['temp_RA']
+    temp_amplitude = data['temp_amplitude']
 
-    fig, axes = pylab.subplots(figsize=(8,5), ncols=2)
-    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA}.items(), axes):
+    fig, axes = pylab.subplots(figsize=(11,5), ncols=3)
+    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA, "amplitude": temp_amplitude}.items(), axes):
         device_mean = measure.groupby(device).mean()
         random_mean = measure.groupby(random_device).mean()
         m = device_mean.quantile(0.01)
@@ -1322,7 +1336,7 @@ def temperature_calibration_plots():
         ax.hist(device_mean, bins=bins, color='r', alpha=0.5, label="True" if ax == axes[0] else None)
         ax.set_xlabel(f"Temperature {name}")
     fig.legend()
-    fig.savefig(OUTDIR+"temperature_calibration.png")
+    fig.savefig(OUTDIR+f"temperature_calibration.png")
 
 
 def demographics_table():
@@ -1631,7 +1645,8 @@ if __name__ == '__main__':
 
     med_differences = phewas_tests.assess_medications(data, quantitative_variables, medications, OUTDIR, RECOMPUTE)
 
-    phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, phecode_info, OUTDIR, RECOMPUTE)
+    phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_RA")
+    phecode_three_component_tests_amp, phecode_three_component_tests_by_sex_amp, phecode_three_component_tests_by_age_amp, quantitative_three_component_tests_amp, quantitative_three_component_tests_by_sex_amp, quantitative_three_component_tests_by_age_amp = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_amplitude")
 
 
     #### Prepare color maps for the plots

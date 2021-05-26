@@ -4,6 +4,10 @@ import pandas
 # We will reject all individual measurements beyond this zscore cutoff value
 ZSCORE_OUTLIER_CUTOFF = 7
 
+# Force these activity variables to be included in the analysis even though they do meet the
+# requirements for repeateability from the seasonal data
+EXTRA_ACTIVITY_VARIABLES = ["temp_L1_time", "temp_phase"]
+
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
 self_report_circadian_variables = {
@@ -78,6 +82,7 @@ def load_activity(ukbb):
     activity_variance['summary_var'] = activity_variance.index.isin(activity_summary.columns)
     activity_variance['use'] = (~activity_variance.summary_var) | activity_variance.index.str.contains("overall-")
     good_variance = (activity_variance.corrected_intra_personal_normalized < 1)
+    good_variance = good_variance | activity_variance.index.isin(EXTRA_ACTIVITY_VARIABLES) # Force inclusion of some variables despite variance
     activity_variables = activity_variance.index[good_variance & activity_variance.use]
     activity_variables = activity_variables.intersection(activity.columns)
 
@@ -101,10 +106,11 @@ def load_activity(ukbb):
 
     activity.columns = activity.columns.str.replace("-","_") # Can't use special characters easily
 
-    activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characters easily
+    activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characjers easily
 
     ## Process activity variables that need cleaning
     activity.phase = activity.phase % 24
+    activity.temp_phase = activity.temp_phase % 24
 
     ## Correct activity measures based off of seasonality
     # compute the 'fraction of year' value (0 = January 1st, 1 = December 31st)
@@ -145,7 +151,10 @@ def load_activity(ukbb):
     # List the activity variables
     activity_variables = activity.columns
 
-    # Zero out the extreme outliers in the dataset
+    # Drop out the extreme outliers in the dataset
+    # First remove all infinities as NaNs - shouldn't be many anyway
+    infs = ~numpy.isfinite(activity.values)
+    activity.iloc[infs] = float("NaN")
     stds = activity.std()
     means = activity.mean()
     zscores = ((activity - means) / stds).abs()
