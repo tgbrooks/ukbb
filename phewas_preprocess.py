@@ -320,6 +320,13 @@ def load_data(cohort):
     data['birth_year_dt'] = pandas.to_datetime(data.birth_year.apply(year_to_jan_first)) # As datetime
     data['age_at_actigraphy'] = (data.actigraphy_start_date - data.birth_year_dt) / pandas.to_timedelta("1Y")
 
+    # Actigraphy device metadata
+    # Device id's cluster into three groups with large gaps between them and significant
+    # differences in some measurements, particularly light and temperature
+    # We give name them clusters A/B/C
+    data['device_id'] = activity_summary['file-deviceID']
+    data['device_cluster'] = pandas.cut( data.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
+
     # Create simplified versions of the categorical covarites
     # This is necessary for convergence of the logistic models
     data['ethnicity_white'] = data.ethnicity.isin(["British", "Any other white background", "Irish", "White"])
