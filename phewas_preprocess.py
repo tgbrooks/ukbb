@@ -125,7 +125,6 @@ def load_activity(ukbb):
             continue
         activity[var] = activity[var] - cos_year_fraction * activity_variance.loc[var].cos - sin_year_fraction * activity_variance.loc[var].sin
 
-
     self_report_data = {}
     for variable, var_data in self_report_circadian_variables.items():
         if var_data['zeros'] is not None:
@@ -165,6 +164,15 @@ def load_activity(ukbb):
     activity[outlier] = float("Nan")
 
     return activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
+
+def correct_for_device_cluster(data, variable, multiplicative=True):
+    d = data[variable]
+    grand_median = d.median()
+    category_medians = d.groupby(data.device_cluster).median()
+    if multiplicative:
+        data[variable] = d / data.device_cluster.map(category_medians).astype(float) * grand_median
+    else:
+        data[variable] = d - data.device_cluster.map(category_medians).astype(float) + grand_median
 
 def load_phecode(selected_ids):
     # Load the PheCode mappings
@@ -327,6 +335,13 @@ def load_data(cohort):
     data['device_id'] = activity_summary['file-deviceID']
     data['device_cluster'] = pandas.cut( data.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
 
+    # Use device clusters to correct some actigraphy values
+    correct_for_device_cluster(data, 'temp_amplitude', multiplicative=True)
+    correct_for_device_cluster(data, 'temp_RA', multiplicative=True)
+    correct_for_device_cluster(data, 'temp_IV', multiplicative=True)
+    correct_for_device_cluster(data, 'temp_cosinor_rsquared', multiplicative=True)
+    correct_for_device_cluster(data, 'temp_within_day_SD', multiplicative=True)
+
     # Create simplified versions of the categorical covarites
     # This is necessary for convergence of the logistic models
     data['ethnicity_white'] = data.ethnicity.isin(["British", "Any other white background", "Irish", "White"])
@@ -338,7 +353,7 @@ def load_data(cohort):
     data.loc[data.high_income == 'Do not know', 'high_income'] = float("NaN")
     data['college_education'] = data['education_College_or_University_degree']
 
-    # Process daeath data, appropriate for Cox proportional hazards model
+    # Process death data, appropriate for Cox proportional hazards model
     data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)
     data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
     data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
