@@ -41,12 +41,14 @@ def compute_phecode_test(activity_variable, phecode, data):
                  data=data)
     p = fit.pvalues[f"Q({phecode})"]
     coeff = fit.params[f"Q({phecode})"]
+    se = fit.bse[f"Q({phecode})"]
     std_effect = coeff / data[activity_variable].std()
     N_cases = data.loc[~data[activity_variable].isna(), phecode].sum()
     return {"phecode": phecode,
              "activity_var": activity_variable,
              "p": p,
              "coeff": coeff,
+             'se': se,
              "std_effect": std_effect,
              "N_cases": N_cases,
     }, fit 
