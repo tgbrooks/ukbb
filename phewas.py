@@ -722,7 +722,7 @@ def circadian_component_plots():
     # Plot the age differences
     fig, axes = pylab.subplots(ncols=3, figsize=(14,5))
     vars = ['circ', 'physical', 'sleep']
-    phecode = phecode_three_component_tests_by_age.phenotype
+    phecode = phecode_three_component_tests_by_age.index
     c = phecode.map(phecode_info.set_index('phenotype').category).map(color_by_phecode_cat)
     for ax, var in zip(axes, vars):
         age55 = phecode_three_component_tests_by_age[f"age55_{var}_eff"]
@@ -1041,7 +1041,7 @@ def temperature_trace_plots(N_IDS=500):
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.age.png")
 
-    fig = temp_trace_by_cat(data.sex, colors={'Male': '#1f77b4', 'Female': '#ff7f0e'})
+    fig = temp_trace_by_cat(data.sex, colors=color_by_sex)
     fig.gca().set_title("Sex")
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.sex.png")
@@ -1341,6 +1341,37 @@ def age_interaction_plots():
     fig = plot_case_control_by_age(300, "main_sleep_offset_mean")
     fig.savefig(OUTDIR+"by_age.anxiety_disorders.vs.main_sleep_offset_mean.png")
 
+def sex_quantitative_interaction_plots(activity_var = "moderate_overall", phenotype="vitamin_D"):
+    # Evaluate densities at these point
+    phenotype_values = numpy.linspace(data[phenotype].quantile(0.01), data[phenotype].quantile(0.99), 31)
+    plot_values = numpy.concatenate((phenotype_values[:1], phenotype_values, phenotype_values[-1:]))
+
+    QUANTILES = 5
+    WIDTH = 0.4
+
+    fig, ax = pylab.subplots(figsize=(6,6))
+    for sex in ['Male', 'Female']:
+        d = data[data.sex == sex]
+        buckets = pandas.qcut(d[activity_var], QUANTILES)
+        for i, (bucket_name, bucket) in enumerate(d.groupby(buckets)):
+            shape = plots.gaussian_kde(bucket[phenotype])(phenotype_values)
+            shape *= WIDTH / shape.max() 
+            plot_shape = numpy.concatenate(([0], shape, [0]))
+            sign = {"Male": 1, "Female":-1}[sex]
+            ax.fill(i + plot_shape * sign, plot_values, color=color_by_sex[sex], zorder=1)
+            #ax.boxplot(bucket[[phenotype]].values, positions = [i+WIDTH/2*sign], meanline=True)
+            mean =bucket[phenotype].mean()
+            ax.plot([i,i+WIDTH*sign], [mean, mean], c='k')
+
+    ax.set_xticks(numpy.arange(QUANTILES))
+    ax.set_xticklabels([f"{int(100/QUANTILES*i)}-{int(100/QUANTILES*(i+1))}%" for i in range(QUANTILES)])
+    ax.set_xlabel(activity_var + " percentile")
+    ax.set_ylabel(phenotype)
+    legend_from_colormap(fig, color_by_sex)
+
+    fig.savefig(OUTDIR+f"by_sex_.{activity_var}.{phenotype}.png")
+
+
 
 def temperature_calibration_plots():
     # Plot the (mis)-calibration of the tempreature variables
@@ -1604,9 +1635,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    import matplotlib
     if args.no_display:
         # Use the non-graphical backend Agg
-        import matplotlib
         matplotlib.use("Agg")
     import pylab
 
@@ -1687,11 +1718,13 @@ if __name__ == '__main__':
     color_by_quantitative_function = {cat:color for cat, color in
                                         zip(quantitative_variable_descriptions['Functional Categories'].unique(),
                                             [pylab.get_cmap("tab20b")(i) for i in range(20)])}
+    color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
     colormaps = {
         "phecode_cat": color_by_phecode_cat,
         "actigraphy_cat": color_by_actigraphy_cat,
         "actigraphy_subcat": color_by_actigraphy_subcat,
         "quantitative_function": color_by_quantitative_function,
+        "sex": color_by_sex,
     }
 
     ## Create the plotter object
@@ -1711,13 +1744,14 @@ if __name__ == '__main__':
         circadian_component_plots()
         activity_var_comparisons()
         age_interaction_plots()
-        temperature_trace_plots()
+        sex_quantitative_interaction_plots()
         temperature_calibration_plots()
         chronotype_plots()
         quantitative_traits_with_medications()
         if args.all:
             # Note: slow to run: performs many regressions
-            by_date_plots()
+            temperature_trace_plots() # Slowish
+            by_date_plots() # Very slow
 
         ## Summarize everything
         generate_results_table()
