@@ -605,6 +605,31 @@ def triangular_three_component_plots():
     triangle_frame(ax)
     legend_from_colormap(fig, color_by_phecode_cat)
 
+def effect_size_plots():
+
+    def plot(activity_var = "acceleration_RA"):
+        selected_data = phecode_tests[phecode_tests.activity_var == activity_var].sort_values(by="p").head(10).sort_values(by="coeff")
+        fig, ax = pylab.subplots(figsize=(7,4))
+        y = 0
+        for _, d in selected_data.iterrows():
+            std = data[activity_var].std()
+            se = d['se'] / std
+            eff = abs(d['coeff']) /std
+            c = 'r' if d['coeff'] < 0 else 'b' # Color by directionality
+            ax.scatter([eff], [y], c=c)
+            ax.plot([eff - 1.96*se, eff + 1.96*se], [y, y], c=c) # Draw effect sizes
+            y += 1
+        ax.set_yticks(numpy.arange(y))
+        ax.set_yticklabels(selected_data.phecode_meaning)
+        ax.set_xlim(left=0)
+        ax.set_xlabel("Effect Size (SD)")
+        fig.suptitle(f"Associations with {activity_var}")
+        fig.tight_layout()
+        fig.savefig(OUTDIR+f"/top_phecode_associations.acceleration_RA.png", dpi=300)
+        return fig, ax
+
+    plot("acceleration_RA")
+
 
 def circadian_component_plots():
     ## Plot the amount RA goes "beyond" other variables
@@ -1676,6 +1701,7 @@ if __name__ == '__main__':
     ## Make the plots
     if not args.noplots:
         summary()
+        effect_size_plots()
         sex_difference_plots()
         age_difference_plots()
         fancy_plots()
