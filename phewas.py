@@ -1394,6 +1394,23 @@ def temperature_calibration_plots():
     fig.legend()
     fig.savefig(OUTDIR+f"temperature_calibration.png")
 
+    # Plot the cluster-level histograms
+    activity = full_activity.copy().set_index('id')
+    activity = activity[activity.run == 0]
+    activity['device_id'] = activity_summary['file-deviceID']
+    activity['device_cluster'] = pandas.cut( activity.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
+    fig, ax = pylab.subplots(figsize=(5,5))
+    bins = numpy.linspace(
+        activity.temp_amplitude.quantile(0.01),
+        activity.temp_amplitude.quantile(0.99),
+        31)
+    for cluster, grouping in activity.groupby('device_cluster'):
+        ax.hist(grouping.temp_amplitude, bins=bins, label="Cluster " + cluster, alpha=0.4, density=True)
+    ax.set_xlabel("temp_amplitude (C)")
+    ax.set_ylabel("Density")
+    fig.legend()
+    fig.savefig(OUTDIR+"temperature_calibration.histogram.png")
+
 
 def demographics_table():
     # Create a table of demographics of the population studied, compared to the overall UK Biobank
