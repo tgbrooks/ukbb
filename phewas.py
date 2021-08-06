@@ -962,12 +962,14 @@ def generate_results_table():
     workbook.save(OUTDIR+"results.xlsx")
     with pandas.ExcelWriter(OUTDIR+"results.xlsx", mode="a") as writer:
         survival_tests.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
-        phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Phecode Associations", index=False)
+        phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="PheCODE Associations", index=False)
         quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
         quantitative_sex_tests.sort_values(by="sex_difference_p").to_excel(writer, sheet_name="Quantitative Sex Differences", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
         quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="Quantitative Age Differences", index=False)
+        phecode_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="PheCODE Actigraphy Comps.")
+        quantitative_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="Quantitative Actigraphy Comps.")
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
 def temperature_trace_plots(N_IDS=500):
