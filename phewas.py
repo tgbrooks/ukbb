@@ -1027,6 +1027,12 @@ def temperature_trace_plots(N_IDS=500):
     fig.savefig(OUTDIR+"temperature.asthma.png")
     fig = case_control(480)
     fig.savefig(OUTDIR+"temperature.pneumonia.png")
+    fig = case_control(296)
+    fig.savefig(OUTDIR+"temperature.mood_disorders.png")
+    fig = case_control(300)
+    fig.savefig(OUTDIR+"temperature.anxiety_disorders.png")
+    fig = case_control(272)
+    fig.savefig(OUTDIR+"temperature.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
     fig = temp_trace_by_cat(morning_evening, show_variance=False)
