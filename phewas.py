@@ -988,7 +988,7 @@ def temperature_trace_plots(N_IDS=500):
     ax.set_ylabel("Temperature (C)")
 
     ## By categories
-    def temp_trace_by_cat(cats, colors=None, show_variance=True, show_confidence_intervals=False):
+    def temp_trace_by_cat(cats, colors=None, show_variance=True, show_confidence_intervals=False, data=data):
         temp_mean = temp_to_C(full_activity.temp_mean_mean.mean())
         fig, ax = pylab.subplots()
         for cat in cats.cat.categories:
@@ -1009,10 +1009,10 @@ def temperature_trace_plots(N_IDS=500):
         fig.tight_layout()
         return fig
 
-    def case_control(phecode):
+    def case_control(phecode, data=data):
         cats = data[phecode].astype("category").cat.rename_categories({0:"Control", 1:"Case"})
         fig = temp_trace_by_cat(cats,
-                                 colors = {"Case": "orange", "Control": "teal"})
+                                 colors = {"Case": "orange", "Control": "teal"}, data=data)
         fig.gca().set_title(phecode_info.loc[phecode].phenotype)
         fig.tight_layout()
         return fig
@@ -1070,6 +1070,13 @@ def temperature_trace_plots(N_IDS=500):
     fig.gca().set_title("Asthma by Weight")
     fig.tight_layout()
     fig.savefig(OUTDIR+"temperature.asthma.by_bmi.png")
+
+    ## Hypertension interaction with Chronotype
+    for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
+        d = data[data.morning_evening_person == chronotype]
+        fig= case_control(401, data=d)
+        fig.savefig(OUTDIR+f"temperature.hypertension.{label}.png")
+
 
 def chronotype_plots():
     # Chronotype by sex+age plot
