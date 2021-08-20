@@ -624,11 +624,39 @@ def effect_size_plots():
         ax.set_xlim(left=0)
         ax.set_xlabel("Effect Size (SD)")
         fig.suptitle(f"Associations with {activity_var}")
-        fig.tight_layout()
+        fig.tight_layout(rect=(0,0,1,0.96))
         fig.savefig(OUTDIR+f"/top_phecode_associations.acceleration_RA.png", dpi=300)
         return fig, ax
-
     plot("acceleration_RA")
+
+    def effect_sizes_by_sex(activity_var = "acceleration_RA"):
+        selected_data = phecode_tests_by_sex[phecode_tests_by_sex.activity_var == activity_var].sort_values(by="p_diff").head(10).sort_values(by="std_male_coeff")
+        fig, ax = pylab.subplots(figsize=(7,4))
+        y = 0
+        colormap = color_by_sex
+        for _, d in selected_data.iterrows():
+            male_coeff = d['std_male_coeff']
+            male_lb = d['std_male_coeff_low']
+            male_ub = d['std_male_coeff_high']
+            female_coeff = d['std_female_coeff']
+            female_lb = d['std_female_coeff_low']
+            female_ub = d['std_female_coeff_high']
+            ax.scatter([male_coeff, female_coeff], [y-0.15, y+0.15], c=[colormap['Male'], colormap['Female']]) #TODO update sex-specific coloring
+            ax.plot([male_lb, male_ub], [y-0.15, y-0.15], c = colormap['Male'])
+            ax.plot([female_lb, female_ub], [y+0.15, y+0.15], c = colormap['Female'])
+            y += 1
+        ax.axvline(0, linestyle="--", color='k')
+        ax.set_yticks(numpy.arange(y))
+        ax.set_yticklabels(selected_data.phecode_meaning)
+        #ax.set_xlim(left=0)
+        ax.set_xlabel("Effect Size (SD)")
+        ax.set_title(f"Associations with {activity_var}")
+        fig.tight_layout()
+        util.legend_from_colormap(fig, colormap)
+        fig.subplots_adjust(right=0.85)
+        fig.savefig(OUTDIR+f"/top_phecode_associations.by_sexacceleration_RA.png", dpi=300)
+        return fig, ax
+    effect_sizes_by_sex("acceleration_RA")
 
 
 def circadian_component_plots():
