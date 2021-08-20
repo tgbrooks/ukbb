@@ -1106,6 +1106,14 @@ def temperature_trace_plots(N_IDS=500):
         fig.savefig(OUTDIR+f"temperature.hypertension.{label}.png")
 
 
+    ## BMI versus Chronotype
+    for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
+        d = data[data.morning_evening_person == chronotype]
+        cats = pandas.qcut(data.BMI, numpy.linspace(0,1,6))
+        fig= temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=False)
+        fig.savefig(OUTDIR+f"temperature.bmi.{label}.png")
+
+
 def chronotype_plots():
     # Chronotype by sex+age plot
     age_cutoffs = numpy.arange(40,80,5) # every 5 years from 40 to 75
