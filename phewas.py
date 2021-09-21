@@ -1664,6 +1664,146 @@ def quantitative_traits_with_medications():
     fig.savefig(f"{OUTDIR}/age_effects.quantitative.lipoproteins.png")
 
 
+def predict_diagnoses():
+    # Group by integer PHECODE and get first date of any occurances
+    icd10 = icd10_entries.copy()
+    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+    icd10.first_date = pandas.to_datetime(icd10.first_date)
+    icd10 = icd10.sort_values(by="first_date")
+    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+
+    diagnoses_total = icd10.groupby("ID").PHECODE.count()
+
+    #icd10_after_actigraphy.groupby(['ID', 'PHECODE']).size().unstack(fill_value=0).astype(bool)
+    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+    diagnoses_after_actigraphy = icd10_after_actigraphy.groupby("ID").PHECODE.count()
+
+    icd10_before_actigraphy = icd10[icd10.first_date <= icd10.actigraphy_start_date]
+    diagnoses_before_actigraphy = icd10_before_actigraphy.groupby("ID").PHECODE.count()
+
+    d = data.copy()
+    d['diagnoses_after_actigraphy'] = d.index.map(diagnoses_after_actigraphy).fillna(0)
+    d['diagnoses_before_actigraphy'] = d.index.map(diagnoses_before_actigraphy).fillna(0)
+    d['diagnoses_total'] = d.index.map(diagnoses_total).fillna(0)
+
+    # See if we can predict the number of diagnoses they will come down with
+    num_diagnoses_prediction = []
+    family = sm.families.Poisson()
+    #family.n = icd10.PHECODE.nunique()
+    fit0 = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy + BMI + sex + age_at_actigraphy", data=d, family=family).fit()
+    fit00 = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy", data=d, family=family).fit()
+    for variable in ['acceleration_RA', 'acceleration_overall', 'temp_RA']:
+        fit = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy + {variable} + BMI + sex + age_at_actigraphy", data=d, family=family).fit()
+        num_diagnoses_prediction.append({
+            "activity_var": variable,
+            "p": fit.pvalues[variable],
+            "median_abs_residual": (d.diagnoses_total - fit.fittedvalues).abs().median(),
+            "median_abs_pearson_residual": (fit.resid_pearson).abs().median(),
+            "median_abs_anscombe_residual": numpy.median(numpy.abs((fit.resid_anscombe_scaled))),
+        })
+    num_diagnoses_prediction = pandas.DataFrame(num_diagnoses_prediction).sort_values(by="median_abs_pearson_residual")
+
+
+    # Plot number of diagnosis by quintile for a variable
+    for var in ['acceleration_RA', 'acceleration_overall', 'temp_RA']:
+        fig, ax = pylab.subplots()
+        groups = d.groupby(pandas.qcut(d[var], 5))
+        labels = []
+        for i, (g, d2) in enumerate(groups):
+            ax.boxplot(d2.diagnoses_after_actigraphy, positions=[i], showfliers=False)
+            labels.append(g)
+        ax.set_xticks(numpy.arange(len(labels)))
+        ax.set_xticklabels(labels, rotation=45)
+        ax.set_xlabel(f"{var} quintile")
+        ax.set_ylabel("Diagnoses after actigraphy")
+        fig.tight_layout()
+
+def predict_diagnoses_plots():
+    tests = predictive_tests.sort_values(by="p").head(20).sort_values(by="p", ascending=False)
+    tests_by_sex = predictive_tests_by_sex.set_index("meaning").reindex(tests.meaning).reset_index()
+    tests_by_age = predictive_tests_by_age.set_index("meaning").reindex(tests.meaning).reset_index()
+
+    fig, axes = pylab.subplots(figsize=(9,8), ncols=4, sharey=True)
+    ys = numpy.arange(len(tests))
+    axes[0].barh(
+        ys,
+        -numpy.log10(tests.p),
+        color='k')
+    axes[0].set_yticks(numpy.arange(len(tests)))
+    axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(x, 30)))
+    axes[0].set_ylim(-0.5, len(tests)-0.5)
+    p_cutoff_for_q05 = predictive_tests[predictive_tests.q > 0.05].p.min()
+    axes[0].axvline(-numpy.log10(p_cutoff_for_q05)) # BH FDR cutoff 0.05
+    axes[0].set_xlabel("-log10 p-value")
+
+    axes[1].scatter(
+        tests.std_coeff,
+        ys,
+        color='k',
+    )
+    for i, (idx, row) in enumerate(tests.iterrows()):
+        axes[1].plot(
+            [row.std_coeff - row.std_se*1.96, row.std_coeff + row.std_se*1.96],
+            [ys[i], ys[i]],
+            color='k',
+        )
+    axes[1].axvline(0, color="k")
+    axes[1].set_xlabel("Effect Size")
+
+    # By sex
+    axes[2].scatter(
+        tests_by_sex.std_male_coeff,
+        ys + 0.1,
+        color=color_by_sex['Male'],
+    )
+    axes[2].scatter(
+        tests_by_sex.std_female_coeff,
+        ys-0.1,
+        color=color_by_sex['Female'],
+    )
+    for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
+        axes[2].plot(
+            [row.std_male_coeff - row.std_male_bse*1.96, row.std_male_coeff + row.std_male_bse*1.96],
+            [ys[i] + 0.1, ys[i] + 0.1],
+            color=color_by_sex["Male"],
+        )
+        axes[2].plot(
+            [row.std_female_coeff - row.std_female_bse*1.96, row.std_female_coeff + row.std_female_bse*1.96],
+            [ys[i]-+ 0.1, ys[i] - 0.1],
+            color=color_by_sex["Female"],
+        )
+    axes[2].set_xlabel("Effect Size\nBy Sex")
+
+    # By age
+    axes[3].scatter(
+        tests_by_age.std_age55_coeff,
+        ys + 0.1,
+        color=color_by_age[55],
+    )
+    axes[3].scatter(
+        tests_by_age.std_age70_coeff,
+        ys-0.1,
+        color=color_by_age[70],
+    )
+    for i, (idx, row) in enumerate(tests_by_age.iterrows()):
+        axes[3].plot(
+            [row.std_age55_coeff - row.std_age55_se*1.96, row.std_age55_coeff + row.std_age55_se*1.96],
+            [ys[i] + 0.1, ys[i] + 0.1],
+            color=color_by_age[55],
+        )
+        axes[3].plot(
+            [row.std_age70_coeff - row.std_age70_se*1.96, row.std_age70_coeff + row.std_age70_se*1.96],
+            [ys[i]-+ 0.1, ys[i] - 0.1],
+            color=color_by_age[70],
+        )
+    axes[3].set_xlabel("Effect Size\nBy Age")
+    fig.tight_layout(rect=(0,0,0.85,1))
+    util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
+    util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
+
+    fig.savefig(OUTDIR + "predictive_tests.png", dpi=300)
 
 def med_differences_plots():
     d = -numpy.log10(med_differences.pivot_table(columns=["medication"], index=["phenotype"], values="p") + 1e-20)
@@ -1816,6 +1956,7 @@ if __name__ == '__main__':
         temperature_calibration_plots()
         chronotype_plots()
         quantitative_traits_with_medications()
+        predict_diagnoses_plots()
         if args.all:
             # Note: slow to run: performs many regressions
             temperature_trace_plots() # Slowish

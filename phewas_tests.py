@@ -825,3 +825,175 @@ def three_components_tests(data, phecodes, quantitative_variables, quantitative_
     quantitative_three_component_tests_by_age.to_csv(OUTDIR+f"quantitative.three_components.{circ_var}.by_age.txt", sep="\t", )
 
     return phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age
+
+
+def predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE=False):
+    # Predict diagnoses after actigraphy
+    if not RECOMPUTE:
+        try:
+            predictive_tests = pandas.read_csv(OUTDIR+f"predictive_tests.txt", sep="\t", index_col=0)
+            predictive_tests_by_sex = pandas.read_csv(OUTDIR+f"predictive_tests_by_sex.txt", sep="\t", index_col=0)
+            predictive_tests_by_age = pandas.read_csv(OUTDIR+f"predictive_tests_by_age.txt", sep="\t", index_col=0)
+            return predictive_tests, predictive_tests_by_sex, predictive_tests_by_age
+        except FileNotFoundError:
+            pass
+
+    d = data.copy()
+    icd10 = icd10_entries.copy()
+    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+    icd10.first_date = pandas.to_datetime(icd10.first_date)
+    icd10 = icd10.sort_values(by="first_date")
+    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+
+    predictive_tests_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        d['diagnosis_after_actigraphy'] = d.index.isin(icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].ID).astype(int)
+        subset = (~d[diagnosis].astype(bool)) | (d.diagnosis_after_actigraphy) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        covariate_formula = " + ".join(covariates)
+        #fit0 = smf.logit(f"diagnosis_after_actigraphy ~ {covariate_formula}", data=d).fit()
+        for variable in ['temp_RA']:#, 'acceleration_RA', 'acceleration_overall', 'main_sleep_ratio_mean']:
+            model = smf.logit(
+                f"diagnosis_after_actigraphy ~ {variable} + {covariate_formula}",
+                data=d,
+                subset = subset)
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_cases": model.endog.sum(),
+                "N_controls": (model.endog == 0).sum(),
+            }
+            if header['N_cases'] < 50: # How many should we require? 200?
+                continue
+            try:
+                fit = model.fit()
+            except numpy.linalg.LinAlgError:
+                predictive_tests_list.append(header)
+                continue
+            if not fit.mle_retvals['converged']:
+                predictive_tests_list.append(header)
+            else:
+                header.update({
+                    "p": fit.pvalues[variable],
+                    "coeff": fit.params[variable],
+                    "std_coeff": fit.params[variable] * d[variable].std(),
+                    "std_se": fit.bse[variable] * d[variable].std(),
+                })
+                predictive_tests_list.append(header)
+    predictive_tests = pandas.DataFrame(predictive_tests_list)
+    def bh_fdr_with_nans(ps):
+        okay = ~ps.isna()
+        qs = numpy.full(fill_value=float("NaN"), shape=ps.shape)
+        qs[okay] = BH_FDR(ps[okay])
+        return qs
+    predictive_tests['q'] = bh_fdr_with_nans(predictive_tests.p.fillna(1))
+    predictive_tests.sort_values(by="p").to_csv(OUTDIR + "predictive_tests.txt", sep="\t", index=False)
+
+    # Predict diagnoses after actigraphy BY SEX
+    predictive_tests_by_sex_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        d['diagnosis_after_actigraphy'] = d.index.isin(icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].ID).astype(int)
+        subset = (~d[diagnosis].astype(bool)) | (d.diagnosis_after_actigraphy) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        by_sex_covariates = "sex * (" + " + ".join([cov for cov in covariates if cov != 'sex']) + ")"
+        for variable in ['temp_RA']:
+            model = smf.logit(
+                f"diagnosis_after_actigraphy ~ sex * {variable} + {by_sex_covariates}",
+                data=d,
+                subset = subset)
+            exog = pandas.DataFrame(model.exog, columns=model.exog_names)
+            male = exog['sex[T.Male]'] == 1
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_male_cases": model.endog[male].sum(),
+                "N_female_cases": model.endog[~male].sum(),
+                "N_controls": (model.endog == 0).sum(),
+            }
+            if header['N_male_cases'] < 100 or header['N_female_cases'] < 100:
+                continue
+            try:
+                fit = model.fit()
+            except numpy.linalg.LinAlgError:
+                predictive_tests_by_sex_list.append(header)
+                continue
+            if not fit.mle_retvals['converged']:
+                predictive_tests_by_sex_list.append(header)
+            else:
+                interaction = f"sex[T.Male]:{variable}"
+                female_vec = pandas.Series(0, index=fit.params.index)
+                female_vec[variable] = 1
+                male_vec = female_vec.copy()
+                male_vec[interaction] = 1
+                header.update({
+                    "sex_diff_p": fit.pvalues[interaction],
+                    "coeff": fit.params[interaction],
+                    "std_coeff": fit.params[interaction] * d[variable].std(),
+                    "std_male_coeff": (fit.params[interaction] + fit.params[variable]) * d[variable].std(),
+                    "std_female_coeff": (fit.params[variable]) * d[variable].std(),
+                    "std_male_bse": numpy.sqrt(male_vec.T @ fit.cov_params() @ male_vec) * d[variable].std(),
+                    "std_female_bse": numpy.sqrt(female_vec.T @ fit.cov_params() @ female_vec)  * d[variable].std(),
+                })
+                predictive_tests_by_sex_list.append(header)
+                break
+    predictive_tests_by_sex = pandas.DataFrame(predictive_tests_by_sex_list)
+    predictive_tests_by_sex['sex_diff_q'] = bh_fdr_with_nans(predictive_tests_by_sex.sex_diff_p.fillna(1))
+    predictive_tests_by_sex.sort_values(by="sex_diff_p").to_csv(OUTDIR + "predictive_tests_by_sex.txt", sep="\t", index=False)
+
+    # Predict diagnoses after actigraphy BY AGE
+    predictive_tests_by_age_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        d['diagnosis_after_actigraphy'] = d.index.isin(icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].ID).astype(int)
+        subset = (~d[diagnosis].astype(bool)) | (d.diagnosis_after_actigraphy) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        by_age_covariates = " + ".join(covariates)
+        for variable in ['temp_RA']:
+            model = smf.logit(
+                f"diagnosis_after_actigraphy ~ age_at_actigraphy * {variable} + {by_age_covariates}",
+                data=d,
+                subset = subset)
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_cases": model.endog.sum(),
+                "N_controls": (model.endog == 0).sum(),
+            }
+            if header['N_cases'] < 200:
+                continue
+            try:
+                fit = model.fit()
+            except numpy.linalg.LinAlgError:
+                predictive_tests_by_age_list.append(header)
+                continue
+            if not fit.mle_retvals['converged']:
+                predictive_tests_by_age_list.append(header)
+            else:
+                interaction = f"age_at_actigraphy:{variable}"
+                age55_vec = pandas.Series(0, index=fit.params.index)
+                age55_vec[variable] = 1
+                age55_vec[interaction] = 55
+                age70_vec = age55_vec.copy()
+                age70_vec[interaction] = 70
+                header.update({
+                    "age_diff_p": fit.pvalues[interaction],
+                    "coeff": fit.params[interaction],
+                    "std_coeff": fit.params[interaction] * d[variable].std(),
+                    "std_age55_coeff": (fit.params[interaction] * 55 + fit.params[variable]) * d[variable].std(),
+                    "std_age70_coeff": (fit.params[interaction] * 70 + fit.params[variable]) * d[variable].std(),
+                    "std_age55_se": numpy.sqrt(age55_vec.T @ fit.cov_params() @ age55_vec) * d[variable].std(),
+                    "std_age70_se": numpy.sqrt(age70_vec.T @ fit.cov_params() @ age70_vec) * d[variable].std(),
+                })
+                predictive_tests_by_age_list.append(header)
+    predictive_tests_by_age = pandas.DataFrame(predictive_tests_by_age_list)
+    predictive_tests_by_age['age_diff_q'] = bh_fdr_with_nans(predictive_tests_by_age.age_diff_p.fillna(1))
+    predictive_tests_by_age.sort_values(by="age_diff_p").to_csv(OUTDIR + "predictive_tests_by_age.txt", sep="\t", index=False)
+    return predictive_tests, predictive_tests_by_sex, predictive_tests_by_age
