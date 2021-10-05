@@ -538,6 +538,27 @@ def survival_plots():
     fig, ax = sex_difference_survival_plot(d)
     fig.savefig(OUTDIR+"survival.by_sex.png")
 
+def diagnosis_survival_curves():
+    # Pneumonia survival by RA
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "acceleration_RA", 480)
+    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.RA.png")
+
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 480)
+    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.temp_RA.png")
+
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 250)
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.temp_RA.png")
+
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 401)
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.hypertension.temp_RA.png")
+
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 585)
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.renal_failure.temp_RA.png")
+
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 332)
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.parkinsons.temp_RA.png")
+
+
 def triangular_three_component_plots():
     # Make triangular stype plots of the three-component tests
     # however we currently don't use these since they are hard to read
@@ -1912,6 +1933,8 @@ if __name__ == '__main__':
     phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_RA")
     phecode_three_component_tests_amp, phecode_three_component_tests_by_sex_amp, phecode_three_component_tests_by_age_amp, quantitative_three_component_tests_amp, quantitative_three_component_tests_by_sex_amp, quantitative_three_component_tests_by_age_amp = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_amplitude")
 
+    predictive_tests, predictive_tests_by_sex, predictive_tests_by_age = phewas_tests.predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
+
 
     #### Prepare color maps for the plots
     color_by_phecode_cat = {cat:color for cat, color in
@@ -1920,13 +1943,22 @@ if __name__ == '__main__':
     color_by_actigraphy_cat = {cat:color for cat, color in
                                     zip(["Sleep", "Circadianness", "Physical activity"],
                                         [pylab.get_cmap("Dark2")(i) for i in range(20)])}
-    color_by_actigraphy_subcat = {cat:color for cat, color in
-                                    zip(activity_variable_descriptions.Subcategory.unique(),
-                                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
+    subcats_to_cats = activity_variable_descriptions.groupby("Subcategory").Category.first()
+    subcat_number = subcats_to_cats.groupby(subcats_to_cats).cumcount() + 1
+    subcat_total = subcats_to_cats.map(subcats_to_cats.value_counts())
+    def shade(color, t):
+        r,g,b,a = color
+        return (r*t, g*t, b*t, a)
+    color_by_actigraphy_subcat = {subcat: shade(color_by_actigraphy_cat[subcats_to_cats[subcat]], subcat_number[subcat]/subcat_total[subcat])
+                                    for subcat in subcats_to_cats.index}
+    #color_by_actigraphy_subcat = {cat:color for cat, color in
+    #                                zip(activity_variable_descriptions.Subcategory.unique(),
+    #                                    [pylab.get_cmap("Set3")(i) for i in range(20)])}
     color_by_quantitative_function = {cat:color for cat, color in
                                         zip(quantitative_variable_descriptions['Functional Categories'].unique(),
                                             [pylab.get_cmap("tab20b")(i) for i in range(20)])}
     color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
+    color_by_age = {55: '#32a852', 70: '#37166b'}
     colormaps = {
         "phecode_cat": color_by_phecode_cat,
         "actigraphy_cat": color_by_actigraphy_cat,
@@ -1937,7 +1969,7 @@ if __name__ == '__main__':
 
     ## Create the plotter object
     # for common plot types
-    phewas_plots = plots.Plotter(phecode_info, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions)
+    phewas_plots = plots.Plotter(phecode_info, phecode_map, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions)
 
     ## Make the plots
     if not args.noplots:
@@ -1948,6 +1980,7 @@ if __name__ == '__main__':
         fancy_plots()
         survival_curves()
         survival_plots()
+        diagnosis_survival_curves()
         objective_subjective_plots()
         circadian_component_plots()
         activity_var_comparisons()

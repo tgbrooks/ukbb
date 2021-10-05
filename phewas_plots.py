@@ -535,6 +535,69 @@ class Plotter:
         fig.tight_layout()
         return fig
 
+    def quintile_diagnosis_survival_plot(self, data, icd10_entries, var, diagnosis, var_label=None, ax=None):
+        ''' survival curves for a particular diagnosis '''
+        phenotype = self.phecode_info.loc[diagnosis].phenotype
+        icd10 = icd10_entries.copy()
+        icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+        icd10.first_date = pandas.to_datetime(icd10.first_date)
+        icd10 = icd10.sort_values(by="first_date")
+        icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+        icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+        icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+        last_date = pandas.to_datetime(icd10.first_date.max())
+        start_date = icd10.first_date.min()
+
+        diagnosis_data = self.phecode_info[self.phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = self.phecode_map[self.phecode_map.PHECODE.isin(diagnosis_data.index)].index
+
+        d = data.copy()
+        d['diagnosis_date'] = icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].groupby("ID").first_date.min()
+        d['uncensored'] = ~d['diagnosis_date'].isna()
+        # All times are censored by end of data collection but also if they have died first
+        d.diagnosis_date.fillna(pandas.to_datetime(d.date_of_death).fillna(last_date), inplace=True)
+        d['diagnosis_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['use'] = (~d[diagnosis].astype(bool)) | (d.uncensored) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+
+        if var_label is None:
+            var_label = var
+        quintiles = pandas.qcut(d[var], 5)
+        if ax is None:
+            fig, ax = pylab.subplots(figsize=(6,4))
+            just_ax = False
+        else:
+            fig = ax.figure
+            just_ax = True
+        age_range = [60,75] # Age range to use in plot
+        min_value = 100
+        for quintile, label in list(zip(quintiles.cat.categories, quintile_labels)):
+            quintile_data = d[quintiles == quintile]
+            N = len(quintile_data)
+            age = quintile_data.diagnosis_age[quintile_data.uncensored].sort_values()
+            at_risk = numpy.array([(quintile_data.diagnosis_age > x).sum() for x in age])
+            #age_ = pandas.concat((pandas.Series([start_age]), age, pandas.Series([end_age])))
+            age_ = age 
+            y = (1 - numpy.cumsum(1/at_risk))*100
+            ax.plot(age_,
+                    y,
+                    drawstyle='steps-post',
+                    label = label + " quintile",
+            )
+            min_value = min(min_value, numpy.min(y[(age_ >= age_range[0]) & (age_ < age_range[1]+1)]))
+
+        ax.set_title(f"{phenotype} by {var_label}")
+        ax.set_ylabel(f"{phenotype} Probability")
+        ax.set_xlabel("Age (yrs)")
+        ax.set_xlim(*age_range) # age range to show: above and below we get low sample counts
+        ax.set_ylim(min_value-1,100)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+        #ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
+        if not just_ax:
+            fig.legend(loc=(0.15,0.15))
+            fig.tight_layout()
+        return fig
+
     ## Investigate phenotypes by diagnosis age
     def plot_by_diagnosis_date(self, data, ICD10_codes, phecode, phenotype_name, icd10_entries, phecode_tests):
         # gather icd10 entries by the date of first diagnosis
