@@ -1935,6 +1935,9 @@ if __name__ == '__main__':
 
     predictive_tests, predictive_tests_by_sex, predictive_tests_by_age = phewas_tests.predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
 
+    predictive_tests_by_cox = phewas_tests.predictive_tests_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
+    predictive_tests_by_sex_cox = phewas_tests.predictive_tests_by_sex_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
+
 
     #### Prepare color maps for the plots
     color_by_phecode_cat = {cat:color for cat, color in

@@ -997,3 +997,183 @@ def predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entr
     predictive_tests_by_age['age_diff_q'] = bh_fdr_with_nans(predictive_tests_by_age.age_diff_p.fillna(1))
     predictive_tests_by_age.sort_values(by="age_diff_p").to_csv(OUTDIR + "predictive_tests_by_age.txt", sep="\t", index=False)
     return predictive_tests, predictive_tests_by_sex, predictive_tests_by_age
+
+def predictive_tests_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE=False):
+    # Predict diagnoses after actigraphy
+    if not RECOMPUTE:
+        try:
+            predictive_tests_cox = pandas.read_csv(OUTDIR+f"predictive_tests.cox.txt", sep="\t", index_col=0)
+            #predictive_tests_by_sex = pandas.read_csv(OUTDIR+f"predictive_tests_by_sex.cox.txt", sep="\t", index_col=0)
+            #predictive_tests_by_age = pandas.read_csv(OUTDIR+f"predictive_tests_by_age.cox.txt", sep="\t", index_col=0)
+            #return predictive_tests, predictive_tests_by_sex, predictive_tests_by_age
+            return predictive_tests_cox
+        except FileNotFoundError:
+            pass
+
+    d = data.copy()
+    icd10 = icd10_entries.copy()
+    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+    icd10.first_date = pandas.to_datetime(icd10.first_date)
+    icd10 = icd10.sort_values(by="first_date")
+    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+    last_date = icd10.first_date.max()
+
+    predictive_tests_cox_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        #d['diagnosis_after_actigraphy'] = d.index.isin(icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].ID).astype(int)
+        d['diagnosis_date'] = icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].groupby("ID").first_date.min()
+        d['uncensored'] = ~d['diagnosis_date'].isna()
+        # All times are censored by end of data collection but also if they have died first
+        d.diagnosis_date.fillna(pandas.to_datetime(d.date_of_death).fillna(pandas.to_datetime(last_date)), inplace=True)
+        d['diagnosis_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['use'] = (~d[diagnosis].astype(bool)) | (d.uncensored) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        covariate_formula = " + ".join(covariates)
+        #_covariates = ["sex", "BMI"]
+        #covariate_formula = " + ".join(_covariates)
+        for variable in ['temp_RA']:#, 'acceleration_RA', 'acceleration_overall', 'main_sleep_ratio_mean']:
+            d2 = d[d.use][['diagnosis_age', "uncensored", variable] + covariates].dropna(how="any")
+            model = smf.phreg(
+                f"diagnosis_age ~ {variable} + {covariate_formula}",
+                data = d2,
+                status = d2.uncensored.values,
+                entry = d2.age_at_actigraphy.values,
+                )
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_cases": d2.uncensored.sum(),
+                "N_controls": (~d2.uncensored).sum(),
+            }
+            if header['N_cases'] < 50:
+                continue
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error") # warnings as exceptions
+                try:
+                    fit = model.fit() # Run the model fit
+                except (numpy.linalg.LinAlgError, sm.tools.sm_exceptions.ConvergenceWarning, RuntimeWarning) as e:
+                    print(f"Problem in {variable} {diagnosis}: {e}")
+                    predictive_tests_cox_list.append(header)
+                    continue
+            pvalues = pandas.Series(fit.pvalues, model.exog_names)
+            params = pandas.Series(fit.params, model.exog_names)
+            se = pandas.Series(fit.bse, model.exog_names)
+            std = d2[variable].std()
+            header.update({
+                "p": pvalues[variable],
+                "logHR": params[variable],
+                "logHR_se": se[variable],
+                "std_logHR": params[variable] * std,
+                "std_logHR_se": se[variable] *std,
+            })
+            predictive_tests_cox_list.append(header)
+    predictive_tests_cox = pandas.DataFrame(predictive_tests_cox_list)
+    def bh_fdr_with_nans(ps):
+        okay = ~ps.isna()
+        qs = numpy.full(fill_value=float("NaN"), shape=ps.shape)
+        qs[okay] = BH_FDR(ps[okay])
+        return qs
+    predictive_tests_cox['q'] = bh_fdr_with_nans(predictive_tests_cox.p.fillna(1))
+    predictive_tests_cox.sort_values(by="p").to_csv(OUTDIR + "predictive_tests.cox.txt", sep="\t", index=False)
+
+    return predictive_tests_cox
+
+def predictive_tests_by_sex_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE=False):
+    # Predict diagnoses after actigraphy, separte by male and female
+    if not RECOMPUTE:
+        try:
+            predictive_tests_by_sex_cox = pandas.read_csv(OUTDIR+f"predictive_tests_by_sex.cox.txt", sep="\t", index_col=0)
+            return predictive_tests_by_sex_cox
+        except FileNotFoundError:
+            pass
+
+    d = data.copy()
+    icd10 = icd10_entries.copy()
+    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+    icd10.first_date = pandas.to_datetime(icd10.first_date)
+    icd10 = icd10.sort_values(by="first_date")
+    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+    last_date = icd10.first_date.max()
+
+    predictive_tests_by_sex_cox_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        #d['diagnosis_after_actigraphy'] = d.index.isin(icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].ID).astype(int)
+        d['diagnosis_date'] = icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].groupby("ID").first_date.min()
+        d['uncensored'] = ~d['diagnosis_date'].isna()
+        # All times are censored by end of data collection but also if they have died first
+        d.diagnosis_date.fillna(pandas.to_datetime(d.date_of_death).fillna(pandas.to_datetime(last_date)), inplace=True)
+        d['diagnosis_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['use'] = (~d[diagnosis].astype(bool)) | (d.uncensored) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        covariate_formula = " + ".join(c for c in covariates if c != 'sex')
+        for variable in ['temp_RA']:
+            d2 = d[d.use][['diagnosis_age', "uncensored", variable] + covariates].dropna(how="any")
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_cases_male": d2[d2.sex == 'Male'].uncensored.sum(),
+                "N_cases_female": d2[d2.sex == 'Female'].uncensored.sum(),
+                "N_controls": (~d2.uncensored).sum(),
+            }
+            print(diagnosis)
+            if header['N_cases_male'] < 100 or header['N_cases_female'] < 100:
+                continue
+            model = smf.phreg(
+                f"diagnosis_age ~ sex:({variable} + {covariate_formula})",
+                data = d2,
+                status = d2.uncensored.values,
+                entry = d2.age_at_actigraphy.values,
+                )
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error") # warnings as exceptions
+                try:
+                    fit = model.fit() # Run the model fit
+                except (numpy.linalg.LinAlgError, sm.tools.sm_exceptions.ConvergenceWarning, RuntimeWarning) as e:
+                    print(f"Problem in {variable} {diagnosis}: {e}")
+                    predictive_tests_by_sex_cox_list.append(header)
+                    continue
+            pvalues = pandas.Series(fit.pvalues, model.exog_names)
+            params = pandas.Series(fit.params, model.exog_names)
+            se = pandas.Series(fit.bse, model.exog_names)
+            std = d2[variable].std()
+            male_var = f"sex[Male]:{variable}"
+            female_var = f"sex[Female]:{variable}"
+            contrast = pandas.Series(numpy.zeros(params.shape), model.exog_names)
+            contrast[male_var] = 1
+            contrast[female_var] = -1
+            sex_diff_p = float(fit.f_test(contrast).pvalue)
+            header.update({
+                "sex_diff_p": sex_diff_p,
+                "male_p": pvalues[male_var],
+                "female_p": pvalues[female_var],
+                "male_logHR": params[male_var],
+                "female_logHR": params[female_var],
+                "male_logHR_se": se[male_var],
+                "female_logHR_se": se[female_var],
+                "male_std_logHR": params[male_var] * std,
+                "female_std_logHR": params[female_var] * std,
+                "male_std_logHR_se": se[male_var] *std,
+                "female_std_logHR_se": se[female_var] *std,
+            })
+            predictive_tests_by_sex_cox_list.append(header)
+
+    predictive_tests_by_sex_cox = pandas.DataFrame(predictive_tests_by_sex_cox_list)
+    def bh_fdr_with_nans(ps):
+        okay = ~ps.isna()
+        qs = numpy.full(fill_value=float("NaN"), shape=ps.shape)
+        qs[okay] = BH_FDR(ps[okay])
+        return qs
+    predictive_tests_by_sex_cox['sex_diff_q'] = bh_fdr_with_nans(predictive_tests_by_sex_cox.sex_diff_p.fillna(1))
+    predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_csv(OUTDIR + "predictive_tests_by_sex.cox.txt", sep="\t", index=False)
+
+    return predictive_tests_by_sex_cox
