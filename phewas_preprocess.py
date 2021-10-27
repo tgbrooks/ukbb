@@ -235,10 +235,12 @@ def load_phecode(selected_ids):
         in_block = icd10_entries.ICD10.isin(icd10_codes)
         in_block_icd9 = icd9_entries.ICD9.isin(icd9_codes)
 
+        #icd10.groupby(['ID', 'PHECODE']).size().unstack(fill_value=0).astype(bool) #TODO use this instead
         diagnosed = in_block.groupby(icd10_entries.ID).any()
         phecode_data_icd10[group] = diagnosed
         phecode_data_icd9[group] =  in_block_icd9.groupby(icd9_entries.ID).any()
         phecode_data_self_report[group] = self_reported.phecode.isin(group_data.index)
+
         phecode_group_details[group] = {
             "phecodes": ';'.join(group_data.index.astype(str)),
             "ICD10_codes": ';'.join(icd10_codes),

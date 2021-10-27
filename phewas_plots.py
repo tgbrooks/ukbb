@@ -64,8 +64,9 @@ def local_regression(x,y, out_x, bw=0.05):
 
 
 class Plotter:
-    def __init__(self, phecode_info, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions):
+    def __init__(self, phecode_info, phecode_map, colormaps, activity_variables, activity_variable_descriptions, quantitative_variable_descriptions):
          self.phecode_info = phecode_info
+         self.phecode_map = phecode_map
          self.colormaps = colormaps
          self.activity_variables = activity_variables
          self.activity_variable_descriptions = activity_variable_descriptions
@@ -569,9 +570,11 @@ class Plotter:
         else:
             fig = ax.figure
             just_ax = True
-        age_range = [60,75] # Age range to use in plot
-        min_value = 100
+        #age_range = [60,75] # Age range to use in plot
+        #min_value = 100
+        i = 1
         for quintile, label in list(zip(quintiles.cat.categories, quintile_labels)):
+            i += 1
             quintile_data = d[quintiles == quintile]
             N = len(quintile_data)
             age = quintile_data.diagnosis_age[quintile_data.uncensored].sort_values()
@@ -583,14 +586,16 @@ class Plotter:
                     y,
                     drawstyle='steps-post',
                     label = label + " quintile",
+                    c='k',
+                    alpha = i / (5 + 1)
             )
-            min_value = min(min_value, numpy.min(y[(age_ >= age_range[0]) & (age_ < age_range[1]+1)]))
+            #min_value = min(min_value, numpy.min(y[(age_ >= age_range[0]) & (age_ < age_range[1]+1)]))
 
         ax.set_title(f"{phenotype} by {var_label}")
         ax.set_ylabel(f"{phenotype} Probability")
         ax.set_xlabel("Age (yrs)")
-        ax.set_xlim(*age_range) # age range to show: above and below we get low sample counts
-        ax.set_ylim(min_value-1,100)
+        #ax.set_xlim(*age_range) # age range to show: above and below we get low sample counts
+        #ax.set_ylim(min_value-1,100)
         ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
         #ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
         if not just_ax:
@@ -669,12 +674,13 @@ class Plotter:
         colors_list = list(colors.values())
         fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
         yticks = {}
+        Q_CUTOFF = 0.01
 
         for rank, phenotype in enumerate(phenotypes):
             results = test_results.loc[phenotype]
             phenotype_name = phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name
             height = 0.15 #Height of the bar plots (1 unit is the spacing between variables)
-            ys = numpy.linspace(rank-height*1.5, rank+height*1.5, 4)
+            ys = numpy.linspace(-rank+height*1.5, -rank-height*1.5, 4)
             effs = numpy.abs([results.circ_eff, results.physical_eff, results.sleep_eff])
             ps = [results.circ_p, results.physical_p, results.sleep_p]
             ses = [results.circ_se, results.physical_se, results.sleep_se]
@@ -684,20 +690,17 @@ class Plotter:
             for y, c, p in zip(ys, colors_list, numpy.concatenate((ps, [results.overall_p]))):
                 ax1.barh([y], height=height, width=[-numpy.log10(p)], color=c) # Draw p value bars
 
-            yticks[rank] = util.wrap(phenotype_name, 30)
-        # Compute an FDR = 0.05 cutoff - but we don't actually compute a p for every phenotype
-        # so we will assume worst case, all others ps are 1
-        #pvalues = numpy.array(pvalues + [1]*(phenotype_tests.phenotype.nunique() - len(pvalues)))
+            yticks[-rank] = util.wrap(phenotype_name, 30)
         pvalues = test_results.circ_p
-        qvalues = util.BH_FDR(pvalues)
-        qvalues = pandas.Series(qvalues, index=pvalues.index).loc[phenotypes]
+        qvalues = test_results.circ_q
+        qvalues = qvalues.loc[phenotypes]
         pvalues = pvalues.loc[phenotypes]
         qvalue_dict = {rank: q for rank, q in enumerate(qvalues)}
-        # Cut off half way between pvalues of worst gene passing FDR < 0.05 and best gene not passing
-        pvalue_cutoff = 0.5*pvalues[qvalues < 0.05].max() + 0.5*pvalues[qvalues >= 0.05].min()
+        # Cut off half way between pvalues of worst phenotype passing FDR < Q_CUTOFF and best phenotype not passing
+        pvalue_cutoff = 0.5*pvalues[qvalues < Q_CUTOFF].max() + 0.5*pvalues[qvalues >= Q_CUTOFF].min()
         ax1.axvline(-numpy.log10(pvalue_cutoff), linestyle="--", color="k")
         ax1.set_yticks(list(yticks.keys()))
-        ax1.set_yticklabels([name if qvalue >= 0.05 else name + " (*)"
+        ax1.set_yticklabels([name if qvalue >= Q_CUTOFF else name + " (*)"
                                 for qvalue, name in zip(qvalues, yticks.values())])
         ax1.set_xlabel("-log10 p-value")
         ax1.set_xlim(left=0, right=min(ax1.get_xlim()[1], 40)) # Cap log p-values at 40

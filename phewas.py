@@ -5,6 +5,7 @@ import pandas
 import numpy
 import seaborn as sns
 import statsmodels.formula.api as smf
+import statsmodels.api as sm
 
 
 import phewas_preprocess
@@ -16,6 +17,8 @@ import day_plots
 
 import util
 from util import BH_FDR, legend_of_pointscale, legend_from_colormap, truncate, wrap
+
+DPI = 300
 
 def summary():
     # Summarize the phecode test results
@@ -402,6 +405,8 @@ def fancy_plots():
     fig.savefig(OUTDIR+"phenotypes.delirium_dementia_alzheimers.png")
     fig = phewas_plots.fancy_case_control_plot(data, 332, normalize=True, confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.parkinsons.png")
+    fig = phewas_plots.fancy_case_control_plot(data, 332, var="temp_RA", normalize=True, confidence_interval=True)
+    fig.savefig(OUTDIR+"phenotypes.parkinsons.temp_RA.png")
     fig = phewas_plots.fancy_case_control_plot(data, 480, normalize=True, confidence_interval=True)
     fig.savefig(OUTDIR+"phenotypes.pneumonia.png")
     fig = phewas_plots.fancy_case_control_plot(data, 495, normalize=True, confidence_interval=True)
@@ -412,6 +417,11 @@ def survival_curves():
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "RA")
     fig.savefig(OUTDIR+"survival.RA.png")
     death_counts.to_csv(OUTDIR+"deaths.RA.by_year.txt", sep="\t")
+
+    # By temp_RA
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "temp_RA", "temp_RA")
+    fig.savefig(OUTDIR+"survival.temp_RA.png")
+    death_counts.to_csv(OUTDIR+"deaths.temp_RA.by_year.txt", sep="\t")
 
     # Survival by main_sleep_offset_avg
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "main_sleep_offset_mean", "Sleep Offset")
@@ -476,13 +486,14 @@ def survival_plots():
     ax.set_ylabel("Within-person variation / Between-person variation")
     ax.set_ylim(0,1)
     ax.axvline(0, c='k')
-    for index, row in survival_tests.sort_values(by="p").head(20).iterrows():
+    annotate_rows = numpy.concatenate([survival_tests.sort_values(by="p").head(20).activity_var.to_list(), ["temp_RA", "temp_amplitude", "temp_within_day_SD"]])
+    for var, row in survival_tests.set_index('activity_var').loc[annotate_rows].iterrows():
         # Label the top points
         ax.annotate(
-            row.activity_var,
+            var,
             (
             row['standardized log Hazard Ratio'],
-            variance_ratio.loc[row.activity_var]),
+            variance_ratio.loc[var]),
             xytext=(0,15),
             textcoords="offset pixels",
             arrowprops={'arrowstyle':"->"})
@@ -540,23 +551,24 @@ def survival_plots():
 
 def diagnosis_survival_curves():
     # Pneumonia survival by RA
-    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "acceleration_RA", 480)
-    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.RA.png")
+    fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "acceleration_RA", 480, var_label="RA")
+    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.RA.png", dpi=DPI)
+    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.RA.svg")
 
     fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 480)
-    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.temp_RA.png")
+    fig.savefig(OUTDIR+"diagnosis_survival.penumonia.temp_RA.png", dpi=DPI)
 
     fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 250)
-    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.temp_RA.png")
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.temp_RA.png", dpi=DPI)
 
     fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 401)
-    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.hypertension.temp_RA.png")
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.hypertension.temp_RA.png", dpi=DPI)
 
     fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 585)
-    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.renal_failure.temp_RA.png")
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.renal_failure.temp_RA.png", dpi=DPI)
 
     fig = phewas_plots.quintile_diagnosis_survival_plot(data, icd10_entries, "temp_RA", 332)
-    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.parkinsons.temp_RA.png")
+    fig.savefig(OUTDIR+"diagnosis_survival.diabetes.parkinsons.temp_RA.png", dpi=DPI)
 
 
 def triangular_three_component_plots():
@@ -629,7 +641,7 @@ def triangular_three_component_plots():
 def effect_size_plots():
 
     def plot(activity_var = "acceleration_RA"):
-        selected_data = phecode_tests[phecode_tests.activity_var == activity_var].sort_values(by="p").head(10).sort_values(by="coeff")
+        selected_data = phecode_tests[phecode_tests.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[:20][::-1]]
         fig, ax = pylab.subplots(figsize=(7,4))
         y = 0
         for _, d in selected_data.iterrows():
@@ -645,39 +657,52 @@ def effect_size_plots():
         ax.set_xlim(left=0)
         ax.set_xlabel("Effect Size (SD)")
         fig.suptitle(f"Associations with {activity_var}")
-        fig.tight_layout(rect=(0,0,1,0.96))
+        fig.tight_layout()#rect=(0,0,1,0.96))
         fig.savefig(OUTDIR+f"/top_phecode_associations.acceleration_RA.png", dpi=300)
         return fig, ax
     plot("acceleration_RA")
 
-    def effect_sizes_by_sex(activity_var = "acceleration_RA"):
-        selected_data = phecode_tests_by_sex[phecode_tests_by_sex.activity_var == activity_var].sort_values(by="p_diff").head(10).sort_values(by="std_male_coeff")
-        fig, ax = pylab.subplots(figsize=(7,4))
+    def effect_sizes_by_sex_and_age(activity_var = "acceleration_RA"):
+        selected_data = phecode_tests_by_sex[phecode_tests_by_sex.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[:20][::-1]]
+        selected_age_data = age_tests[age_tests.activity_var == activity_var].set_index('phecode').loc[top_phenotypes[:20][::-1]]
+        fig, axes = pylab.subplots(figsize=(10,7), ncols=2, sharey=True)
         y = 0
-        colormap = color_by_sex
-        for _, d in selected_data.iterrows():
+        for ((_,d),(_,d_age)) in zip(selected_data.iterrows(), selected_age_data.iterrows()):
             male_coeff = d['std_male_coeff']
             male_lb = d['std_male_coeff_low']
             male_ub = d['std_male_coeff_high']
             female_coeff = d['std_female_coeff']
             female_lb = d['std_female_coeff_low']
             female_ub = d['std_female_coeff_high']
-            ax.scatter([male_coeff, female_coeff], [y-0.15, y+0.15], c=[colormap['Male'], colormap['Female']]) #TODO update sex-specific coloring
-            ax.plot([male_lb, male_ub], [y-0.15, y-0.15], c = colormap['Male'])
-            ax.plot([female_lb, female_ub], [y+0.15, y+0.15], c = colormap['Female'])
+            axes[0].scatter([male_coeff, female_coeff], [y-0.15, y+0.15], c=[color_by_sex['Male'], color_by_sex['Female']])
+            axes[0].plot([male_lb, male_ub], [y-0.15, y-0.15], c = color_by_sex['Male'])
+            axes[0].plot([female_lb, female_ub], [y+0.15, y+0.15], c = color_by_sex['Female'])
+            # age effects
+            age55_effect = d_age.age_55_std_effect
+            age55_lb = (d_age.age_55_std_effect - 1.96 * d_age.age_55_std_se)
+            age55_ub = (d_age.age_55_std_effect + 1.96 * d_age.age_55_std_se)
+            age70_effect = d_age.age_70_std_effect
+            age70_lb = (d_age.age_70_std_effect - 1.96 * d_age.age_70_std_se)
+            age70_ub = (d_age.age_70_std_effect + 1.96 * d_age.age_70_std_se)
+            axes[1].scatter([age55_effect, age70_effect], [y-0.15, y+0.15], c=[color_by_age[55], color_by_age[70]])
+            axes[1].plot([age55_lb, age55_ub], [y-0.15, y-0.15], c = color_by_age[55])
+            axes[1].plot([age70_lb, age70_ub], [y+0.15, y+0.15], c = color_by_age[70])
             y += 1
-        ax.axvline(0, linestyle="--", color='k')
-        ax.set_yticks(numpy.arange(y))
-        ax.set_yticklabels(selected_data.phecode_meaning)
+        axes[0].axvline(0, linestyle="--", color='k')
+        axes[1].axvline(0, linestyle="--", color='k')
+        axes[0].set_yticks(numpy.arange(y))
+        axes[0].set_yticklabels(selected_data.phecode_meaning)
         #ax.set_xlim(left=0)
-        ax.set_xlabel("Effect Size (SD)")
-        ax.set_title(f"Associations with {activity_var}")
+        axes[0].set_xlabel("Effect size (SD)\nby sex")
+        axes[1].set_xlabel("Effect size (SD)\nby age")
+        fig.suptitle(f"Associations with {activity_var}")
         fig.tight_layout()
-        util.legend_from_colormap(fig, colormap)
-        fig.subplots_adjust(right=0.85)
-        fig.savefig(OUTDIR+f"/top_phecode_associations.by_sexacceleration_RA.png", dpi=300)
-        return fig, ax
-    effect_sizes_by_sex("acceleration_RA")
+        fig.subplots_adjust(right=0.82)
+        util.legend_from_colormap(fig, color_by_sex, loc=(0.85,0.6))
+        util.legend_from_colormap(fig, color_by_age, names={x:f"age {x}" for x in color_by_age.keys()}, loc=(0.85,0.4))
+        fig.savefig(OUTDIR+f"/top_phecode_associations.by_sex_and_age.{activity_var}.png", dpi=300)
+        return fig, axes
+    effect_sizes_by_sex_and_age("acceleration_RA")
 
 
 def circadian_component_plots():
@@ -705,16 +730,14 @@ def circadian_component_plots():
     legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
     fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
-    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
     fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
     fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests_amp, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.temp_amplitude.png")
 
-    top_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
-    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_phenotypes[:20], quantitative=True)
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_quantitative_phenotypes[:20], quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
-    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_phenotypes[:20], quantitative=True)
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_quantitative_phenotypes[:20], quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.temp_amplitude.png")
 
     # Plot the sex differences
@@ -1742,9 +1765,10 @@ def predict_diagnoses():
         fig.tight_layout()
 
 def predict_diagnoses_plots():
-    tests = predictive_tests.sort_values(by="p").head(20).sort_values(by="p", ascending=False)
-    tests_by_sex = predictive_tests_by_sex.set_index("meaning").reindex(tests.meaning).reset_index()
-    tests_by_age = predictive_tests_by_age.set_index("meaning").reindex(tests.meaning).reset_index()
+    phenotypes = top_phenotypes[:20][::-1]
+    tests = predictive_tests_cox.set_index('phecode').loc[phenotypes]
+    tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
+    tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
     fig, axes = pylab.subplots(figsize=(9,8), ncols=4, sharey=True)
     ys = numpy.arange(len(tests))
@@ -1760,66 +1784,68 @@ def predict_diagnoses_plots():
     axes[0].set_xlabel("-log10 p-value")
 
     axes[1].scatter(
-        tests.std_coeff,
+        tests.std_logHR,
         ys,
         color='k',
     )
     for i, (idx, row) in enumerate(tests.iterrows()):
         axes[1].plot(
-            [row.std_coeff - row.std_se*1.96, row.std_coeff + row.std_se*1.96],
+            [row.std_logHR- row.std_logHR_se*1.96, row.std_logHR+ row.std_logHR_se*1.96],
             [ys[i], ys[i]],
             color='k',
         )
     axes[1].axvline(0, color="k")
-    axes[1].set_xlabel("Effect Size")
+    axes[1].set_xlabel("logHR per SD")
 
     # By sex
     axes[2].scatter(
-        tests_by_sex.std_male_coeff,
+        tests_by_sex.male_std_logHR,
         ys + 0.1,
         color=color_by_sex['Male'],
     )
     axes[2].scatter(
-        tests_by_sex.std_female_coeff,
+        tests_by_sex.female_std_logHR,
         ys-0.1,
         color=color_by_sex['Female'],
     )
     for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
         axes[2].plot(
-            [row.std_male_coeff - row.std_male_bse*1.96, row.std_male_coeff + row.std_male_bse*1.96],
+            [row.male_std_logHR - row.male_std_logHR_se*1.96, row.male_std_logHR+ row.male_std_logHR_se*1.96],
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_sex["Male"],
         )
         axes[2].plot(
-            [row.std_female_coeff - row.std_female_bse*1.96, row.std_female_coeff + row.std_female_bse*1.96],
+            [row.female_std_logHR- row.female_std_logHR_se*1.96, row.female_std_logHR + row.female_std_logHR_se*1.96],
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
-    axes[2].set_xlabel("Effect Size\nBy Sex")
+    axes[2].set_xlabel("logHR per SD\nBy Sex")
+    axes[2].axvline(0, color="k")
 
-    # By age
+    #By age
     axes[3].scatter(
-        tests_by_age.std_age55_coeff,
+        tests_by_age.age55_std_logHR,
         ys + 0.1,
         color=color_by_age[55],
     )
     axes[3].scatter(
-        tests_by_age.std_age70_coeff,
+        tests_by_age.age70_std_logHR,
         ys-0.1,
         color=color_by_age[70],
     )
     for i, (idx, row) in enumerate(tests_by_age.iterrows()):
         axes[3].plot(
-            [row.std_age55_coeff - row.std_age55_se*1.96, row.std_age55_coeff + row.std_age55_se*1.96],
+            [row.age55_std_logHR - row.age55_std_logHR_se*1.96, row.age55_std_logHR + row.age55_std_logHR_se*1.96],
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_age[55],
         )
         axes[3].plot(
-            [row.std_age70_coeff - row.std_age70_se*1.96, row.std_age70_coeff + row.std_age70_se*1.96],
+            [row.age70_std_logHR - row.age70_std_logHR_se*1.96, row.age70_std_logHR + row.age70_std_logHR_se*1.96],
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_age[70],
         )
-    axes[3].set_xlabel("Effect Size\nBy Age")
+    axes[3].set_xlabel("logHR per SD\nBy Age")
+    axes[3].axvline(0, color="k")
     fig.tight_layout(rect=(0,0,0.85,1))
     util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
     util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
@@ -1935,8 +1961,9 @@ if __name__ == '__main__':
 
     predictive_tests, predictive_tests_by_sex, predictive_tests_by_age = phewas_tests.predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
 
-    predictive_tests_by_cox = phewas_tests.predictive_tests_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
+    predictive_tests_cox = phewas_tests.predictive_tests_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
     predictive_tests_by_sex_cox = phewas_tests.predictive_tests_by_sex_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
+    predictive_tests_by_age_cox = phewas_tests.predictive_tests_by_age_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
 
 
     #### Prepare color maps for the plots
@@ -1969,6 +1996,10 @@ if __name__ == '__main__':
         "quantitative_function": color_by_quantitative_function,
         "sex": color_by_sex,
     }
+
+     #The top phenotypes that we will highlight
+    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
+    top_quantitative_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
 
     ## Create the plotter object
     # for common plot types

@@ -1,8 +1,10 @@
 import scipy
 import numpy
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import pylab
 import pandas
+import warnings
 
 from util import BH_FDR
 import fields_of_interest
@@ -319,9 +321,19 @@ def age_tests(data, phecode_groups, activity_variables, activity_variable_descri
             p = fit.pvalues[f"Q({group}):age_at_actigraphy"]
             main_coeff = fit.params[f"Q({group})"]
             age_coeff = fit.params[f"Q({group}):age_at_actigraphy"]
-            std_effect = age_coeff / data[activity_variable].std()
-            age_55_pvalue = fit.f_test(f"Q({group}):age_at_actigraphy*55 + Q({group})").pvalue
-            age_70_pvalue = fit.f_test(f"Q({group}):age_at_actigraphy*70 + Q({group})").pvalue
+            activity_std = data[activity_variable].std()
+            std_effect = age_coeff / activity_std
+            # Compute the effects at age 55 and age 70 specifically for illustrative purposes
+            age_55_contrast = pandas.DataFrame(numpy.zeros(shape=(1,len(fit.params))), columns=fit.params.index) 
+            age_55_contrast[f"Q({group}):age_at_actigraphy"] = 55
+            age_55_contrast[f"Q({group})"] = 1
+            age_55_pvalue = fit.f_test(age_55_contrast).pvalue
+            age_55_std_se = float(numpy.sqrt(age_55_contrast @ fit.cov_params() @ age_55_contrast.T).values) / activity_std
+            age_70_contrast = pandas.DataFrame(numpy.zeros(shape=(1,len(fit.params))), columns=fit.params.index) 
+            age_70_contrast[f"Q({group}):age_at_actigraphy"] = 70
+            age_70_contrast[f"Q({group})"] = 1
+            age_70_pvalue = fit.f_test(age_70_contrast).pvalue
+            age_70_std_se = float(numpy.sqrt(age_70_contrast @ fit.cov_params() @ age_70_contrast.T).values) / activity_std
             age_tests_list.append({"phecode": group,
                                     "activity_var": activity_variable,
                                     "p": p,
@@ -331,6 +343,8 @@ def age_tests(data, phecode_groups, activity_variables, activity_variable_descri
                                     "N_cases": N,
                                     "age_55_p": age_55_pvalue,
                                     "age_70_p": age_70_pvalue,
+                                    "age_55_std_se": age_55_std_se,
+                                    "age_70_std_se": age_70_std_se,
                                    })
     age_tests = pandas.DataFrame(age_tests_list)
 
@@ -1177,3 +1191,94 @@ def predictive_tests_by_sex_cox(data, phecode_groups, phecode_info, phecode_map,
     predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_csv(OUTDIR + "predictive_tests_by_sex.cox.txt", sep="\t", index=False)
 
     return predictive_tests_by_sex_cox
+
+def predictive_tests_by_age_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE=False):
+    # Predict diagnoses after actigraphy, separating by age at which actigraphy was recorded
+    if not RECOMPUTE:
+        try:
+            predictive_tests_by_age_cox = pandas.read_csv(OUTDIR+f"predictive_tests_by_age.cox.txt", sep="\t", index_col=0)
+            return predictive_tests_by_age_cox
+        except FileNotFoundError:
+            pass
+
+    d = data.copy()
+    icd10 = icd10_entries.copy()
+    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
+    icd10.first_date = pandas.to_datetime(icd10.first_date)
+    icd10 = icd10.sort_values(by="first_date")
+    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
+
+    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
+    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
+    last_date = icd10.first_date.max()
+
+    predictive_tests_by_age_cox_list = []
+    for diagnosis in phecode_groups:
+        diagnosis_data = phecode_info[phecode_info.index.astype(int) == diagnosis]
+        icd10_codes = phecode_map[phecode_map.PHECODE.isin(diagnosis_data.index)].index
+        d['diagnosis_date'] = icd10_after_actigraphy[icd10_after_actigraphy.ICD10.isin(icd10_codes)].groupby("ID").first_date.min()
+        d['uncensored'] = ~d['diagnosis_date'].isna()
+        # All times are censored by end of data collection but also if they have died first
+        d.diagnosis_date.fillna(pandas.to_datetime(d.date_of_death).fillna(pandas.to_datetime(last_date)), inplace=True)
+        d['diagnosis_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['use'] = (~d[diagnosis].astype(bool)) | (d.uncensored) # Use only controls (without ever that diagnosis) and cases (with diagnosis after actigraphy)
+        covariate_formula = " + ".join(c for c in covariates if c != 'age_at_actigraphy')
+        for variable in ['temp_RA']:
+            d2 = d[d.use][['diagnosis_age', "uncensored", variable] + covariates].dropna(how="any")
+            header = {
+                "activity_var": variable,
+                "phecode": diagnosis,
+                "meaning": phecode_info.phenotype.get(diagnosis, "NA"),
+                "N_cases": d2.uncensored.sum(),
+                "N_controls": (~d2.uncensored).sum(),
+            }
+            if header['N_cases'] < 500:
+                continue
+            print(diagnosis)
+            model = smf.phreg(
+                f"diagnosis_age ~ age_at_actigraphy*({variable} + {covariate_formula})",
+                data = d2,
+                status = d2.uncensored.values,
+                entry = d2.age_at_actigraphy.values,
+                )
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error") # warnings as exceptions
+                try:
+                    fit = model.fit() # Run the model fit
+                except (numpy.linalg.LinAlgError, sm.tools.sm_exceptions.ConvergenceWarning, RuntimeWarning) as e:
+                    print(f"Problem in {variable} {diagnosis}: {e}")
+                    predictive_tests_by_age_cox_list.append(header)
+                    continue
+            pvalues = pandas.Series(fit.pvalues, model.exog_names)
+            params = pandas.Series(fit.params, model.exog_names)
+            cov_params = pandas.DataFrame(fit.cov_params(), index=params.index, columns=params.index)
+            std = d2[variable].std()
+            interaction = f"age_at_actigraphy:{variable}"
+            age55_vec = pandas.Series(numpy.zeros(len(params)), index=params.index)
+            age55_vec[variable] = 1
+            age55_vec[interaction] = 55
+            age70_vec = pandas.Series(numpy.zeros(len(params)), index=params.index)
+            age70_vec[variable] = 1
+            age70_vec[interaction] = 70
+            age_diff_p = pvalues[interaction]
+            header.update({
+                "age_diff_p": age_diff_p,
+                "age55_std_logHR": (params @ age55_vec) * std,
+                "age70_std_logHR": (params @ age70_vec) * std,
+                "age55_std_logHR_se": numpy.sqrt(age55_vec.T @ cov_params @ age55_vec) * std,
+                "age70_std_logHR_se": numpy.sqrt(age70_vec.T @ cov_params @ age70_vec) * std,
+                "age55_p": fit.f_test(age55_vec).pvalue,
+                "age70_p": fit.f_test(age70_vec).pvalue,
+            })
+            predictive_tests_by_age_cox_list.append(header)
+
+    predictive_tests_by_age_cox = pandas.DataFrame(predictive_tests_by_age_cox_list)
+    def bh_fdr_with_nans(ps):
+        okay = ~ps.isna()
+        qs = numpy.full(fill_value=float("NaN"), shape=ps.shape)
+        qs[okay] = BH_FDR(ps[okay])
+        return qs
+    predictive_tests_by_age_cox['age_diff_q'] = bh_fdr_with_nans(predictive_tests_by_age_cox.age_diff_p.fillna(1))
+    predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_csv(OUTDIR + "predictive_tests_by_age.cox.txt", sep="\t", index=False)
+
+    return predictive_tests_by_age_cox
