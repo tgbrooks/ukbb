@@ -1044,6 +1044,37 @@ def generate_results_table():
         quantitative_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="Quantitative Actigraphy Comps.")
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
+    # TODO include header
+    workbook = openpyxl.load_workbook("../phewas_table_header.xlsx")
+    workbook.save(OUTDIR+"phewas_results.xlsx")
+    with pandas.ExcelWriter(OUTDIR+"phewas_results.xlsx", mode="a") as writer:
+        phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
+        phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="By Sex", index=False)
+        age_tests.sort_values(by="p").to_excel(writer, sheet_name="By Age", index=False)
+
+    # TODO include header
+    workbook = openpyxl.load_workbook("../quantitative_table_header.xlsx")
+    workbook.save(OUTDIR+"quantitative_results.xlsx")
+    with pandas.ExcelWriter(OUTDIR+"quantitative_results.xlsx", mode="a") as writer:
+        quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
+        quantitative_sex_tests.sort_values(by="sex_difference_p").to_excel(writer, sheet_name="By Sex", index=False)
+        quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="By Age", index=False)
+
+    # TODO header
+    workbook = openpyxl.load_workbook("../three_components_table_header.xlsx")
+    workbook.save(OUTDIR+"three_components_results.xlsx")
+    with pandas.ExcelWriter(OUTDIR+"three_components_results.xlsx", mode="a") as writer:
+        phecode_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="PheCODEs")
+        quantitative_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="Quantitative Traits")
+
+    # TODO header
+    workbook = openpyxl.load_workbook("../proportional_hazards_table_header.xlsx")
+    workbook.save(OUTDIR+"proportional_hazards_results.xlsx")
+    with pandas.ExcelWriter(OUTDIR+"proportional_hazards_results.xlsx", mode="a") as writer:
+        predictive_tests_cox.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
+        predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
+        predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
+
 def temperature_trace_plots(N_IDS=500):
     ids = day_plots.get_ids_of_traces_available()
 
