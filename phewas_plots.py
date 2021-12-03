@@ -670,7 +670,7 @@ class Plotter:
     def circadian_component_plot(self, test_results, phenotypes, quantitative=False):
         ## Plot comparison of circadian versus sleep and physical activity
         colors = {c: self.colormaps['actigraphy_cat'][c] if c in self.colormaps['actigraphy_cat'] else (0.3, 0.3, 0.3, 1.0)
-                    for c in ["Circadianness", "Physical activity", "Sleep", "Overall"]}
+                    for c in ["Diurnal rhythms", "Physical activity", "Sleep", "Overall"]}
         colors_list = list(colors.values())
         fig, (ax1, ax2) = pylab.subplots(figsize=(8,9), ncols=2, sharey=True)
         yticks = {}
