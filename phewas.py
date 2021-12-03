@@ -693,8 +693,8 @@ def effect_size_plots():
         axes[0].set_yticks(numpy.arange(y))
         axes[0].set_yticklabels(selected_data.phecode_meaning)
         #ax.set_xlim(left=0)
-        axes[0].set_xlabel("Effect size (SD)\nby sex")
-        axes[1].set_xlabel("Effect size (SD)\nby age")
+        axes[0].set_xlabel("Cohen's d\nby sex")
+        axes[1].set_xlabel("Cohen's d\nby age")
         fig.suptitle(f"Associations with {activity_var}")
         fig.tight_layout()
         fig.subplots_adjust(right=0.82)
@@ -1034,14 +1034,6 @@ def generate_results_table():
     workbook.save(OUTDIR+"results.xlsx")
     with pandas.ExcelWriter(OUTDIR+"results.xlsx", mode="a") as writer:
         survival_tests.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
-        phecode_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="PheCODE Associations", index=False)
-        quantitative_tests_raw.sort_values(by="p").to_excel(writer, sheet_name="Quantitative Associations", index=False)
-        phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="Sex-specific Associations", index=False)
-        quantitative_sex_tests.sort_values(by="sex_difference_p").to_excel(writer, sheet_name="Quantitative Sex Differences", index=False)
-        age_tests.sort_values(by="p").to_excel(writer, sheet_name="Age-dependence", index=False)
-        quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="Quantitative Age Differences", index=False)
-        phecode_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="PheCODE Actigraphy Comps.")
-        quantitative_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="Quantitative Actigraphy Comps.")
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
     # TODO include header
@@ -1883,6 +1875,27 @@ def predict_diagnoses_plots():
 
     fig.savefig(OUTDIR + "predictive_tests.png", dpi=300)
 
+def predict_diagnoses_effect_size_tables():
+    # Generate a table of the effect sizes for predcitive tests (prop hazard models)
+    # for select phecodes
+    phecodes = [250, 401, 496, 272, 585, 480, 300]
+    results = predictive_tests_cox.set_index("phecode").loc[phecodes]
+    HR_1SD = numpy.exp(results.std_logHR).round(2).astype(str)
+    HR_1SD_lower = numpy.exp(results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
+    HR_1SD_upper = numpy.exp(results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
+    HR_2SD = numpy.exp(results.std_logHR*2).round(2).astype(str)
+    HR_2SD_lower = numpy.exp((results.std_logHR - 1.96* results.std_logHR_se)*2).round(2).astype(str)
+    HR_2SD_upper = numpy.exp((results.std_logHR + 1.96* results.std_logHR_se)*2).round(2).astype(str)
+
+    print("Hazard Ratios of common diagnoses per SD of temp_RA")
+    results = pandas.DataFrame({
+        "diagnosis": results.meaning,
+        "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
+        "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
+    })
+    print(results)
+    return results
+
 def med_differences_plots():
     d = -numpy.log10(med_differences.pivot_table(columns=["medication"], index=["phenotype"], values="p") + 1e-20)
 
@@ -2002,19 +2015,19 @@ if __name__ == '__main__':
                                 zip(phecode_tests.phecode_category.unique(),
                                     [pylab.get_cmap("tab20")(i) for i in range(20)])}
     color_by_actigraphy_cat = {cat:color for cat, color in
-                                    zip(["Sleep", "Circadianness", "Physical activity"],
+                                    zip(["Sleep", "Diurnal rhythms", "Physical activity"],
                                         [pylab.get_cmap("Dark2")(i) for i in range(20)])}
     subcats_to_cats = activity_variable_descriptions.groupby("Subcategory").Category.first()
     subcat_number = subcats_to_cats.groupby(subcats_to_cats).cumcount() + 1
     subcat_total = subcats_to_cats.map(subcats_to_cats.value_counts())
-    def shade(color, t):
-        r,g,b,a = color
-        return (r*t, g*t, b*t, a)
-    color_by_actigraphy_subcat = {subcat: shade(color_by_actigraphy_cat[subcats_to_cats[subcat]], subcat_number[subcat]/subcat_total[subcat])
-                                    for subcat in subcats_to_cats.index}
-    #color_by_actigraphy_subcat = {cat:color for cat, color in
-    #                                zip(activity_variable_descriptions.Subcategory.unique(),
-    #                                    [pylab.get_cmap("Set3")(i) for i in range(20)])}
+    #def shade(color, t):
+    #    r,g,b,a = color
+    #    return (r*t, g*t, b*t, a)
+    #color_by_actigraphy_subcat = {subcat: shade(color_by_actigraphy_cat[subcats_to_cats[subcat]], subcat_number[subcat]/subcat_total[subcat])
+    #                                for subcat in subcats_to_cats.index}
+    color_by_actigraphy_subcat = {cat:color for cat, color in
+                                    zip(activity_variable_descriptions.Subcategory.unique(),
+                                        [pylab.get_cmap("Set3")(i) for i in range(20)])}
     color_by_quantitative_function = {cat:color for cat, color in
                                         zip(quantitative_variable_descriptions['Functional Categories'].unique(),
                                             [pylab.get_cmap("tab20b")(i) for i in range(20)])}
@@ -2055,6 +2068,7 @@ if __name__ == '__main__':
         chronotype_plots()
         quantitative_traits_with_medications()
         predict_diagnoses_plots()
+        predict_diagnoses_effect_size_tables()
         if args.all:
             # Note: slow to run: performs many regressions
             temperature_trace_plots() # Slowish
