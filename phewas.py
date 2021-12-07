@@ -641,7 +641,7 @@ def triangular_three_component_plots():
 def effect_size_plots():
 
     def plot(activity_var = "acceleration_RA"):
-        selected_data = phecode_tests[phecode_tests.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[:20][::-1]]
+        selected_data = phecode_tests[phecode_tests.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[::-1]]
         fig, ax = pylab.subplots(figsize=(7,4))
         y = 0
         for _, d in selected_data.iterrows():
@@ -663,9 +663,9 @@ def effect_size_plots():
     plot("acceleration_RA")
 
     def effect_sizes_by_sex_and_age(activity_var = "acceleration_RA"):
-        selected_data = phecode_tests_by_sex[phecode_tests_by_sex.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[:20][::-1]]
-        selected_age_data = age_tests[age_tests.activity_var == activity_var].set_index('phecode').loc[top_phenotypes[:20][::-1]]
-        fig, axes = pylab.subplots(figsize=(10,7), ncols=2, sharey=True)
+        selected_data = phecode_tests_by_sex[phecode_tests_by_sex.activity_var == activity_var].set_index("phecode").loc[top_phenotypes[::-1]]
+        selected_age_data = age_tests[age_tests.activity_var == activity_var].set_index('phecode').loc[top_phenotypes[::-1]]
+        fig, axes = pylab.subplots(figsize=(10,6), ncols=2, sharey=True)
         y = 0
         for ((_,d),(_,d_age)) in zip(selected_data.iterrows(), selected_age_data.iterrows()):
             male_coeff = d['std_male_coeff']
@@ -730,14 +730,14 @@ def circadian_component_plots():
     legend_from_colormap(fig, color_by_actigraphy_subcat, loc="upper left", fontsize="small", ncol=2)
     fig.savefig(OUTDIR+"additive_benefit_RA.png")
 
-    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
+    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, phecode_info.loc[top_phenotypes].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
-    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests_amp, phecode_info.loc[top_phenotypes[:20]].phenotype, quantitative=False)
+    fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests_amp, phecode_info.loc[top_phenotypes].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.temp_amplitude.png")
 
-    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_quantitative_phenotypes[:20], quantitative=True)
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_quantitative_phenotypes, quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
-    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_quantitative_phenotypes[:20], quantitative=True)
+    fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_quantitative_phenotypes, quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.temp_amplitude.png")
 
     # Plot the sex differences
@@ -1788,12 +1788,12 @@ def predict_diagnoses():
         fig.tight_layout()
 
 def predict_diagnoses_plots():
-    phenotypes = top_phenotypes[:20][::-1]
+    phenotypes = top_phenotypes[::-1]
     tests = predictive_tests_cox.set_index('phecode').loc[phenotypes]
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
-    fig, axes = pylab.subplots(figsize=(9,8), ncols=4, sharey=True)
+    fig, axes = pylab.subplots(figsize=(9,7), ncols=4, sharey=True)
     ys = numpy.arange(len(tests))
     axes[0].barh(
         ys,
@@ -2042,8 +2042,11 @@ if __name__ == '__main__':
     }
 
      #The top phenotypes that we will highlight
-    top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases > 1000)].sort_values(by='p').phecode.unique()
-    top_quantitative_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
+    #top_phenotypes = phecode_tests[(~phecode_tests.activity_var.str.startswith('self_report')) & (phecode_tests.N_cases >= 1000)].sort_values(by='p').phecode.unique()
+    #top_phenotypes = top_phenotypes[~phecode_info.loc[top_phenotypes].phenotype.str.startswith("Other")]
+    #top_quantitative_phenotypes = quantitative_tests[(~quantitative_tests.activity_var.str.startswith('self_report'))].sort_values(by='p').phenotype.unique()
+    top_phenotypes = pandas.read_csv("top_phecodes.txt", header=None, index_col=None).values.flatten()
+    top_quantitative_phenotypes = pandas.read_csv("top_quant_traits.txt", header=None, index_col=None).values.flatten()
 
     ## Create the plotter object
     # for common plot types
