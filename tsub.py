@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+'''
+Snakemake helper script for LSF support
+'''
 import argparse
 import subprocess
 import re
