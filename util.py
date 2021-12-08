@@ -48,12 +48,12 @@ def legend_from_colormap(fig, colormap, maxlength=35, names=None, **kwargs):
                         for cat, c in colormap.items()]
     fig.legend(handles=legend_elts, **kwargs)
 
-def legend_of_pointscale(fig, offset, values_to_size, values_to_show, fmt="{}", **kwargs):
+def legend_of_pointscale(fig, point_scale_func, values_to_show, labels=None, **kwargs):
     legend_elts = [matplotlib.lines.Line2D(
                             [0],[0],
                             marker="o", markerfacecolor='k',
-                            markersize=numpy.sqrt(offset + values_to_size * value),
-                            label=fmt.format(value),
+                            markersize=numpy.sqrt(point_scale_func(value)),
+                            label=labels,
                             c='k', lw=0)
                         for value in values_to_show]
     fig.legend(handles=legend_elts, **kwargs)
@@ -68,6 +68,9 @@ def truncate(string, N):
 
 def wrap(string, N):
     # Wrap to lines at most length N, preserving words
+    if string != string:
+        # nan!
+        return ''
     words = string.split()
     lines = []
     current_line = []

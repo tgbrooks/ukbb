@@ -74,7 +74,7 @@ class Plotter:
 
          self.quintile_labels = quintile_labels
 
-    def sex_difference_plot(self, d, color_by="phecode_category", cmap="Dark2", lim=0.5, ax=None, legend=True, labels=True, names=None):
+    def sex_difference_plot(self, d, color_by="phecode_category", cmap="Dark2", lim=0.4, ax=None, legend=True, labels=True, names=None, point_size_legend=False):
         if color_by is not None:
             if type(cmap) == str:
                 cats = d[color_by].unique()
@@ -116,7 +116,7 @@ class Plotter:
             ax.annotate("Male Effect Larger", xy=(0.8*lim,0), ha="center", bbox=bbox, zorder=3)
             ax.annotate("Male Effect Larger", xy=(-0.8*lim,0), ha="center", bbox=bbox, zorder=3)
             ax.annotate("Female Effect Larger", xy=(0,0.8*lim), ha="center", bbox=bbox, zorder=3)
-            ax.annotate("Female Effect Larger", xy=(0,-0.5*lim), ha="center", bbox=bbox, zorder=3)
+            ax.annotate("Female Effect Larger", xy=(0,-0.8*lim), ha="center", bbox=bbox, zorder=3)
         ax.set_aspect("equal")
         ax.set_xlim(-lim, lim)
         ax.set_ylim(-lim, lim)
@@ -131,9 +131,11 @@ class Plotter:
                 util.legend_from_colormap(ax, colormap, ncol=2, fontsize="small", names=names)
             else:
                 util.legend_from_colormap(fig, colormap, ncol=2, fontsize="small", names=names)
+        if point_size_legend:
+            util.legend_of_pointscale(fig, p_to_size, [1e-2, 1e-5, 1e-10], labels=["$10^{-2}$", "$10^{-5}$", "$\leq 10^{-10}$"], loc=(0.85,0.6), title="p-value")
         return fig, ax
 
-    def age_effect_plot(self, d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.45, ax=None, names=None):
+    def age_effect_plot(self, d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.40, ax=None, names=None):
         if ax is None:
             fig, ax = pylab.subplots(figsize=(9,9))
             just_ax = False
@@ -676,6 +678,7 @@ class Plotter:
         yticks = {}
         Q_CUTOFF = 0.01
 
+        phenotypes = list(set(phenotypes).intersection(test_results.index))
         for rank, phenotype in enumerate(phenotypes):
             results = test_results.loc[phenotype]
             phenotype_name = phenotype if not quantitative else self.quantitative_variable_descriptions.loc[phenotype].Name

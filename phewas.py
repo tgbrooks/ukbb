@@ -24,7 +24,9 @@ def summary():
     # Summarize the phecode test results
     num_nonnull = len(phecode_tests) - phecode_tests.p.sum()*2
     bonferonni_cutoff = 0.05 / len(phecode_tests)
+    quant_bonferroni_cutoff = 0.05 / len(quantitative_tests)
     FDR_cutoff = phecode_tests[phecode_tests.q < 0.05].p.max()
+    quant_FDR_cutoff = quantitative_tests[quantitative_tests.q < 0.05].p.max()
     print(f"Of {len(phecode_tests)} tested, approx {int(num_nonnull)} expected non-null")
     print(f"and {(phecode_tests.p <= bonferonni_cutoff).sum()} exceed the Bonferonni significance threshold")
     print(f"and {(phecode_tests.p <= FDR_cutoff).sum()} exceed the FDR < 0.05 significance threshold")
@@ -53,7 +55,7 @@ def summary():
     legend_from_colormap(ax, color_by_phecode_cat, ncol=2, fontsize="small")
     fig.savefig(OUTDIR+"phewas.volcano_plot.png")
 
-    def manhattan_plot(tests_df, group_on="phecode", group_by=None, color_on=None, color_by=None, y_break=20):
+    def manhattan_plot(tests_df, group_on="phecode", group_by=None, color_on=None, color_by=None, y_break=20, bonferroni = bonferonni_cutoff, FDR = FDR_cutoff):
         # "Manhattan" plot of the PheWAS
         fig, axes = pylab.subplots(nrows=2, figsize=(12,7), sharex=True)
         x = 0
@@ -95,6 +97,7 @@ def summary():
         color_on="Activity Subcategory",
         color_by=color_by_actigraphy_subcat)
     fig.savefig(OUTDIR+"manhattan_plot.png")
+    fig.savefig(PUB_OUTDIR+"FIG1.manhattan_plot.png")
 
     # Manhattan plot by activity variable
     cats = phecode_tests['Activity Subcategory'].fillna("N/A").astype('category')
@@ -117,8 +120,11 @@ def summary():
         group_by=cats,
         color_on="Activity Subcategory",
         color_by=color_by_actigraphy_subcat,
-        y_break=40)
+        y_break=40,
+        bonferroni=quant_bonferroni_cutoff,
+        FDR=quant_FDR_cutoff)
     fig.savefig(OUTDIR+"manhattan_plot.quantitative.png")
+    fig.savefig(PUB_OUTDIR+"FIG1.manhattan_plot.quantitative.png")
 
     cats = quantitative_tests['Activity Subcategory'].astype('category')
     cats.cat.reorder_categories(color_by_actigraphy_subcat.keys(), inplace=True)
@@ -128,7 +134,9 @@ def summary():
         group_by=cats,
         color_on="Functional Category",
         color_by=color_by_quantitative_function,
-        y_break=40)
+        y_break=40,
+        bonferroni=quant_bonferroni_cutoff,
+        FDR=quant_FDR_cutoff)
     fig.savefig(OUTDIR+"manhattan_plot.quantitative.by_activity_var.png")
 
 
@@ -236,8 +244,9 @@ def sex_difference_plots():
                             & (phecode_tests_by_sex.N_male > N_CUTOFF)
                             & (phecode_tests_by_sex.N_female > N_CUTOFF)]
     ## Create the phewas_plots.sex_difference_plots
-    fig, ax = phewas_plots.sex_difference_plot(d, cmap=color_by_phecode_cat)
+    fig, ax = phewas_plots.sex_difference_plot(d, cmap=color_by_phecode_cat, point_size_legend=True)
     fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
+    fig.savefig(f"{PUB_OUTDIR}/FIG6.sex_differences.all_phenotypes.png")
 
     fig, ax = phewas_plots.sex_difference_plot(d[d.phecode_category == 'circulatory system'], color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/sex_differences.circulatory.png")
@@ -272,6 +281,7 @@ def sex_difference_plots():
     #TODO: I believe the above needs to rename columns std_male_effect -> std_male_coeff and same for female to work below
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
+    fig.savefig(PUB_OUTDIR+"FIG6.sex_differences.quantitative.svg")
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Activity Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.by_activity_var.png")
 
@@ -304,6 +314,7 @@ def age_difference_plots():
 
     fig, ax = phewas_plots.age_effect_plot(d)
     fig.savefig(f"{OUTDIR}/age_effects.png")
+    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.svg")
 
     fig, ax = phewas_plots.age_effect_plot(d[d.phecode_category == 'mental disorders'], labels=False, color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
@@ -342,6 +353,8 @@ def age_difference_plots():
     dage['p_age'] = dage.age_difference_p
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
     fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
+    fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3, legend=False) #Same but no legend
+    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.quantitative.png")
 
     #Make 2x2 grid of quantitative age differences
     fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
@@ -732,11 +745,13 @@ def circadian_component_plots():
 
     fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests, phecode_info.loc[top_phenotypes].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.png")
+    fig.savefig(PUB_OUTDIR+"FIG3.circadian_vs_other_vars.svg")
     fig, axes = phewas_plots.circadian_component_plot(phecode_three_component_tests_amp, phecode_info.loc[top_phenotypes].phenotype, quantitative=False)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.temp_amplitude.png")
 
     fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests, top_quantitative_phenotypes, quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.png")
+    fig.savefig(PUB_OUTDIR+"FIG3.circadian_vs_other_vars.quantitative.svg")
     fig, axes = phewas_plots.circadian_component_plot(quantitative_three_component_tests_amp, top_quantitative_phenotypes, quantitative=True)
     fig.savefig(OUTDIR+"circadian_vs_other_vars.quantitative.temp_amplitude.png")
 
@@ -1789,7 +1804,7 @@ def predict_diagnoses():
 
 def predict_diagnoses_plots():
     phenotypes = top_phenotypes[::-1]
-    tests = predictive_tests_cox.set_index('phecode').loc[phenotypes]
+    tests = predictive_tests_cox.set_index('phecode').reindex(phenotypes)
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
@@ -1943,11 +1958,14 @@ if __name__ == '__main__':
     COHORT = args.cohort
     RECOMPUTE = args.force_recompute
     OUTDIR = f"../global_phewas/cohort{COHORT}/"
+    PUB_OUTDIR = f"../global_phewas/cohort{COHORT}/pub_figs/" # For publication figures
     FDR_CUTOFF_VALUE = 0.05
 
     # Prep sub directories
     outdir = pathlib.Path(OUTDIR)
     (outdir/"cholesterol").mkdir(exist_ok=True)
+    pub_outdir = pathlib.Path(PUB_OUTDIR)
+    (pub_outdir).mkdir(exist_ok=True)
 
     #### Load and preprocess the underlying data
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
@@ -2025,8 +2043,9 @@ if __name__ == '__main__':
     #    return (r*t, g*t, b*t, a)
     #color_by_actigraphy_subcat = {subcat: shade(color_by_actigraphy_cat[subcats_to_cats[subcat]], subcat_number[subcat]/subcat_total[subcat])
     #                                for subcat in subcats_to_cats.index}
+    activity_variable_subcats = ["Variability", "Phase", "Amplitude", "Phase Variability", "Physical activity variability", "Physical activity", "Sleep", "Sleep variability", "Self-report physical activity", "Self-report"]
     color_by_actigraphy_subcat = {cat:color for cat, color in
-                                    zip(activity_variable_descriptions.Subcategory.unique(),
+                                    zip(activity_variable_subcats,
                                         [pylab.get_cmap("Set3")(i) for i in range(20)])}
     color_by_quantitative_function = {cat:color for cat, color in
                                         zip(quantitative_variable_descriptions['Functional Categories'].unique(),
