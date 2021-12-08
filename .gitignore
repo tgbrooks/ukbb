@@ -5,3 +5,4 @@ venv/
 .snakemake
 log
 *ipynb*
+notebook/*
