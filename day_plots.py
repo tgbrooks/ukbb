@@ -1,5 +1,7 @@
 """
 Create plots for daily 24 hour average traces (of acceleration values or temperature, etc)
+
+While visualize.py does individual trace plots, this averages over many individuals
 """
 import pathlib
 

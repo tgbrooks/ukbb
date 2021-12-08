@@ -1,3 +1,19 @@
+'''
+Main script to generate the results for the phenome-wide association study of actigraphy
+Assumes existing processing pipeline (in Snakefile) was already run
+
+Runs all the statistical tests, if the results are not already there.
+This may take several hours to run.
+
+Places output in global_phewas/cohort*/
+Main results are in the excel tables and figures.
+Many exploratory figures are generated that are not included in the paper, so there is a
+large amount of generated output.
+
+COHORTS are either 1 or 2 corresponding to the smaller exploratory sample (25k participants)
+or the remaing 60k+ in the validation cohort, respectively.
+'''
+
 import math
 import re
 import pathlib

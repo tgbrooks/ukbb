@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+'''
+Extracts activity features
+Activity features are all the per-subject metrics
+derived from an actigraphy trace
+'''
 import datetime
 import pandas
 import numpy

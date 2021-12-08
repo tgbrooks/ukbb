@@ -1,3 +1,8 @@
+'''
+Script to generate an actigraphy trace plot of one individual
+Shows acceleration, light, temperature levels and highlights
+based off of the classified activity types (sleep, walking, etc.)
+'''
 import argparse
 import math
 import pathlib

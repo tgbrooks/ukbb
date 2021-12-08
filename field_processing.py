@@ -1,3 +1,6 @@
+'''
+Utility features for processing certain fields of the UK Biobank
+'''
 def process_longest_period(field):
     # Replace the "too many to count" value with the 90th percentile value
     many = field.quantile(0.9)

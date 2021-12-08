@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+'''
+Downloads bulk data (actigraphy) from UK Biobank servers
+'''
 
 # Reads in the given tsv file and generates the list of participant IDs and Data files to download
 import pandas

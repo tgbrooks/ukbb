@@ -1,3 +1,8 @@
+## Runs the snakemake pipeline in Snakefile
+## This downloads and processes the actigraphy data from the UK Biobank
+## as well as processing some additional data about participants
+## such as employment, medications, and medical history
+##
 # NOTE: may want to run 'snakemake -n' first to see what is going to be run
 LOGFILE=snakemake.log
 ERRFILE=snakemake.err

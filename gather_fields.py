@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-
+'''
+Generates a smaller table of the variables we care about
+'''
 import argparse
 
 import pandas
