@@ -4,6 +4,7 @@ Create plots for daily 24 hour average traces (of acceleration values or tempera
 While visualize.py does individual trace plots, this averages over many individuals
 """
 import pathlib
+import functools
 
 import pandas
 import numpy
@@ -15,13 +16,17 @@ def get_ids_of_traces_available(directory="../processed/acc_analysis"):
     dir = pathlib.Path(directory)
     return [int(f.name.split("_")[0]) for f in dir.glob("*_90001_0_0-timeSeries.csv.gz")]
 
+@functools.lru_cache(None)
+def get_tracedata(tracefile):
+        return activity_features.load_activity_file(tracefile)
+
 def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
             normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
             show_confidence_intervals=False):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
-        tracedata = activity_features.load_activity_file(tracefile)
+        tracedata = get_tracedata(tracefile)
 
         if tracedata is None:
             print(f"Skipping {id}")
@@ -58,7 +63,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
                         low_average,
                         high_average,
                         facecolor=color,
-                        alpha=0.3,
+                        alpha=0.25,
                         )
 
     if show_confidence_intervals:
@@ -69,7 +74,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
                         low,
                         high,
                         facecolor=color,
-                        alpha=0.3,
+                        alpha=0.25,
                         )
 
     #ax.plot(low_average.index / pandas.to_timedelta("1H"), low_average, label="75th percentile")
