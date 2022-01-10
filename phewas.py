@@ -297,7 +297,7 @@ def sex_difference_plots():
     #TODO: I believe the above needs to rename columns std_male_effect -> std_male_coeff and same for female to work below
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
-    fig.savefig(PUB_OUTDIR+"FIG6.sex_differences.quantitative.svg")
+    fig.savefig(PUB_OUTDIR+"FIG6.sex_differences.quantitative.png")
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Activity Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.by_activity_var.png")
 
@@ -330,7 +330,8 @@ def age_difference_plots():
 
     fig, ax = phewas_plots.age_effect_plot(d)
     fig.savefig(f"{OUTDIR}/age_effects.png")
-    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.svg")
+    fig, ax = phewas_plots.age_effect_plot(d, legend=False)
+    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.png")
 
     fig, ax = phewas_plots.age_effect_plot(d[d.phecode_category == 'mental disorders'], labels=False, color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
@@ -443,8 +444,9 @@ def fancy_plots():
 
 def survival_curves():
     # Survival by RA
-    fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "RA")
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "Acceleration RA")
     fig.savefig(OUTDIR+"survival.RA.png")
+    fig.savefig(PUB_OUTDIR+"FIG4.survival.RA.png")
     death_counts.to_csv(OUTDIR+"deaths.RA.by_year.txt", sep="\t")
 
     # By temp_RA
@@ -469,9 +471,15 @@ def survival_curves():
     fig.savefig(OUTDIR+"survival.acceleration_hourly_SD.png")
     death_counts.to_csv(OUTDIR+"deaths.acceleration_hourly_SD.by_year.txt", sep="\t")
 
+    # Survival by acceleration_overall
+    fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_overall", "Acceleration Overall")
+    fig.savefig(OUTDIR+"survival.acceleration_overall.png")
+    fig.savefig(PUB_OUTDIR+"FIG4.survival.acceleration_overall.png")
+
     # Survival by main_sleep_ratio_mean
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "main_sleep_ratio_mean", "Sleep Ratio")
     fig.savefig(OUTDIR+"survival.main_sleep_ratio_mean.png")
+    fig.savefig(PUB_OUTDIR+"FIG4.survival.main_sleep_ratio_mean.png")
     death_counts.to_csv(OUTDIR+"deaths.main_sleep_ratio_mean.by_year.txt", sep="\t")
 
     # Survival by phase
