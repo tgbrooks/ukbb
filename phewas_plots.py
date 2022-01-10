@@ -132,7 +132,7 @@ class Plotter:
             else:
                 util.legend_from_colormap(fig, colormap, ncol=2, fontsize="small", names=names)
         if point_size_legend:
-            util.legend_of_pointscale(fig, p_to_size, [1e-2, 1e-5, 1e-10], labels=["$10^{-2}$", "$10^{-5}$", "$\leq 10^{-10}$"], loc=(0.85,0.6), title="p-value")
+            util.legend_of_pointscale(fig, p_to_size, [1e-2, 1e-5, 1e-10], labels=["$10^{-2}$", "$10^{-5}$", "$≤10^{-10}$"], loc=(0.85,0.6), title="p-value")
         return fig, ax
 
     def age_effect_plot(self, d, legend=True, labels=True, color_by="phecode_category", cmap="Dark2", lim=0.40, ax=None, names=None):

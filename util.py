@@ -53,9 +53,9 @@ def legend_of_pointscale(fig, point_scale_func, values_to_show, labels=None, **k
                             [0],[0],
                             marker="o", markerfacecolor='k',
                             markersize=numpy.sqrt(point_scale_func(value)),
-                            label=labels,
+                            label=label,
                             c='k', lw=0)
-                        for value in values_to_show]
+                        for label, value in zip(labels, values_to_show) ]
     fig.legend(handles=legend_elts, **kwargs)
 
 ## Prepare utility functions
