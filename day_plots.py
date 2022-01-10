@@ -22,7 +22,8 @@ def get_tracedata(tracefile):
 
 def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
             normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
-            show_confidence_intervals=False):
+            show_confidence_intervals=False,
+            center="mean"):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
@@ -48,8 +49,11 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
         else:
             grand_mean = pandas.DataFrame([trace.mean() for trace in average_traces]).mean()
         average_traces = [trace - trace.mean() + grand_mean for trace in average_traces]
-    resampled = pandas.concat(average_traces).resample("1min")[var]
-    grand_average = resampled.mean()
+    resampled = pandas.concat(average_traces).resample("5min")[var]
+    if center == 'mean':
+        grand_average = resampled.mean()
+    else:
+        grand_average = resampled.median()
 
 
     if ax is None:
