@@ -18,20 +18,9 @@ def get_ids_of_traces_available(directory="../processed/acc_analysis"):
 
 @functools.lru_cache(None)
 def get_tracedata(tracefile):
-        return activity_features.load_activity_file(tracefile)
-
-def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
-            normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
-            show_confidence_intervals=False,
-            center="mean"):
-    average_traces = []
-    for id in ids:
-        tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
-        tracedata = get_tracedata(tracefile)
-
+        tracedata =  activity_features.load_activity_file(tracefile)
         if tracedata is None:
-            print(f"Skipping {id}")
-            continue
+            return None
 
         # Trim the first and last 6 hours of data
         # due to apparent discontinuities around them
@@ -40,7 +29,21 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
 
         # Time since midnight
         timeofday = (tracedata.index - tracedata.index.normalize())
-        average_trace = tracedata.set_index(timeofday).resample("1min").mean()
+        average_trace = tracedata.set_index(timeofday).resample("2min").mean()
+        return average_trace
+
+def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
+            normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
+            show_confidence_intervals=False,
+            center="mean"):
+    average_traces = []
+    for id in ids:
+        tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
+        average_trace = get_tracedata(tracefile)
+
+        if average_trace is None:
+            print(f"Skipping {id}")
+            continue
         average_traces.append(transform(average_trace[[var]]))
     if normalize_mean:
         # Make sure everyone's mean is the same
