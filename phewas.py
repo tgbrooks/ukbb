@@ -262,7 +262,7 @@ def sex_difference_plots():
     ## Create the phewas_plots.sex_difference_plots
     fig, ax = phewas_plots.sex_difference_plot(d, cmap=color_by_phecode_cat, point_size_legend=True)
     fig.savefig(f"{OUTDIR}/sex_differences.all_phenotypes.png")
-    fig.savefig(f"{PUB_OUTDIR}/FIG6.sex_differences.all_phenotypes.png")
+    fig.savefig(f"{PUB_OUTDIR}/FIGS7.sex_differences.all_phenotypes.png")
 
     fig, ax = phewas_plots.sex_difference_plot(d[d.phecode_category == 'circulatory system'], color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/sex_differences.circulatory.png")
@@ -297,7 +297,7 @@ def sex_difference_plots():
     #TODO: I believe the above needs to rename columns std_male_effect -> std_male_coeff and same for female to work below
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.png")
-    fig.savefig(PUB_OUTDIR+"FIG6.sex_differences.quantitative.png")
+    fig.savefig(PUB_OUTDIR+"FIGS7.sex_differences.quantitative.png")
     fig, ax = phewas_plots.sex_difference_plot(qt, color_by="Activity Subcategory", cmap=color_by_actigraphy_subcat, lim=0.25)
     fig.savefig(OUTDIR+"sex_differences.quantitative.by_activity_var.png")
 
@@ -331,7 +331,7 @@ def age_difference_plots():
     fig, ax = phewas_plots.age_effect_plot(d)
     fig.savefig(f"{OUTDIR}/age_effects.png")
     fig, ax = phewas_plots.age_effect_plot(d, legend=False)
-    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.png")
+    fig.savefig(f"{PUB_OUTDIR}/FIGS7.age_effects.png")
 
     fig, ax = phewas_plots.age_effect_plot(d[d.phecode_category == 'mental disorders'], labels=False, color_by="phecode_meaning")
     fig.savefig(f"{OUTDIR}/age_effects.mental_disorders.png")
@@ -371,7 +371,7 @@ def age_difference_plots():
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3)
     fig.savefig(f"{OUTDIR}/age_effects.quantitative.png")
     fig, ax = phewas_plots.age_effect_plot(dage.sample(frac=1), color_by="Functional Category", cmap=color_by_quantitative_function, lim=0.3, legend=False) #Same but no legend
-    fig.savefig(f"{PUB_OUTDIR}/FIG6.age_effects.quantitative.png")
+    fig.savefig(f"{PUB_OUTDIR}/FIGS7.age_effects.quantitative.png")
 
     #Make 2x2 grid of quantitative age differences
     fig, axes = pylab.subplots(ncols=2, nrows=2, figsize=(11,11))
@@ -446,7 +446,7 @@ def survival_curves():
     # Survival by RA
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_RA", "Acceleration RA")
     fig.savefig(OUTDIR+"survival.RA.png")
-    fig.savefig(PUB_OUTDIR+"FIG4.survival.RA.png")
+    fig.savefig(PUB_OUTDIR+"FIGS2.survival.RA.png")
     death_counts.to_csv(OUTDIR+"deaths.RA.by_year.txt", sep="\t")
 
     # By temp_RA
@@ -474,12 +474,12 @@ def survival_curves():
     # Survival by acceleration_overall
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "acceleration_overall", "Acceleration Overall")
     fig.savefig(OUTDIR+"survival.acceleration_overall.png")
-    fig.savefig(PUB_OUTDIR+"FIG4.survival.acceleration_overall.png")
+    fig.savefig(PUB_OUTDIR+"FIGS2.survival.acceleration_overall.png")
 
     # Survival by main_sleep_ratio_mean
     fig, death_counts = phewas_plots.quintile_survival_plot(data, "main_sleep_ratio_mean", "Sleep Ratio")
     fig.savefig(OUTDIR+"survival.main_sleep_ratio_mean.png")
-    fig.savefig(PUB_OUTDIR+"FIG4.survival.main_sleep_ratio_mean.png")
+    fig.savefig(PUB_OUTDIR+"FIGS2.survival.main_sleep_ratio_mean.png")
     death_counts.to_csv(OUTDIR+"deaths.main_sleep_ratio_mean.by_year.txt", sep="\t")
 
     # Survival by phase
@@ -1913,6 +1913,7 @@ def predict_diagnoses_plots():
     util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
 
     fig.savefig(OUTDIR + "predictive_tests.png", dpi=300)
+    fig.savefig(PUB_OUTDIR+"FIG4.predictive.png", dpi=300)
 
 def predict_diagnoses_effect_size_tables():
     # Generate a table of the effect sizes for predcitive tests (prop hazard models)
