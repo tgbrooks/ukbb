@@ -2119,7 +2119,6 @@ if __name__ == '__main__':
         if args.all:
             # Note: slow to run: performs many regressions
             temperature_trace_plots() # Slowish
-            by_date_plots() # Very slow
 
         ## Summarize everything
         generate_results_table()
