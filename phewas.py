@@ -1781,11 +1781,6 @@ if __name__ == '__main__':
     subcats_to_cats = activity_variable_descriptions.groupby("Subcategory").Category.first()
     subcat_number = subcats_to_cats.groupby(subcats_to_cats).cumcount() + 1
     subcat_total = subcats_to_cats.map(subcats_to_cats.value_counts())
-    #def shade(color, t):
-    #    r,g,b,a = color
-    #    return (r*t, g*t, b*t, a)
-    #color_by_actigraphy_subcat = {subcat: shade(color_by_actigraphy_cat[subcats_to_cats[subcat]], subcat_number[subcat]/subcat_total[subcat])
-    #                                for subcat in subcats_to_cats.index}
     activity_variable_subcats = ["Variability", "Phase", "Amplitude", "Phase Variability", "Physical activity variability", "Physical activity", "Sleep", "Sleep variability", "Self-report physical activity", "Self-report"]
     color_by_actigraphy_subcat = {cat:color for cat, color in
                                     zip(activity_variable_subcats,
