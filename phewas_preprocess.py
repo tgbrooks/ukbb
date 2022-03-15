@@ -59,6 +59,10 @@ def load_ukbb():
     ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
     ukbb.columns = ukbb.columns.str.replace("[,:/]","_") # Can't use special characters easily
 
+    # Update death information
+    deaths = pandas.read_csv("../data/patient_records/death.txt", sep='\t').drop_duplicates(['eid', 'date_of_death']).set_index('eid')
+    ukbb['date_of_death'] = ukbb.index.map(deaths.date_of_death)
+
     return ukbb
 
 def load_activity(ukbb):
