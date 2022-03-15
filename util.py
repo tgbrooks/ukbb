@@ -46,7 +46,8 @@ def legend_from_colormap(fig, colormap, maxlength=35, names=None, **kwargs):
                             label=truncate(names[cat],maxlength) if not pandas.isna(cat) else "NA",
                             c=c, lw=0)
                         for cat, c in colormap.items()]
-    fig.legend(handles=legend_elts, **kwargs)
+    legend = fig.legend(handles=legend_elts, **kwargs)
+    return legend
 
 def legend_of_pointscale(fig, point_scale_func, values_to_show, labels=None, **kwargs):
     legend_elts = [matplotlib.lines.Line2D(

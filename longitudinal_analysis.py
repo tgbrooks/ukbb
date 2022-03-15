@@ -17,7 +17,100 @@ import day_plots
 import util
 
 DPI = 300
+FDR_CUTOFF = 0.1
+BONFERRONI_CUTOFF = 0.05
 RESULTS_DIR = pathlib.Path("../longitudinal/")
+
+def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None, y_break=5):
+    # "Manhattan" plot of the PheWAS
+    fig, ax = pylab.subplots(nrows=1, figsize=(8,6), sharex=True)
+    x = 0
+    x_ticks = []
+    x_minorticks = [-0.5]
+    x_ticklabels = []
+    for key, pt in tests_df.sample(frac=1).groupby(group_by):
+        x_ticks.append(x+pt[minor_group_by].nunique()/2-0.5)
+        x_ticklabels.append(util.capitalize(key))
+        ax.scatter(x+numpy.arange(len(pt)), -numpy.log10(pt.p), color=color_by[key])
+        x += len(pt)
+        x_minorticks.append(x-0.5)
+    ax.set_ylabel("-log10(p-value)")
+    ax.axhline(-numpy.log10(BONFERRONI_CUTOFF), c="k", zorder = 2)
+    ax.axhline(-numpy.log10(FDR_CUTOFF), c="k", linestyle="--", zorder = 2)
+    ax.set_xticks(x_ticks)
+    ax.set_xticks(x_minorticks, minor=True)
+    ax.set_xticklabels(x_ticklabels, rotation=90)
+    ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
+    ax.xaxis.set_tick_params(which="minor", length=10)
+    ax.set_ylim(0,y_break)
+    ax.set_xlim(-1, x+1)
+    fig.tight_layout(h_pad=0.01)
+    return fig
+
+def summary():
+
+    # Manhattan plot by phecode
+    tests = predictive_tests_cox.copy()
+    tests['category'] = tests.phecode.map(phecode_info.category).fillna("N/A").astype('category')
+    cat_ordering = list(color_by_phecode_cat.keys()) + ['N/A']
+    tests['category'].cat.reorder_categories(
+        sorted(tests['category'].cat.categories, key=lambda x: cat_ordering.index(x)),
+        inplace=True
+    )
+    color_by = {key:color for key, color in color_by_phecode_cat.items() if key in tests.category.unique()}
+    fig = manhattan_plot(
+        tests,
+        minor_group_by="phecode",
+        group_by=tests.category,
+        color_by=color_by)
+    legend = util.legend_from_colormap(fig, color_by, ncol=2, fontsize="small", loc="upper left", bbox_to_anchor=(1.0,0.9))
+    fig.savefig(OUTDIR/"FIG2.manhattan_plot.png", bbox_extra_artists=[legend], bbox_inches='tight')
+
+    ### TIMELINE
+    # Make a timeline of the study design timing so that readers can easily see when data was collected
+    ACTIGRAPHY_COLOR = "#1b998b"
+    REPEAT_COLOR = "#c5d86d"
+    DIAGNOSIS_COLOR = "#f46036"
+    ASSESSMENT_COLOR = "#aaaaaa"
+    DEATH_COLOR = "#333333"
+    fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(8,6), nrows=3)
+    #ax2.yaxis.set_inverted(True)
+    ax1.yaxis.set_label_text("Participants / month")
+    ax2.yaxis.set_label_text("Diagnoses / month")
+    ax3.yaxis.set_label_text("Deaths / month")
+    #ax2.xaxis.tick_top()
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+    ax3.spines["top"].set_visible(False)
+    ax3.spines["right"].set_visible(False)
+    bins = pandas.date_range("2000-1-1", "2022-1-1", freq="1M")
+    def date_hist(ax, values, bins, **kwargs):
+        # Default histogram for dates doesn't cooperate with being given a list of bins
+        # since the list of bins doesn't get converted to the same numerical values as the values themselves
+        counts, edges = numpy.histogram(values, bins)
+        # Fudge factor fills in odd gaps between boxes
+        ax.bar(edges[:-1], counts, width=(edges[1:]-edges[:-1])*1.05, **kwargs)
+    assessment_time = pandas.to_datetime(data.blood_sample_time_collected_V0)
+    actigraphy_time = pandas.to_datetime(activity_summary.loc[data.index, 'file-startTime'])
+    actigraphy_seasonal_time = pandas.to_datetime(activity_summary_seasonal.loc[activity_summary_seasonal.ID.isin(data.index), 'file-startTime'], cache=False)
+    death_time = pandas.to_datetime(data[~data.date_of_death.isna()].date_of_death)
+    diagnosis_time = pandas.to_datetime(case_status[case_status.ID.isin(data.index)].first_date)
+    date_hist(ax1, assessment_time, color=ASSESSMENT_COLOR, label="assessment", bins=bins)
+    date_hist(ax1, actigraphy_time, color=ACTIGRAPHY_COLOR, label="actigraphy", bins=bins)
+    date_hist(ax1, actigraphy_seasonal_time, color=REPEAT_COLOR, label="repeat actigraphy", bins=bins)
+    date_hist(ax2, diagnosis_time, color=DIAGNOSIS_COLOR, label="Diagnoses", bins=bins)
+    date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
+    ax1.annotate("Assessment", (assessment_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
+    ax1.annotate("Actigraphy", (actigraphy_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
+    ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
+    ax2.annotate("Medical Record\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,60), textcoords="offset points", ha="center")
+    ax3.annotate("Deaths", (death_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
+    fig.savefig(OUTDIR/"FIG1a.summary_timeline.png")
+
+    time_difference = (actigraphy_time - assessment_time).mean()
+    print(f"Mean difference between actigraphy time and initial assessment time: {time_difference/pandas.to_timedelta('1Y')} years")
 
 def generate_results_table():
     '''
@@ -341,7 +434,7 @@ if __name__ == '__main__':
     COHORT = args.cohort
     RECOMPUTE = args.force_recompute
     RESULTS_DIR.mkdir(exist_ok=True)
-    OUTDIR = RESULTS_DIR / "cohort{COHORT}"
+    OUTDIR = RESULTS_DIR / f"cohort{COHORT}"
     OUTDIR.mkdir(exist_ok=True)
 
     #### Load and preprocess the underlying data
@@ -359,12 +452,11 @@ if __name__ == '__main__':
 
 
     #### Prepare color maps for the plots
+    color_by_phecode_cat = {(cat if cat==cat else 'N/A'):color for cat, color in
+                                zip(phecode_info.category.unique(),
+                                    [pylab.get_cmap("tab20")(i) for i in range(20)])}
     color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
     color_by_age = {55: '#32a852', 70: '#37166b'}
-    colormaps = {
-        "sex": color_by_sex,
-        "age": color_by_age,
-    }
 
     # The top phenotypes that we will highlight
     #TODO: read these in from a file?
@@ -381,6 +473,7 @@ if __name__ == '__main__':
 
         ## Summarize everything
         generate_results_table()
+        summary()
 
     predict_diagnoses_effect_size_tables()
     demographics_table()
