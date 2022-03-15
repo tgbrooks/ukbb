@@ -608,73 +608,6 @@ def diagnosis_survival_curves():
     fig.savefig(OUTDIR+"diagnosis_survival.diabetes.parkinsons.temp_RA.png", dpi=DPI)
 
 
-def triangular_three_component_plots():
-    # Make triangular stype plots of the three-component tests
-    # however we currently don't use these since they are hard to read
-
-    # Plot the components in a triangular plot
-    def trianglize(coords):
-        # Take values summing to 1 and convert to the equilateral triangle of length 1 in the plane
-        coords = numpy.maximum(coords,0)
-        norm_factors = coords.sum(axis=len(coords.shape)-1)
-        norm_effs = (coords.T/norm_factors).T
-        return norm_effs @ numpy.array([[0,1,0.5], [0,0,numpy.sqrt(3/4)]]).T
-    def triangle_frame(ax):
-        # Draw axis frame in a triangle
-        ax.set_aspect('equal')
-        ax.plot([0,1,0.5,0], [0,0,numpy.sqrt(3/4),0], c="k")
-        ax.annotate("Circadian", (0,0), horizontalalignment="right")
-        ax.annotate("PA", (1,0))
-        ax.annotate("Sleep", (0.5,numpy.sqrt(3/4)))
-        ax.axis('off')
-    def plot_triangular_ses(ax, effs, seses, colors):
-        #color = "#999"
-        for eff, ses, color in zip(effs.values, seses.values, colors):
-            base_point = trianglize(eff)
-            circ_point = trianglize(eff + [ses[0],0,0])
-            physical_point = trianglize(eff + [0,ses[1],0])
-            sleep_point = trianglize(eff + [0,0,ses[2]])
-            #ax.plot(*numpy.array([base_point, circ_point]).T, c=color, zorder=-1)
-            #ax.plot(*numpy.array([base_point, physical_point]).T, c=color, zorder=-1)
-            #ax.plot(*numpy.array([base_point, sleep_point]).T, c=color, zorder=-1)
-            #The negative directions
-            neg_circ_point = trianglize(eff + [-ses[0],0,0])
-            neg_physical_point = trianglize(eff + [0,-ses[1],0])
-            neg_sleep_point = trianglize(eff + [0,0,-ses[2]])
-            ax.plot(*numpy.array([base_point, neg_circ_point]).T, c=color, zorder=-1)
-            ax.plot(*numpy.array([base_point, neg_physical_point]).T, c=color, zorder=-1)
-            ax.plot(*numpy.array([base_point, neg_sleep_point]).T, c=color, zorder=-1)
-            #poly_x, poly_y= numpy.array([
-            #    #base_point,
-            #    circ_point,
-            #    neg_physical_point,
-            #    sleep_point,
-            #    neg_circ_point,
-            #    physical_point,
-            #    neg_sleep_point,
-            #]).T
-            #print(poly_x, poly_y)
-            #ax.fill(
-            #    poly_x,
-            #    poly_y,
-            #    color=color,
-            #    alpha=0.2,
-            #    zorder=-1)
-
-    effs_cols = ['circ_eff', 'physical_eff', 'sleep_eff']
-    ses_cols = ['circ_se', 'physical_se', 'sleep_se']
-    effs = phecode_three_component_tests[effs_cols].abs()
-    ses = phecode_three_component_tests[ses_cols].abs()
-
-    coords = trianglize(effs.values)
-    fig, ax = pylab.subplots()
-    c = phecode_three_component_tests.index.map(phecode_info.set_index("phenotype").category.map(color_by_phecode_cat))
-    s = -numpy.log10(phecode_three_component_tests.overall_p.astype(float)) + 8
-    ax.scatter(*coords.T, c=c, s=s)
-    plot_triangular_ses(ax, effs, ses, c)
-    triangle_frame(ax)
-    legend_from_colormap(fig, color_by_phecode_cat)
-
 def effect_size_plots():
 
     def plot(activity_var = "acceleration_RA"):
@@ -896,7 +829,6 @@ def generate_results_table():
         survival_tests.sort_values(by="p").to_excel(writer, sheet_name="Survival Associations", index=False)
         phecode_details.to_excel(writer, sheet_name="PheCODEs")
 
-    # TODO include header
     workbook = openpyxl.load_workbook("../phewas_table_header.xlsx")
     workbook.save(OUTDIR+"phewas_results.xlsx")
     with pandas.ExcelWriter(OUTDIR+"phewas_results.xlsx", mode="a") as writer:
@@ -904,7 +836,6 @@ def generate_results_table():
         phecode_tests_by_sex.sort_values(by="p_diff").to_excel(writer, sheet_name="By Sex", index=False)
         age_tests.sort_values(by="p").to_excel(writer, sheet_name="By Age", index=False)
 
-    # TODO include header
     workbook = openpyxl.load_workbook("../quantitative_table_header.xlsx")
     workbook.save(OUTDIR+"quantitative_results.xlsx")
     with pandas.ExcelWriter(OUTDIR+"quantitative_results.xlsx", mode="a") as writer:
@@ -912,20 +843,11 @@ def generate_results_table():
         quantitative_sex_tests.sort_values(by="sex_difference_p").to_excel(writer, sheet_name="By Sex", index=False)
         quantitative_age_tests.sort_values(by="age_difference_p").to_excel(writer, sheet_name="By Age", index=False)
 
-    # TODO header
     workbook = openpyxl.load_workbook("../three_components_table_header.xlsx")
     workbook.save(OUTDIR+"three_components_results.xlsx")
     with pandas.ExcelWriter(OUTDIR+"three_components_results.xlsx", mode="a") as writer:
         phecode_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="PheCODEs")
         quantitative_three_component_tests.sort_values(by="circ_p").to_excel(writer, sheet_name="Quantitative Traits")
-
-    # TODO header
-    workbook = openpyxl.load_workbook("../proportional_hazards_table_header.xlsx")
-    workbook.save(OUTDIR+"proportional_hazards_results.xlsx")
-    with pandas.ExcelWriter(OUTDIR+"proportional_hazards_results.xlsx", mode="a") as writer:
-        predictive_tests_cox.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
-        predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
-        predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
 
 def temperature_trace_plots(N_IDS=500):
     ids = day_plots.get_ids_of_traces_available()
@@ -1488,172 +1410,6 @@ def quantitative_traits_with_medications():
     fig.savefig(f"{OUTDIR}/age_effects.quantitative.lipoproteins.png")
 
 
-def predict_diagnoses():
-    # Group by integer PHECODE and get first date of any occurances
-    icd10 = icd10_entries.copy()
-    icd10['PHECODE'] = numpy.floor(icd10.PHECODE)
-    icd10.first_date = pandas.to_datetime(icd10.first_date)
-    icd10 = icd10.sort_values(by="first_date")
-    icd10 = icd10[~icd10[['ID', 'PHECODE']].duplicated(keep='first')]
-
-    icd10['actigraphy_start_date'] = icd10.ID.map(data.actigraphy_start_date)
-
-    diagnoses_total = icd10.groupby("ID").PHECODE.count()
-
-    #icd10_after_actigraphy.groupby(['ID', 'PHECODE']).size().unstack(fill_value=0).astype(bool)
-    icd10_after_actigraphy = icd10[icd10.first_date > icd10.actigraphy_start_date]
-    diagnoses_after_actigraphy = icd10_after_actigraphy.groupby("ID").PHECODE.count()
-
-    icd10_before_actigraphy = icd10[icd10.first_date <= icd10.actigraphy_start_date]
-    diagnoses_before_actigraphy = icd10_before_actigraphy.groupby("ID").PHECODE.count()
-
-    d = data.copy()
-    d['diagnoses_after_actigraphy'] = d.index.map(diagnoses_after_actigraphy).fillna(0)
-    d['diagnoses_before_actigraphy'] = d.index.map(diagnoses_before_actigraphy).fillna(0)
-    d['diagnoses_total'] = d.index.map(diagnoses_total).fillna(0)
-
-    # See if we can predict the number of diagnoses they will come down with
-    num_diagnoses_prediction = []
-    family = sm.families.Poisson()
-    #family.n = icd10.PHECODE.nunique()
-    fit0 = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy + BMI + sex + age_at_actigraphy", data=d, family=family).fit()
-    fit00 = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy", data=d, family=family).fit()
-    for variable in ['acceleration_RA', 'acceleration_overall', 'temp_RA']:
-        fit = smf.glm(f"diagnoses_after_actigraphy ~ diagnoses_before_actigraphy + {variable} + BMI + sex + age_at_actigraphy", data=d, family=family).fit()
-        num_diagnoses_prediction.append({
-            "activity_var": variable,
-            "p": fit.pvalues[variable],
-            "median_abs_residual": (d.diagnoses_total - fit.fittedvalues).abs().median(),
-            "median_abs_pearson_residual": (fit.resid_pearson).abs().median(),
-            "median_abs_anscombe_residual": numpy.median(numpy.abs((fit.resid_anscombe_scaled))),
-        })
-    num_diagnoses_prediction = pandas.DataFrame(num_diagnoses_prediction).sort_values(by="median_abs_pearson_residual")
-
-
-    # Plot number of diagnosis by quintile for a variable
-    for var in ['acceleration_RA', 'acceleration_overall', 'temp_RA']:
-        fig, ax = pylab.subplots()
-        groups = d.groupby(pandas.qcut(d[var], 5))
-        labels = []
-        for i, (g, d2) in enumerate(groups):
-            ax.boxplot(d2.diagnoses_after_actigraphy, positions=[i], showfliers=False)
-            labels.append(g)
-        ax.set_xticks(numpy.arange(len(labels)))
-        ax.set_xticklabels(labels, rotation=45)
-        ax.set_xlabel(f"{var} quintile")
-        ax.set_ylabel("Diagnoses after actigraphy")
-        fig.tight_layout()
-
-def predict_diagnoses_plots():
-    phenotypes = top_phenotypes[::-1]
-    tests = predictive_tests_cox.set_index('phecode').reindex(phenotypes)
-    tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
-    tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
-
-    fig, axes = pylab.subplots(figsize=(9,7), ncols=4, sharey=True)
-    ys = numpy.arange(len(tests))
-    axes[0].barh(
-        ys,
-        -numpy.log10(tests.p),
-        color='k')
-    axes[0].set_yticks(numpy.arange(len(tests)))
-    axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(x, 30)))
-    axes[0].set_ylim(-0.5, len(tests)-0.5)
-    p_cutoff_for_q05 = predictive_tests[predictive_tests.q > 0.05].p.min()
-    axes[0].axvline(-numpy.log10(p_cutoff_for_q05)) # BH FDR cutoff 0.05
-    axes[0].set_xlabel("-log10 p-value")
-
-    axes[1].scatter(
-        tests.std_logHR,
-        ys,
-        color='k',
-    )
-    for i, (idx, row) in enumerate(tests.iterrows()):
-        axes[1].plot(
-            [row.std_logHR- row.std_logHR_se*1.96, row.std_logHR+ row.std_logHR_se*1.96],
-            [ys[i], ys[i]],
-            color='k',
-        )
-    axes[1].axvline(0, color="k")
-    axes[1].set_xlabel("logHR per SD")
-
-    # By sex
-    axes[2].scatter(
-        tests_by_sex.male_std_logHR,
-        ys + 0.1,
-        color=color_by_sex['Male'],
-    )
-    axes[2].scatter(
-        tests_by_sex.female_std_logHR,
-        ys-0.1,
-        color=color_by_sex['Female'],
-    )
-    for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
-        axes[2].plot(
-            [row.male_std_logHR - row.male_std_logHR_se*1.96, row.male_std_logHR+ row.male_std_logHR_se*1.96],
-            [ys[i] + 0.1, ys[i] + 0.1],
-            color=color_by_sex["Male"],
-        )
-        axes[2].plot(
-            [row.female_std_logHR- row.female_std_logHR_se*1.96, row.female_std_logHR + row.female_std_logHR_se*1.96],
-            [ys[i]-+ 0.1, ys[i] - 0.1],
-            color=color_by_sex["Female"],
-        )
-    axes[2].set_xlabel("logHR per SD\nBy Sex")
-    axes[2].axvline(0, color="k")
-
-    #By age
-    axes[3].scatter(
-        tests_by_age.age55_std_logHR,
-        ys + 0.1,
-        color=color_by_age[55],
-    )
-    axes[3].scatter(
-        tests_by_age.age70_std_logHR,
-        ys-0.1,
-        color=color_by_age[70],
-    )
-    for i, (idx, row) in enumerate(tests_by_age.iterrows()):
-        axes[3].plot(
-            [row.age55_std_logHR - row.age55_std_logHR_se*1.96, row.age55_std_logHR + row.age55_std_logHR_se*1.96],
-            [ys[i] + 0.1, ys[i] + 0.1],
-            color=color_by_age[55],
-        )
-        axes[3].plot(
-            [row.age70_std_logHR - row.age70_std_logHR_se*1.96, row.age70_std_logHR + row.age70_std_logHR_se*1.96],
-            [ys[i]-+ 0.1, ys[i] - 0.1],
-            color=color_by_age[70],
-        )
-    axes[3].set_xlabel("logHR per SD\nBy Age")
-    axes[3].axvline(0, color="k")
-    fig.tight_layout(rect=(0,0,0.85,1))
-    util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
-    util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
-
-    fig.savefig(OUTDIR + "predictive_tests.png", dpi=300)
-    fig.savefig(PUB_OUTDIR+"FIG4.predictive.png", dpi=300)
-
-def predict_diagnoses_effect_size_tables():
-    # Generate a table of the effect sizes for predcitive tests (prop hazard models)
-    # for select phecodes
-    phecodes = [250, 401, 496, 272, 585, 480, 300]
-    results = predictive_tests_cox.set_index("phecode").loc[phecodes]
-    HR_1SD = numpy.exp(results.std_logHR).round(2).astype(str)
-    HR_1SD_lower = numpy.exp(results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
-    HR_1SD_upper = numpy.exp(results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
-    HR_2SD = numpy.exp(results.std_logHR*2).round(2).astype(str)
-    HR_2SD_lower = numpy.exp((results.std_logHR - 1.96* results.std_logHR_se)*2).round(2).astype(str)
-    HR_2SD_upper = numpy.exp((results.std_logHR + 1.96* results.std_logHR_se)*2).round(2).astype(str)
-
-    print("Hazard Ratios of common diagnoses per SD of temp_RA")
-    results = pandas.DataFrame({
-        "diagnosis": results.meaning,
-        "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
-        "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
-    })
-    print(results)
-    return results
-
 def med_differences_plots():
     d = -numpy.log10(med_differences.pivot_table(columns=["medication"], index=["phenotype"], values="p") + 1e-20)
 
@@ -1711,7 +1467,8 @@ if __name__ == '__main__':
     (pub_outdir).mkdir(exist_ok=True)
 
     #### Load and preprocess the underlying data
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = phewas_preprocess.load_data(COHORT)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
+    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details  = phewas_preprocess.load_diagnoses(data)
 
     medications = phewas_preprocess.load_medications(data.index)
 
@@ -1763,12 +1520,6 @@ if __name__ == '__main__':
 
     phecode_three_component_tests, phecode_three_component_tests_by_sex, phecode_three_component_tests_by_age, quantitative_three_component_tests, quantitative_three_component_tests_by_sex, quantitative_three_component_tests_by_age = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_RA")
     phecode_three_component_tests_amp, phecode_three_component_tests_by_sex_amp, phecode_three_component_tests_by_age_amp, quantitative_three_component_tests_amp, quantitative_three_component_tests_by_sex_amp, quantitative_three_component_tests_by_age_amp = phewas_tests.three_components_tests(data, phecode_groups, quantitative_variables, quantitative_variable_descriptions, phecode_info, OUTDIR, RECOMPUTE, circ_var="temp_amplitude")
-
-    predictive_tests, predictive_tests_by_sex, predictive_tests_by_age = phewas_tests.predictive_tests(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
-
-    predictive_tests_cox = phewas_tests.predictive_tests_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
-    predictive_tests_by_sex_cox = phewas_tests.predictive_tests_by_sex_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
-    predictive_tests_by_age_cox = phewas_tests.predictive_tests_by_age_cox(data, phecode_groups, phecode_info, phecode_map, icd10_entries, OUTDIR, RECOMPUTE)
 
 
     #### Prepare color maps for the plots
@@ -1825,8 +1576,6 @@ if __name__ == '__main__':
         temperature_calibration_plots()
         chronotype_plots()
         quantitative_traits_with_medications()
-        predict_diagnoses_plots()
-        predict_diagnoses_effect_size_tables()
         if args.all:
             # Note: slow to run
             temperature_trace_plots()

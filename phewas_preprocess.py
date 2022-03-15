@@ -364,7 +364,11 @@ def load_data(cohort):
     data['entry_age'] = (data.actigraphy_start_date - data.birth_year_dt) / pandas.to_timedelta("1Y")
     data.age_at_death_censored.fillna(data.age_at_death_censored.max(), inplace=True)
 
-
+    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
+    
+def load_diagnoses(data):
+    ''' Load phecode information and insert into data '''
+    selected_ids = data.index
     # Load phecode data
     phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_phecode(selected_ids)
 
@@ -372,8 +376,9 @@ def load_data(cohort):
     for group in phecode_groups:
         # Note that those without any ICD10 entries at all should be marked as non-case, hence the fillna()
         data[group] = data.index.map(phecode_data[group].astype(int)).fillna(0)
-    
-    return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
+
+    return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
+
 
 if __name__ == "__main__":
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_data(1)
