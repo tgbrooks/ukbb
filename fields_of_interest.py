@@ -5,6 +5,8 @@ general_fields = dict(
     birth_month = 52,
     sex = 31,
     assessment_center = 54,
+    townsend_deprivation_index = 189,
+    alcohol_intake_frequency = 1558,
 )
 
 general_mental_health_fields = dict(
@@ -559,6 +561,7 @@ self_reported_conditions = dict(
 
 
 # Death records
+# NOTE: more up-to-date available in data/patient_records/death*
 death_fields = dict(
         age_at_death = 40007,
         date_of_death = 40000,
