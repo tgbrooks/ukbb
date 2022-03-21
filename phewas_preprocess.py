@@ -60,7 +60,7 @@ def load_ukbb():
     ukbb.columns = ukbb.columns.str.replace("[,:/]","_") # Can't use special characters easily
 
     # Update death information
-    deaths = pandas.read_csv("../data/patient_records/death.txt", sep='\t').drop_duplicates(['eid', 'date_of_death']).set_index('eid')
+    deaths = pandas.read_csv("../data/patient_records/death.txt", sep='\t', parse_dates=["date_of_death"], dayfirst=True).drop_duplicates(['eid', 'date_of_death']).set_index('eid')
     ukbb['date_of_death'] = ukbb.index.map(deaths.date_of_death)
 
     return ukbb
@@ -349,7 +349,7 @@ def load_data(cohort):
     correct_for_device_cluster(data, 'temp_within_day_SD', multiplicative=True)
 
     # Create simplified versions of the categorical covarites
-    # This is necessary for convergence of the logistic models
+    # so that there aren't too many covariate factors included in the model
     data['ethnicity_white'] = data.ethnicity.isin(["British", "Any other white background", "Irish", "White"])
     data['overall_health_good'] = data.overall_health.isin(["Good", "Excellent"])
     data.loc[data.overall_health.isin(['Do not know', 'Prefer not to answer']), 'overall_health_good'] = float("NaN")
@@ -358,6 +358,16 @@ def load_data(cohort):
     data['high_income'] = data.household_income.isin(['52,000 to 100,000', 'Greater than 100,000'])
     data.loc[data.high_income == 'Do not know', 'high_income'] = float("NaN")
     data['college_education'] = data['education_College_or_University_degree']
+    data['alcohol'] = data.alcohol_frequency.map({
+        "Prefer not to answer": float("NaN"),
+        "Never": "never",
+        "Special occaisions only": "never",
+        "One to three times a month": "sometimes",
+        "Once or twice a week": "sometimes",
+        "Three or four times a week": "often",
+        "Daily or almost daily": "often",
+    })
+
 
     # Process death data, appropriate for Cox proportional hazards model
     data['date_of_death_censored'] = pandas.to_datetime(data.date_of_death)

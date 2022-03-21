@@ -12,6 +12,7 @@ import statsmodels.api as sm
 import phewas_preprocess
 import longitudinal_statistics
 import longitudinal_diagnoses
+import longitudinal_diagnostics
 import day_plots
 
 import util
@@ -85,7 +86,7 @@ def summary():
     ax2.spines["right"].set_visible(False)
     ax3.spines["top"].set_visible(False)
     ax3.spines["right"].set_visible(False)
-    bins = pandas.date_range("2000-1-1", "2022-1-1", freq="1M")
+    bins = pandas.date_range("2007-1-1", "2022-1-1", freq="1M")
     def date_hist(ax, values, bins, **kwargs):
         # Default histogram for dates doesn't cooperate with being given a list of bins
         # since the list of bins doesn't get converted to the same numerical values as the values themselves
@@ -105,7 +106,7 @@ def summary():
     ax1.annotate("Assessment", (assessment_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
     ax1.annotate("Actigraphy", (actigraphy_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
     ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
-    ax2.annotate("Medical Record\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,60), textcoords="offset points", ha="center")
+    ax2.annotate("Novel In-Patient\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,20), textcoords="offset points", ha="center")
     ax3.annotate("Deaths", (death_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
     fig.savefig(OUTDIR/"FIG1a.summary_timeline.png")
 
@@ -126,7 +127,7 @@ def generate_results_table():
         predictive_tests_cox.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
         predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
         predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
-        phecode_details.to_excel(writer, sheet_name="PheCODEs")
+        phecode_details.T.to_excel(writer, sheet_name="PheCODEs")
 
 def temperature_trace_plots(N_IDS=500):
     '''
@@ -340,23 +341,23 @@ def predict_diagnoses_plots():
 
     # By sex
     axes[2].scatter(
-        tests_by_sex.male_std_logHR,
+        tests_by_sex.std_male_logHR,
         ys + 0.1,
         color=color_by_sex['Male'],
     )
     axes[2].scatter(
-        tests_by_sex.female_std_logHR,
+        tests_by_sex.std_female_logHR,
         ys-0.1,
         color=color_by_sex['Female'],
     )
     for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
         axes[2].plot(
-            [row.male_std_logHR - row.male_std_logHR_se*1.96, row.male_std_logHR+ row.male_std_logHR_se*1.96],
+            [row.std_male_logHR - row.std_male_logHR_se*1.96, row.std_male_logHR+ row.std_male_logHR_se*1.96],
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_sex["Male"],
         )
         axes[2].plot(
-            [row.female_std_logHR- row.female_std_logHR_se*1.96, row.female_std_logHR + row.female_std_logHR_se*1.96],
+            [row.std_female_logHR- row.std_female_logHR_se*1.96, row.std_female_logHR + row.std_female_logHR_se*1.96],
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
@@ -459,9 +460,8 @@ if __name__ == '__main__':
     color_by_age = {55: '#32a852', 70: '#37166b'}
 
     # The top phenotypes that we will highlight
-    #TODO: read these in from a file?
-    #top_phenotypes = pandas.read_csv("top_phecodes.txt", header=None, index_col=None).values.flatten()
-    top_phenotypes = ['250', '318', '585', '276', '296', '496', '480' ,'300', '272', '591', '411', '458', '427']
+    top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '327.3', '480', '272', '327', '740', '550.2', '716']
+    #old list: ['250', '318', '585', '276', '496', '480' ,'300', '272', '591', '411', '458', '427']
 
     ## Make the plots
     if not args.no_plots:
@@ -474,6 +474,11 @@ if __name__ == '__main__':
         ## Summarize everything
         generate_results_table()
         summary()
+
+    # For running the more compute-intensive diagnositcs processes
+    # e.g. checking cox.zph, time-varying models
+    if args.all:
+        longitudinal_diagnostics.diagnostics(data, case_status, top_phenotypes, OUTDIR)
 
     predict_diagnoses_effect_size_tables()
     demographics_table()
