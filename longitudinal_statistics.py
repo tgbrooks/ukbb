@@ -7,7 +7,7 @@ import statsmodels.api as sm
 
 from util import BH_FDR
 
-COVARIATES = ["sex", "ethnicity_white", "overall_health_good", "smoking_ever", "age_at_actigraphy", "BMI", "college_education", "alcohol", "townsend_deprivation_index"]
+COVARIATES = ["sex", "ethnicity_white", "overall_health_good", "smoking_ever", "age_at_actigraphy_cat", "BMI", "college_education", "alcohol", "townsend_deprivation_index"]
 MIN_N = 200
 MIN_N_BY_AGE = 400
 MIN_N_PER_SEX = 200
@@ -47,9 +47,7 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
     variable = 'temp_RA'
     variable_SD = data[variable].std()
 
-    covariate_formula = " + ".join(COVARIATES)
-
-    d = data[[variable, 'date_of_death', 'birth_year_dt'] + COVARIATES].copy()
+    d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
 
     predictive_tests_cox_list = []
     print("Starting longitudinal tests")
@@ -66,9 +64,10 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
         d.loc[~d.censored, 'event'] = 'diagnosed'
         d.loc[d.date_of_death == d.diagnosis_date, 'event'] = 'death'
         d['event'] = pandas.Categorical(d.event, categories = ['censored', 'diagnosed', 'death'])
+        d['time_to_event'] = d.event_age - d.age_at_actigraphy
 
         # Final collection of data we use for the models
-        d2 = d[d.use].reset_index()[['event_age', "censored", 'case_status', 'index', 'event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
+        d2 = d[d.use].reset_index()[['event_age', "censored", 'case_status', 'index', 'event', 'time_to_event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
 
         header = {
             "activity_var": variable,
@@ -89,7 +88,7 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
         try:
             rfit = robjects.r('''
             res <- coxph(
-                Surv(age_at_actigraphy, event_age, event) ~ temp_RA + BMI + age_at_actigraphy + strata(sex, overall_health_good) + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+                Surv(time_to_event, event == 'diagnosed') ~ temp_RA + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
                 data=d2,
                 id=ID,
                 cluster=ID,
@@ -106,11 +105,11 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
             columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
         )
         header.update({
-            'p': summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
-            'logHR': summary.loc['temp_RA_1:2', 'coef'],
-            'logHR_se': summary.loc['temp_RA_1:2', 'robust se'],
-            'std_logHR': summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
-            'std_logHR_se': summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+            'p': summary.loc['temp_RA', 'Pr(>|z|)'],
+            'logHR': summary.loc['temp_RA', 'coef'],
+            'logHR_se': summary.loc['temp_RA', 'robust se'],
+            'std_logHR': summary.loc['temp_RA', 'coef'] * variable_SD,
+            'std_logHR_se': summary.loc['temp_RA', 'robust se'] * variable_SD,
 
         })
         predictive_tests_cox_list.append(header)
@@ -133,7 +132,7 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
     variable = 'temp_RA'
     variable_SD = data[variable].std()
 
-    d = data[[variable, 'date_of_death', 'birth_year_dt'] + COVARIATES].copy()
+    d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
 
     predictive_tests_by_sex_cox_list = []
     print("Starting sex-specific longitudinal tests")
@@ -150,9 +149,10 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         d.loc[~d.censored, 'event'] = 'diagnosed'
         d.loc[d.date_of_death == d.diagnosis_date, 'event'] = 'death'
         d['event'] = pandas.Categorical(d.event, categories = ['censored', 'diagnosed', 'death'])
+        d['time_to_event'] = d.event_age - d.age_at_actigraphy
 
         # Final collection of data we use for the models
-        d2 = d[d.use].reset_index()[['event_age', "censored", 'case_status', 'index', 'event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
+        d2 = d[d.use].reset_index()[['case_status', 'index', 'event', 'time_to_event', 'age_at_actigraphy_cat', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
 
         header = {
             "activity_var": variable,
@@ -175,7 +175,7 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         try:
             rfit = robjects.r('''
             res <- coxph(
-                Surv(age_at_actigraphy, event_age, event) ~ (temp_RA + BMI + age_at_actigraphy + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index) * sex - sex + strata(sex, overall_health_good) ,
+                Surv(time_to_event, event == 'diagnosed') ~ (temp_RA + BMI + age_at_actigraphy_cat + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index) * sex,
                 data=d2,
                 id=ID,
                 cluster=ID,
@@ -191,8 +191,8 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
             index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
             columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
         )
-        male_var = f"{variable}:sexMale_1:2"
-        female_var = f"{variable}_1:2"
+        male_var = f"{variable}:sexMale"
+        female_var = f"{variable}"
         # Contrast for the male-vs-0 test:
         # linear combination of temp_RA and temp_RA:sexMale since female is the baseline
         contrast = pandas.Series(numpy.zeros(len(summary)), summary.index)
@@ -203,16 +203,16 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         robjects.globalenv['contrast'] = contrast
         wt = robjects.r("wt <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast)")
         header.update({
-            'sex_diff_p': summary.loc['temp_RA:sexMale_1:2', 'Pr(>|z|)'],
-            'female_p': summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
+            'sex_diff_p': summary.loc['temp_RA:sexMale', 'Pr(>|z|)'],
+            'female_p': summary.loc['temp_RA', 'Pr(>|z|)'],
             'male_p': wt[2][0], # Results from the contrast
-            'female_logHR': summary.loc['temp_RA_1:2', 'coef'],
+            'female_logHR': summary.loc['temp_RA', 'coef'],
             'male_logHR': wt[4][0],
-            'female_logHR_se': summary.loc['temp_RA_1:2', 'robust se'],
+            'female_logHR_se': summary.loc['temp_RA', 'robust se'],
             'male_logHR_se': wt[4][1],
-            'std_female_logHR': summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
+            'std_female_logHR': summary.loc['temp_RA', 'coef'] * variable_SD,
             'std_male_logHR': wt[4][0] * variable_SD,
-            'std_female_logHR_se': summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+            'std_female_logHR_se': summary.loc['temp_RA', 'robust se'] * variable_SD,
             'std_male_logHR_se': wt[4][1] * variable_SD,
         })
         predictive_tests_by_sex_cox_list.append(header)
@@ -236,7 +236,8 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
     variable = 'temp_RA'
     variable_SD = data[variable].std()
 
-    d = data[[variable, 'date_of_death', 'birth_year_dt'] + COVARIATES].copy()
+    d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
+    d['age_at_actigraphy_cat'] = d.age_at_actigraphy_cat.astype(str) # The Interval objects don't play with R
 
     predictive_tests_by_age_cox_list = []
     print("Starting sex-specific longitudinal tests")
@@ -253,9 +254,10 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         d.loc[~d.censored, 'event'] = 'diagnosed'
         d.loc[d.date_of_death == d.diagnosis_date, 'event'] = 'death'
         d['event'] = pandas.Categorical(d.event, categories = ['censored', 'diagnosed', 'death'])
+        d['time_to_event'] = d.event_age - d.age_at_actigraphy
 
         # Final collection of data we use for the models
-        d2 = d[d.use].reset_index()[['event_age', "censored", 'case_status', 'index', 'event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
+        d2 = d[d.use].reset_index()[['time_to_event', 'case_status', 'index', 'event', 'time_to_event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
 
         header = {
             "activity_var": variable,
@@ -274,49 +276,41 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
 
         # Age-interaction effect model
         # Include an age_at_actigraphy interaction term with temp_RA
-        # Don't include it for the other factors since they were not assessed at that time so it makes little sense
         try:
             rfit = robjects.r('''
             res <- coxph(
-                Surv(age_at_actigraphy, event_age, event) ~ temp_RA*age_at_actigraphy + BMI + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index + strata(sex, overall_health_good) ,
+                Surv(time_to_event, event == 'diagnosed') ~ (temp_RA + BMI + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index) * age_at_actigraphy_cat -age_at_actigraphy_cat + strata(age_at_actigraphy_cat),
                 data=d2,
                 id=ID,
                 cluster=ID,
             )
             res
             ''')
-        except rpy2.rinterface.RRuntimeError as e:
+        except rpy2.rinterface.embedded.RRuntimeError as e:
             print(f"Problem in {variable} {diagnosis}:\n\t{e}")
-            predictive_tests_by_age.append(header)
+            predictive_tests_by_age_cox_list.append(header)
             continue
         summary = pandas.DataFrame(
             numpy.array(robjects.r('summary(res)$coefficients')),
             index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
             columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
         )
-        # Contrasts for the age55-vs-0 and age70-vs-0 tests:
-        # linear combination of temp_RA and temp_RA:age_at_actigraphy 
-        contrast_age55 = pandas.Series(numpy.zeros(len(summary)), summary.index)
-        contrast_age55["temp_RA_1:2"] = 1
-        contrast_age55["temp_RA:age_at_actigraphy_1:2"] = 55
-        contrast_age70 = pandas.Series(numpy.zeros(len(summary)), summary.index)
-        contrast_age70["temp_RA_1:2"] = 1
-        contrast_age70["temp_RA:age_at_actigraphy_1:2"] = 70
+        # Contrast for the age <65 category, since this is relative to the >65 category in our model
+        contrast_under65 = pandas.Series(numpy.zeros(len(summary)), summary.index)
+        contrast_under65["temp_RA"] = 1
+        contrast_under65["temp_RA:age_at_actigraphy_catunder 65"] = 1
         with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
-            contrast_age55 = robjects.conversion.py2rpy(contrast_age55) # move into R
-            contrast_age70 = robjects.conversion.py2rpy(contrast_age70) # move into R
-        robjects.globalenv['contrast_age55'] = contrast_age55
-        robjects.globalenv['contrast_age70'] = contrast_age70
-        wt_age55 = robjects.r("wt_age55 <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast_age55)")
-        wt_age70 = robjects.r("wt_age70 <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast_age70)")
+            contrast_under65 = robjects.conversion.py2rpy(contrast_under65) # move into R
+        robjects.globalenv['contrast_under65'] = contrast_under65
+        wt_under65 = robjects.r("wt_age55 <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast_under65)")
         header.update({
-            "age_diff_p": summary.loc['temp_RA:age_at_actigraphy_1:2', 'Pr(>|z|)'],
-            "age55_p": wt_age55[2][0],
-            "age70_p": wt_age70[2][0],
-            "age55_std_logHR": wt_age55[4][0] * variable_SD,
-            "age70_std_logHR": wt_age70[4][0] * variable_SD,
-            "age55_std_logHR_se": wt_age55[4][1] * variable_SD,
-            "age70_std_logHR_se": wt_age70[4][1] * variable_SD,
+            "age_diff_p": summary.loc['temp_RA:age_at_actigraphy_catunder 65', 'Pr(>|z|)'],
+            "over_65_p": summary.loc['temp_RA', 'Pr(>|z|)'],
+            "under_65_p": wt_under65[2][0],
+            "over_65_std_log_HR": summary.loc['temp_RA', 'coef'] * variable_SD,
+            "under_65_std_log_HR": wt_under65[4][0] * variable_SD,
+            "over_65_std_log_HR_se": summary.loc['temp_RA', 'robust se'] * variable_SD,
+            "under_65_std_log_HR_se": wt_under65[4][1] * variable_SD,
         })
         predictive_tests_by_age_cox_list.append(header)
 

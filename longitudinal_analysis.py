@@ -461,7 +461,6 @@ if __name__ == '__main__':
 
     # The top phenotypes that we will highlight
     top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '327.3', '480', '272', '327', '740', '550.2', '716']
-    #old list: ['250', '318', '585', '276', '496', '480' ,'300', '272', '591', '411', '458', '427']
 
     ## Make the plots
     if not args.no_plots:

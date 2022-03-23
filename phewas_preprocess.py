@@ -8,6 +8,10 @@ ZSCORE_OUTLIER_CUTOFF = 7
 # requirements for repeateability from the seasonal data
 EXTRA_ACTIVITY_VARIABLES = ["temp_L1_time", "temp_phase"]
 
+# Bins to group by age (at the time of actigraphy) in years
+#AGE_BINS  = [ 40, 55, 60, 65, 70, 80 ]
+AGE_BINS = [40, 65, 80]
+
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
 self_report_circadian_variables = {
@@ -313,10 +317,11 @@ def load_data(cohort):
 
     # Down sample for testing
     numpy.random.seed(0)
-    # Note: total 92331, half is 46164
-    cohort_id_ranges = {1: slice(0, 25000),
-               2: slice(25000,None), # Everyone not in cohort1
-               }
+    cohort_id_ranges = {
+        0: slice(0, None),  # Everyone
+        1: slice(0, 25000), # Exploratory cohort1
+        2: slice(25000,None), # Everyone not in cohort1
+    }
     selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], replace=False)[cohort_id_ranges[cohort]]
 
     data = data_full.loc[selected_ids].copy()
@@ -333,6 +338,10 @@ def load_data(cohort):
             return str(int(year)) + "-01-01"
     data['birth_year_dt'] = pandas.to_datetime(data.birth_year.apply(year_to_jan_first)) # As datetime
     data['age_at_actigraphy'] = (data.actigraphy_start_date - data.birth_year_dt) / pandas.to_timedelta("1Y")
+    data['age_at_actigraphy_cat'] = pandas.cut(
+        data.age_at_actigraphy,
+        AGE_BINS
+    ).astype("category").cat.rename_categories(["under_65", "over_65"])
 
     # Actigraphy device metadata
     # Device id's cluster into three groups with large gaps between them and significant
