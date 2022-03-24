@@ -298,19 +298,19 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         # Contrast for the age <65 category, since this is relative to the >65 category in our model
         contrast_under65 = pandas.Series(numpy.zeros(len(summary)), summary.index)
         contrast_under65["temp_RA"] = 1
-        contrast_under65["temp_RA:age_at_actigraphy_catunder 65"] = 1
+        contrast_under65["temp_RA:age_at_actigraphy_catunder_65"] = 1
         with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
             contrast_under65 = robjects.conversion.py2rpy(contrast_under65) # move into R
         robjects.globalenv['contrast_under65'] = contrast_under65
         wt_under65 = robjects.r("wt_age55 <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast_under65)")
         header.update({
-            "age_diff_p": summary.loc['temp_RA:age_at_actigraphy_catunder 65', 'Pr(>|z|)'],
+            "age_diff_p": summary.loc['temp_RA:age_at_actigraphy_catunder_65', 'Pr(>|z|)'],
             "over_65_p": summary.loc['temp_RA', 'Pr(>|z|)'],
             "under_65_p": wt_under65[2][0],
-            "over_65_std_log_HR": summary.loc['temp_RA', 'coef'] * variable_SD,
-            "under_65_std_log_HR": wt_under65[4][0] * variable_SD,
-            "over_65_std_log_HR_se": summary.loc['temp_RA', 'robust se'] * variable_SD,
-            "under_65_std_log_HR_se": wt_under65[4][1] * variable_SD,
+            "over_65_std_logHR": summary.loc['temp_RA', 'coef'] * variable_SD,
+            "under_65_std_logHR": wt_under65[4][0] * variable_SD,
+            "over_65_std_logHR_se": summary.loc['temp_RA', 'robust se'] * variable_SD,
+            "under_65_std_logHR_se": wt_under65[4][1] * variable_SD,
         })
         predictive_tests_by_age_cox_list.append(header)
 

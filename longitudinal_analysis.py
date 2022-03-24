@@ -366,25 +366,25 @@ def predict_diagnoses_plots():
 
     #By age
     axes[3].scatter(
-        tests_by_age.age55_std_logHR,
+        tests_by_age.under_65_std_logHR,
         ys + 0.1,
-        color=color_by_age[55],
+        color=color_by_age['under 65'],
     )
     axes[3].scatter(
-        tests_by_age.age70_std_logHR,
+        tests_by_age.over_65_std_logHR,
         ys-0.1,
-        color=color_by_age[70],
+        color=color_by_age['over 65'],
     )
     for i, (idx, row) in enumerate(tests_by_age.iterrows()):
         axes[3].plot(
-            [row.age55_std_logHR - row.age55_std_logHR_se*1.96, row.age55_std_logHR + row.age55_std_logHR_se*1.96],
+            [row.under_65_std_logHR - row.under_65_std_logHR_se*1.96, row.under_65_std_logHR + row.under_65_std_logHR_se*1.96],
             [ys[i] + 0.1, ys[i] + 0.1],
-            color=color_by_age[55],
+            color=color_by_age['under 65'],
         )
         axes[3].plot(
-            [row.age70_std_logHR - row.age70_std_logHR_se*1.96, row.age70_std_logHR + row.age70_std_logHR_se*1.96],
+            [row.over_65_std_logHR - row.over_65_std_logHR_se*1.96, row.over_65_std_logHR + row.over_65_std_logHR_se*1.96],
             [ys[i]-+ 0.1, ys[i] - 0.1],
-            color=color_by_age[70],
+            color=color_by_age['over 65'],
         )
     axes[3].set_xlabel("logHR per SD\nBy Age")
     axes[3].axvline(0, color="k")
@@ -457,7 +457,7 @@ if __name__ == '__main__':
                                 zip(phecode_info.category.unique(),
                                     [pylab.get_cmap("tab20")(i) for i in range(20)])}
     color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
-    color_by_age = {55: '#32a852', 70: '#37166b'}
+    color_by_age = {"under 65": '#32a852', "over 65": '#37166b'}
 
     # The top phenotypes that we will highlight
     top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '327.3', '480', '272', '327', '740', '550.2', '716']
