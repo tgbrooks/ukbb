@@ -255,8 +255,8 @@ def temperature_calibration_plots():
     temp_RA = data['temp_RA']
     temp_amplitude = data['temp_amplitude']
 
-    fig, axes = pylab.subplots(figsize=(11,5), ncols=3)
-    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA, "amplitude": temp_amplitude}.items(), axes):
+    fig, axes = pylab.subplots(figsize=(8,5), ncols=2)
+    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA}.items(), axes):
         device_mean = measure.groupby(device).mean()
         random_mean = measure.groupby(random_device).mean()
         m = device_mean.quantile(0.01)
