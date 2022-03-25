@@ -17,6 +17,16 @@ ZPH_PS_CUTOFF = 0.01
 # Number of bins to use for time-interaction to approximate the continuous time interaction
 NUM_TIME_BINS = 20
 
+utils = robjects.packages.importr("utils")
+packnames = ['survival', 'timereg']
+names_to_install = [x for x in packnames if not robjects.packages.isinstalled(x)]
+utils.chooseCRANmirror(ind=1) # select the first mirror in the list
+if len(names_to_install) > 0:
+    utils.install_packages(robjects.vectors.StrVector(names_to_install))
+survival = robjects.packages.importr('survival')
+timereg = robjects.packages.importr('timereg')
+
+
 def time_interaction(data, vars, entry_var, time_var, event_var, time_bins):
     ''' expand data out to multiple instance, one per time bin so that Cox PH model
     can be run with a time-interaction on each of the columns named in `vars`
@@ -50,13 +60,13 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
     variable = 'temp_RA'
     variable_SD = data[variable].std()
 
-    d = data[[variable, 'date_of_death', 'birth_year_dt'] + COVARIATES].copy()
+    d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
 
     results = {}
     for diagnosis in top_phenotypes:
-        diags = case_status[case_status.PHECODE == diagnosis].set_index('ID')
-        d['case_status'] = d.index.map(diags.case_status.astype(str)).fillna('control')
-        d['diagnosis_date'] = d.index.map(diags.first_date)
+        diagnoses = case_status[case_status.PHECODE == diagnosis].set_index('ID')
+        d['case_status'] = d.index.map(diagnoses.case_status.astype(str)).fillna('control')
+        d['diagnosis_date'] = d.index.map(diagnoses.first_date)
         d['censored'] = d.case_status != 'case'
         d.diagnosis_date.fillna(d.date_of_death.fillna(last_date), inplace=True)
         d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
@@ -65,19 +75,12 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         d.loc[~d.censored, 'event'] = 'diagnosed'
         d.loc[d.date_of_death == d.diagnosis_date, 'event'] = 'death'
         d['event'] = pandas.Categorical(d.event, categories = ['censored', 'diagnosed', 'death'])
+        d['time_to_event'] = d.event_age - d.age_at_actigraphy
 
         # Final collection of data we use for the models
-        d2 = d[d.use].reset_index()[['event_age', "censored", 'case_status', 'index', 'event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
+        d2 = d[d.use].reset_index()[['time_to_event', 'case_status', 'index', 'event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
 
         # Run it in R
-        utils = robjects.packages.importr("utils")
-        packnames = ['survival']
-        names_to_install = [x for x in packnames if not robjects.packages.isinstalled(x)]
-        utils.chooseCRANmirror(ind=1) # select the first mirror in the list
-        if len(names_to_install) > 0:
-            utils.install_packages(robjects.vectors.StrVector(names_to_install))
-        survival = robjects.packages.importr('survival')
-
         with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
             d2_r = robjects.conversion.py2rpy(d2)
         robjects.globalenv['d2'] = d2_r
@@ -85,7 +88,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         # First, we have the standard base model
         rfit = robjects.r('''
         res <- coxph(
-            Surv(age_at_actigraphy, event_age, event) ~ temp_RA + BMI + age_at_actigraphy + strata(sex, overall_health_good) + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event == 'diagnosed') ~ temp_RA + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -116,11 +119,11 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
             columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
         )
         RA_summary = {
-                'p': summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
-                'logHR': summary.loc['temp_RA_1:2', 'coef'],
-                'logHR_se': summary.loc['temp_RA_1:2', 'robust se'],
-                'std_logHR': summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
-                'std_logHR_se': summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+                'p': summary.loc['temp_RA', 'Pr(>|z|)'],
+                'logHR': summary.loc['temp_RA', 'coef'],
+                'logHR_se': summary.loc['temp_RA', 'robust se'],
+                'std_logHR': summary.loc['temp_RA', 'coef'] * variable_SD,
+                'std_logHR_se': summary.loc['temp_RA', 'robust se'] * variable_SD,
         }
         results[diagnosis] = {
             'coeffs': coeffs,
@@ -135,9 +138,8 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         fig_dir = OUTDIR / 'diagnosis_figs'
         fig_dir.mkdir(exist_ok=True)
         for i, var in enumerate(zph_ps.index):
-            if '1:3' in var:
-                break
-            var = "_".join(var.split("_")[:-1]) # Remove the 1:2 or 1:3
+            if var == "GLOBAL":
+                continue
             output_img = str(fig_dir /  f'{diagnosis}.{var}.png')
             rcode = f'''
             png({repr(output_img)})
@@ -149,26 +151,34 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         # Find the variables that cox.zph identifies as time-varying
         # by comparing p-values to ZPH_PS_CUTOFF
         time_varying = []
-        for var in ["age_at_actigraphy", "BMI", "temp_RA"]:
+        for var in ["temp_RA", "BMI", "townsend_deprivation_index"]:
             if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
                 time_varying.append(var)
+        time_varying_cat = []
+        for var in ["age_at_actigraphy_cat", "sex", "overall_good_health", "smoking_ever", "college_education", "ethnicity_white", "alcohol"]:
+            if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
+                time_varying_cat.append(var)
 
         #### Run with time-interaction as identified by cox.zph above
         # Manually expand the dataset with `time_interaction` with a limited number of time bins
         # so that the memory explosion is manageable - coxph's tt support for this crashes with our large dataset even after down-sampling
         # this approximates time interactions with a more manageable number of intervals (NUM_TIME_BINS)
-        time_bins = pandas.cut(d2.event_age, NUM_TIME_BINS).unique()
-        d2_time = time_interaction(d2, time_varying, "age_at_actigraphy", "event_age", "event", time_bins)
+        time_bins = pandas.cut(d2.time_to_event, NUM_TIME_BINS).unique()
+        d2['start'] = 0
+        d2_time = time_interaction(d2, time_varying, 'start', "time_to_event", "event", time_bins)
         d2_time['start_state'] = 'censored'
         with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
             d2_time_r = robjects.conversion.py2rpy(d2_time)
         robjects.globalenv['d2_time'] = d2_time_r
 
         # Time interactions model with manually expanded dataset
+        non_time_varying = " ".join([f"+ {cov}" for cov in COVARIATES if cov not in time_varying_cat])
         time_varying_factors = ' '.join(f"+ {var}_time" for var in time_varying)
+        strata = ', '.join(time_varying_cat)
+        strata = f"+ strata({strata})" if len(time_varying_cat) > 0 else ''
         rfit2 = robjects.r(f'''
         res2 <- coxph(
-            Surv(start, end, event) ~ temp_RA + BMI + age_at_actigraphy + strata(sex, overall_health_good) + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index {time_varying_factors},
+            Surv(start, end, event == 'diagnosed') ~ temp_RA {non_time_varying}  {time_varying_factors} {strata},
             data=d2_time,
             id=ID,
             cluster=ID,
@@ -185,19 +195,19 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
             columns = numpy.array(robjects.r('colnames(summary(res2)$coefficients)')),
         )
         tv_RA_summary = {
-                'p': tv_summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
-                'logHR': tv_summary.loc['temp_RA_1:2', 'coef'],
-                'logHR_se': tv_summary.loc['temp_RA_1:2', 'robust se'],
-                'std_logHR': tv_summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
-                'std_logHR_se': tv_summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+                'p': tv_summary.loc['temp_RA', 'Pr(>|z|)'],
+                'logHR': tv_summary.loc['temp_RA', 'coef'],
+                'logHR_se': tv_summary.loc['temp_RA', 'robust se'],
+                'std_logHR': tv_summary.loc['temp_RA', 'coef'] * variable_SD,
+                'std_logHR_se': tv_summary.loc['temp_RA', 'robust se'] * variable_SD,
         }
         if 'temp_RA' in time_varying:
             tv_RA_summary.update({
-                'p_time': tv_summary.loc['temp_RA_time_1:2', 'coef'], # p-value of slope of RA effect over time
-                'logHR_time': tv_summary.loc['temp_RA_time_1:2', 'coef'], # change per year from mean diagnosis time
-                'logHR_time_se': tv_summary.loc['temp_RA_time_1:2', 'robust se'],
-                'std_logHR_time': tv_summary.loc['temp_RA_time_1:2', 'coef'] * variable_SD,
-                'std_logHR_time_se': tv_summary.loc['temp_RA_time_1:2', 'robust se'] * variable_SD,
+                'p_time': tv_summary.loc['temp_RA_time', 'coef'], # p-value of slope of RA effect over time
+                'logHR_time': tv_summary.loc['temp_RA_time', 'coef'], # change per year from mean diagnosis time
+                'logHR_time_se': tv_summary.loc['temp_RA_time', 'robust se'],
+                'std_logHR_time': tv_summary.loc['temp_RA_time', 'coef'] * variable_SD,
+                'std_logHR_time_se': tv_summary.loc['temp_RA_time', 'robust se'] * variable_SD,
             })
         results[diagnosis].update({
             "time_varying_summary":  tv_summary,
@@ -210,7 +220,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         # Fit a spline over temp_RA
         rfit3 = robjects.r('''
         res3 <- coxph(
-            Surv(age_at_actigraphy, event_age, event=='diagnosed') ~ pspline(temp_RA, df=3) + BMI + age_at_actigraphy + strata(sex, overall_health_good) + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event=='diagnosed') ~ pspline(temp_RA, df=3) + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -240,6 +250,38 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         })
 
 
+        ### Run with competing-outcomes effects (i.e. death vs diagnosis)
+        rfit4 = robjects.r('''
+        res4 <- coxph(
+            Surv(time_to_event, event) ~ temp_RA + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            data=d2,
+            id=ID,
+            cluster=ID,
+        )
+        print(summary(res4))
+        res4
+        ''')
+
+        # Extract results from R into summary objects
+        summary = pandas.DataFrame(
+            numpy.array(robjects.r('summary(res4)$coefficients')),
+            index = numpy.array(robjects.r('rownames(summary(res4)$coefficients)')),
+            columns = numpy.array(robjects.r('colnames(summary(res4)$coefficients)')),
+        )
+        RA_summary = {
+                'p': summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
+                'logHR': summary.loc['temp_RA_1:2', 'coef'],
+                'logHR_se': summary.loc['temp_RA_1:2', 'robust se'],
+                'std_logHR': summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
+                'std_logHR_se': summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+        }
+        results[diagnosis].update({
+            'competing_outcomes_RA_summary': RA_summary,
+            'competing_outcomes_summary': summary,
+        })
+
+
+
         robjects.r('gc()') # Helps with memory use to clear between diagnoses
 
 
@@ -250,6 +292,10 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
     })
     time_varying_RA_summary = pandas.DataFrame({
         diagnosis: res['time_varying_RA_summary']
+        for diagnosis, res in results.items()
+    })
+    competing_outcomes_RA_summary = pandas.DataFrame({
+        diagnosis: res['competing_outcomes_RA_summary']
         for diagnosis, res in results.items()
     })
     def label(df, diag):
@@ -266,9 +312,10 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         for diagnosis, res in results.items()
     })
 
-    RA_summary.to_csv(fig_dir / "RA_summary.txt")
-    time_varying_RA_summary.to_csv(fig_dir / "time_varying_RA_summary.txt")
-    summary.to_csv(fig_dir / "model.summary.txt")
-    zph_ps.to_csv(fig_dir / "zph.ps.txt")
+    RA_summary.to_csv(fig_dir / "RA_summary.txt", sep="\t")
+    time_varying_RA_summary.to_csv(fig_dir / "time_varying_RA_summary.txt", sep="\t")
+    competing_outcomes_RA_summary.to_csv(fig_dir / "competing_outcomes_RA_summary.txt", sep="\t")
+    summary.to_csv(fig_dir / "model.summary.txt", sep="\t")
+    zph_ps.to_csv(fig_dir / "zph.ps.txt", sep="\t")
 
-    return RA_summary, time_varying_RA_summary, zph_ps, results
+    return RA_summary, time_varying_RA_summary, competing_outcomes_RA_summary, zph_ps, results
