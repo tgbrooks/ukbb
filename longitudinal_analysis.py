@@ -248,7 +248,6 @@ def temperature_trace_plots(N_IDS=500):
         fig.savefig(temp_trace_dir+f"temperature.bmi.{label}.png")
 
 def temperature_calibration_plots():
-    # Plot the (mis)-calibration of the tempreature variables
     device = activity_summary.loc[data.index, 'file-deviceID']
     random_device = pandas.Series(device.sample(frac=1.0).values, index=device.index)
     temp_mean = full_activity[full_activity.run == 0].set_index("id").loc[data.index, 'temp_mean_mean']
@@ -326,7 +325,7 @@ def demographics_table():
     return demographics
 
 def predict_diagnoses_plots():
-    phenotypes = top_phenotypes[::-1]
+    phenotypes = predictive_tests_cox.set_index("phecode").loc[top_phenotypes].sort_values(by="std_logHR").index
     tests = predictive_tests_cox.set_index('phecode').reindex(phenotypes)
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
@@ -345,73 +344,73 @@ def predict_diagnoses_plots():
     axes[0].set_xlabel("-log10 p-value")
 
     axes[1].scatter(
-        tests.std_logHR,
+        numpy.exp(tests.std_logHR),
         ys,
         color='k',
     )
     for i, (idx, row) in enumerate(tests.iterrows()):
         axes[1].plot(
-            [row.std_logHR- row.std_logHR_se*1.96, row.std_logHR+ row.std_logHR_se*1.96],
+            numpy.exp([row.std_logHR- row.std_logHR_se*1.96, row.std_logHR+ row.std_logHR_se*1.96]),
             [ys[i], ys[i]],
             color='k',
         )
-    axes[1].axvline(0, color="k")
-    axes[1].set_xlabel("logHR per SD")
+    axes[1].axvline(1, color="k")
+    axes[1].set_xlabel("HR per SD")
 
     # By sex
     axes[2].scatter(
-        tests_by_sex.std_male_logHR,
+        numpy.exp(tests_by_sex.std_male_logHR),
         ys + 0.1,
         color=color_by_sex['Male'],
     )
     axes[2].scatter(
-        tests_by_sex.std_female_logHR,
+        numpy.exp(tests_by_sex.std_female_logHR),
         ys-0.1,
         color=color_by_sex['Female'],
     )
     for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
         axes[2].plot(
-            [row.std_male_logHR - row.std_male_logHR_se*1.96, row.std_male_logHR+ row.std_male_logHR_se*1.96],
+            numpy.exp([row.std_male_logHR - row.std_male_logHR_se*1.96, row.std_male_logHR+ row.std_male_logHR_se*1.96]),
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_sex["Male"],
         )
         axes[2].plot(
-            [row.std_female_logHR- row.std_female_logHR_se*1.96, row.std_female_logHR + row.std_female_logHR_se*1.96],
+            numpy.exp([row.std_female_logHR- row.std_female_logHR_se*1.96, row.std_female_logHR + row.std_female_logHR_se*1.96]),
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
-    axes[2].set_xlabel("logHR per SD\nBy Sex")
-    axes[2].axvline(0, color="k")
+    axes[2].set_xlabel("HR per SD\nBy Sex")
+    axes[2].axvline(1, color="k")
 
     #By age
     axes[3].scatter(
-        tests_by_age.under_65_std_logHR,
+        numpy.exp(tests_by_age.under_65_std_logHR),
         ys + 0.1,
         color=color_by_age['under 65'],
     )
     axes[3].scatter(
-        tests_by_age.over_65_std_logHR,
+        numpy.exp(tests_by_age.over_65_std_logHR),
         ys-0.1,
         color=color_by_age['over 65'],
     )
     for i, (idx, row) in enumerate(tests_by_age.iterrows()):
         axes[3].plot(
-            [row.under_65_std_logHR - row.under_65_std_logHR_se*1.96, row.under_65_std_logHR + row.under_65_std_logHR_se*1.96],
+            numpy.exp([row.under_65_std_logHR - row.under_65_std_logHR_se*1.96, row.under_65_std_logHR + row.under_65_std_logHR_se*1.96]),
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_age['under 65'],
         )
         axes[3].plot(
-            [row.over_65_std_logHR - row.over_65_std_logHR_se*1.96, row.over_65_std_logHR + row.over_65_std_logHR_se*1.96],
+            numpy.exp([row.over_65_std_logHR - row.over_65_std_logHR_se*1.96, row.over_65_std_logHR + row.over_65_std_logHR_se*1.96]),
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_age['over 65'],
         )
-    axes[3].set_xlabel("logHR per SD\nBy Age")
-    axes[3].axvline(0, color="k")
+    axes[3].set_xlabel("HR per SD\nBy Age")
+    axes[3].axvline(1, color="k")
     fig.tight_layout(rect=(0,0,0.85,1))
     util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
     util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
 
-    fig.savefig(OUTDIR / "FIG1.summary_results.png", dpi=300)
+    fig.savefig(OUTDIR / "FIG2.summary_results.png", dpi=300)
 
 def predict_diagnoses_effect_size_tables():
     # Generate a table of the effect sizes for predcitive tests (prop hazard models)
@@ -461,6 +460,10 @@ if __name__ == '__main__':
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
     selected_ids = data.index
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
+
+    # Whether subjects have complete data
+    complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_RA']].isna().any(axis=1))
+    print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
 
