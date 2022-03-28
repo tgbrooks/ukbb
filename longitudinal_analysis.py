@@ -473,6 +473,11 @@ if __name__ == '__main__':
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
 
+    survival = longitudinal_statistics.survival_association(data, OUTDIR, RECOMPUTE)
+    print("Survival association:")
+    print(pandas.Series(survival))
+    print(f"Survival HR per 2SD increase:\n{numpy.exp(2*survival['std_logHR']):0.2f} ({numpy.exp(2*(survival['std_logHR'] - 1.96*survival['std_logHR_se'])):0.2f}-{numpy.exp(2*(survival['std_logHR'] + 1.96*survival['std_logHR_se'])):0.2f})")
+
 
     #### Prepare color maps for the plots
     color_by_phecode_cat = {(cat if cat==cat else 'N/A'):color for cat, color in

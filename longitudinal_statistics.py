@@ -319,3 +319,78 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
     predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_csv(OUTDIR / "predictive_tests_by_age.cox.txt", sep="\t", index=False)
 
     return predictive_tests_by_age_cox
+
+def survival_association(data, OUTDIR, RECOMPUTE=False, variable="temp_amplitude"):
+    last_date = data.date_of_death.max()
+    variable_SD = data[variable].std()
+
+    d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
+
+    predictive_tests_cox_list = []
+    print(f"Running survival test for {variable}")
+    d['event_age'] = (d.date_of_death - d.birth_year_dt) / pandas.to_timedelta("1Y")
+    d['status'] = ~d.event_age.isna()
+    d.event_age.fillna((last_date - d.birth_year_dt) / pandas.to_timedelta("1Y"), inplace=True)
+    d['time_to_event'] = d.event_age - d.age_at_actigraphy
+
+    # Final collection of data we use for the models
+    d2 = d.reset_index()[['index', 'status', 'time_to_event', variable] + COVARIATES].dropna(how="any").rename(columns={"index": "ID"})
+
+    results = {
+        "activity_var": variable,
+        "phecode": "death",
+        "N_cases": (d2.status).sum(),
+        "N_controls": (d2.status == False).sum(),
+    }
+
+    # Run it in R
+    with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
+        d2_r = robjects.conversion.py2rpy(d2)
+    robjects.globalenv['d2'] = d2_r
+
+    # We have the standard base model
+    rfit = robjects.r(f'''
+    res <- coxph(
+        Surv(time_to_event, status) ~ {variable} + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+        data=d2,
+        id=ID,
+        cluster=ID,
+    )
+    res
+    ''')
+
+    summary = pandas.DataFrame(
+        numpy.array(robjects.r('summary(res)$coefficients')),
+        index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
+        columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
+    )
+    results.update({
+        'p': summary.loc[variable, 'Pr(>|z|)'],
+        'logHR': summary.loc[variable, 'coef'],
+        'logHR_se': summary.loc[variable, 'robust se'],
+        'std_logHR': summary.loc[variable, 'coef'] * variable_SD,
+        'std_logHR_se': summary.loc[variable, 'robust se'] * variable_SD,
+    })
+
+    # Not super informative, won't use for now
+    ## Generate a survival plot
+    #first, second, third, fourth, fifth = d2[variable].quantile([0.1,0.3,0.5,0.7,0.9])
+    #robjects.r(f'''
+    #dummy <- expand.grid(
+    #    {variable} = c({first}, {second}, {third}, {fourth}, {fifth}),
+    #    age_at_actigraphy_cat = 'under_65',
+    #    ethnicity_white = TRUE,
+    #    overall_health_good = 1,
+    #    sex = 'Female',
+    #    smoking_ever = 0,
+    #    BMI = {d2.BMI.mean()},
+    #    college_education = 0,
+    #    alcohol = 'often',
+    #    townsend_deprivation_index = {d2.townsend_deprivation_index.mean()}
+    #)
+    #fit <- survfit(res, newdata=dummy)
+    #plot(fit, col=1:9, ymin=0.9)
+    #print(dummy)
+    #''')
+
+    return results
