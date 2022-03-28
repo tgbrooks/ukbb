@@ -255,8 +255,9 @@ def temperature_calibration_plots():
     temp_RA = data['temp_RA']
     temp_amplitude = data['temp_amplitude']
 
-    fig, axes = pylab.subplots(figsize=(8,5), ncols=2)
-    for (name, measure), ax in zip({"mean": temp_mean, "RA": temp_RA}.items(), axes):
+    # Plot the (mis)-calibration of the tempreature variables by device cluster
+    fig, axes = pylab.subplots(figsize=(5,3), ncols=2)
+    for (name, measure), ax in zip({"mean": temp_mean, "amplitude": temp_amplitude}.items(), axes):
         device_mean = measure.groupby(device).mean()
         random_mean = measure.groupby(random_device).mean()
         m = device_mean.quantile(0.01)
@@ -266,24 +267,42 @@ def temperature_calibration_plots():
         ax.hist(device_mean, bins=bins, color='r', alpha=0.5, label="True" if ax == axes[0] else None)
         ax.set_xlabel(f"Temperature {name}")
     fig.legend()
-    fig.savefig(OUTDIR/f"temperature_calibration.png")
+    fig.tight_layout()
+    fig.savefig(OUTDIR/f"FIGS3.temperature_calibration.png", dpi=300)
 
     # Plot the cluster-level histograms
     activity = full_activity.copy().set_index('id')
     activity = activity[activity.run == 0]
     activity['device_id'] = activity_summary['file-deviceID']
     activity['device_cluster'] = pandas.cut( activity.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
-    fig, ax = pylab.subplots(figsize=(5,5))
+    fig, ax = pylab.subplots(figsize=(3,3))
     bins = numpy.linspace(
         activity.temp_amplitude.quantile(0.01),
         activity.temp_amplitude.quantile(0.99),
         31)
     for cluster, grouping in activity.groupby('device_cluster'):
         ax.hist(grouping.temp_amplitude, bins=bins, label="Cluster " + cluster, alpha=0.4, density=True)
-    ax.set_xlabel("temp_amplitude (C)")
+    ax.set_xlabel("Temp. amplitude (C)")
     ax.set_ylabel("Density")
     fig.legend()
-    fig.savefig(OUTDIR/"temperature_calibration.histogram.png")
+    fig.tight_layout()
+    fig.savefig(OUTDIR/"FIGS3.temperature_calibration.histogram.png", dpi=300)
+
+    # Plot the temperature variable versus device ID
+    fig, ax = pylab.subplots(figsize=(4,3))
+    ax.scatter(
+        activity.index.map(device),
+        activity.temp_amplitude,
+        s = 1,
+        alpha=0.01,
+        color = 'k',
+    )
+    ax.set_xlabel("Device ID")
+    ax.set_ylabel("Temp. amplitude (C)")
+    ax.axvline(7500.5, linestyle="--", color='k')
+    ax.axvline(12500.5, linestyle="--", color='k')
+    fig.tight_layout()
+    fig.savefig(OUTDIR/"FIGS3.temperature_calibration.by_id.png", dpi=300)
 
 def demographics_table():
     # Create a table of demographics of the population studied, compared to the overall UK Biobank
