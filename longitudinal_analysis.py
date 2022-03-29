@@ -516,11 +516,14 @@ if __name__ == '__main__':
     selected_ids = data.index
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
 
+    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
+
     # Whether subjects have complete data
     complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_amplitude']].isna().any(axis=1))
+    complete_case_ids = complete_cases.index[complete_cases]
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
-
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
+    n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
+    print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
     correct_for_seasonality_and_cluster()
