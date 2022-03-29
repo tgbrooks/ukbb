@@ -55,9 +55,8 @@ def time_interaction(data, vars, entry_var, time_var, event_var, time_bins):
         datas.append(d)
     return pandas.concat(datas)
 
-def diagnostics(data, case_status, top_phenotypes, OUTDIR):
+def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplitude"):
     last_date = case_status.first_date.max()
-    variable = 'temp_RA'
     variable_SD = data[variable].std()
 
     d = data[[variable, 'date_of_death', 'birth_year_dt', 'age_at_actigraphy'] + COVARIATES].copy()
@@ -86,9 +85,9 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         robjects.globalenv['d2'] = d2_r
 
         # First, we have the standard base model
-        rfit = robjects.r('''
+        rfit = robjects.r(f'''
         res <- coxph(
-            Surv(time_to_event, event == 'diagnosed') ~ temp_RA + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event == 'diagnosed') ~ {variable} + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -118,17 +117,17 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
             index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
             columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
         )
-        RA_summary = {
-                'p': summary.loc['temp_RA', 'Pr(>|z|)'],
-                'logHR': summary.loc['temp_RA', 'coef'],
-                'logHR_se': summary.loc['temp_RA', 'robust se'],
-                'std_logHR': summary.loc['temp_RA', 'coef'] * variable_SD,
-                'std_logHR_se': summary.loc['temp_RA', 'robust se'] * variable_SD,
+        amp_summary = {
+                'p': summary.loc['temp_amplitude', 'Pr(>|z|)'],
+                'logHR': summary.loc['temp_amplitude', 'coef'],
+                'logHR_se': summary.loc['temp_amplitude', 'robust se'],
+                'std_logHR': summary.loc['temp_amplitude', 'coef'] * variable_SD,
+                'std_logHR_se': summary.loc['temp_amplitude', 'robust se'] * variable_SD,
         }
         results[diagnosis] = {
             'coeffs': coeffs,
             'summary': summary,
-            'RA': RA_summary,
+            'amp': amp_summary,
             'zph_ps': zph_ps,
         }
 
@@ -151,7 +150,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         # Find the variables that cox.zph identifies as time-varying
         # by comparing p-values to ZPH_PS_CUTOFF
         time_varying = []
-        for var in ["temp_RA", "BMI", "townsend_deprivation_index"]:
+        for var in ["temp_amplitude", "BMI", "townsend_deprivation_index"]:
             if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
                 time_varying.append(var)
         time_varying_cat = []
@@ -178,7 +177,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         strata = f"+ strata({strata})" if len(time_varying_cat) > 0 else ''
         rfit2 = robjects.r(f'''
         res2 <- coxph(
-            Surv(start, end, event == 'diagnosed') ~ temp_RA {non_time_varying}  {time_varying_factors} {strata},
+            Surv(start, end, event == 'diagnosed') ~ {variable} {non_time_varying}  {time_varying_factors} {strata},
             data=d2_time,
             id=ID,
             cluster=ID,
@@ -194,33 +193,33 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
             index = numpy.array(robjects.r('rownames(summary(res2)$coefficients)')),
             columns = numpy.array(robjects.r('colnames(summary(res2)$coefficients)')),
         )
-        tv_RA_summary = {
-                'p': tv_summary.loc['temp_RA', 'Pr(>|z|)'],
-                'logHR': tv_summary.loc['temp_RA', 'coef'],
-                'logHR_se': tv_summary.loc['temp_RA', 'robust se'],
-                'std_logHR': tv_summary.loc['temp_RA', 'coef'] * variable_SD,
-                'std_logHR_se': tv_summary.loc['temp_RA', 'robust se'] * variable_SD,
+        tv_amp_summary = {
+                'p': tv_summary.loc['temp_amplitude', 'Pr(>|z|)'],
+                'logHR': tv_summary.loc['temp_amplitude', 'coef'],
+                'logHR_se': tv_summary.loc['temp_amplitude', 'robust se'],
+                'std_logHR': tv_summary.loc['temp_amplitude', 'coef'] * variable_SD,
+                'std_logHR_se': tv_summary.loc['temp_amplitude', 'robust se'] * variable_SD,
         }
-        if 'temp_RA' in time_varying:
-            tv_RA_summary.update({
-                'p_time': tv_summary.loc['temp_RA_time', 'coef'], # p-value of slope of RA effect over time
-                'logHR_time': tv_summary.loc['temp_RA_time', 'coef'], # change per year from mean diagnosis time
-                'logHR_time_se': tv_summary.loc['temp_RA_time', 'robust se'],
-                'std_logHR_time': tv_summary.loc['temp_RA_time', 'coef'] * variable_SD,
-                'std_logHR_time_se': tv_summary.loc['temp_RA_time', 'robust se'] * variable_SD,
+        if 'temp_amplitude' in time_varying:
+            tv_amp_summary.update({
+                'p_time': tv_summary.loc['temp_amplitude_time', 'coef'], # p-value of slope of amp effect over time
+                'logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'], # change per year from mean diagnosis time
+                'logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'],
+                'std_logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'] * variable_SD,
+                'std_logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'] * variable_SD,
             })
         results[diagnosis].update({
             "time_varying_summary":  tv_summary,
-            "time_varying_RA_summary": tv_RA_summary,
+            "time_varying_amp_summary": tv_amp_summary,
             "time_varying_factors": time_varying,
         })
 
 
-        ### Run with non-linear temp_RA effects
-        # Fit a spline over temp_RA
+        ### Run with non-linear temp_amplitude effects
+        # Fit a spline over temp_amplitude
         rfit3 = robjects.r('''
         res3 <- coxph(
-            Surv(time_to_event, event=='diagnosed') ~ pspline(temp_RA, df=3) + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event=='diagnosed') ~ pspline(temp_amplitude, df=3) + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -232,7 +231,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         # Plot the nonlinearity for manual inspection
         nonlinear_figs = fig_dir / "nonlinear"
         nonlinear_figs.mkdir(exist_ok=True)
-        nonlinear_plot = repr(str(nonlinear_figs/ f'{diagnosis}.nonlinear.temp_RA.png'))
+        nonlinear_plot = repr(str(nonlinear_figs/ f'{diagnosis}.nonlinear.temp_amplitude.png'))
         robjects.r(f'''
         png({nonlinear_plot})
         termplot(res3, term=1, se=TRUE)
@@ -253,7 +252,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         ### Run with competing-outcomes effects (i.e. death vs diagnosis)
         rfit4 = robjects.r('''
         res4 <- coxph(
-            Surv(time_to_event, event) ~ temp_RA + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event) ~ temp_amplitude + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -268,15 +267,15 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
             index = numpy.array(robjects.r('rownames(summary(res4)$coefficients)')),
             columns = numpy.array(robjects.r('colnames(summary(res4)$coefficients)')),
         )
-        RA_summary = {
-                'p': summary.loc['temp_RA_1:2', 'Pr(>|z|)'],
-                'logHR': summary.loc['temp_RA_1:2', 'coef'],
-                'logHR_se': summary.loc['temp_RA_1:2', 'robust se'],
-                'std_logHR': summary.loc['temp_RA_1:2', 'coef'] * variable_SD,
-                'std_logHR_se': summary.loc['temp_RA_1:2', 'robust se'] * variable_SD,
+        amp_summary = {
+                'p': summary.loc['temp_amplitude_1:2', 'Pr(>|z|)'],
+                'logHR': summary.loc['temp_amplitude_1:2', 'coef'],
+                'logHR_se': summary.loc['temp_amplitude_1:2', 'robust se'],
+                'std_logHR': summary.loc['temp_amplitude_1:2', 'coef'] * variable_SD,
+                'std_logHR_se': summary.loc['temp_amplitude_1:2', 'robust se'] * variable_SD,
         }
         results[diagnosis].update({
-            'competing_outcomes_RA_summary': RA_summary,
+            'competing_outcomes_amp_summary': amp_summary,
             'competing_outcomes_summary': summary,
         })
 
@@ -286,16 +285,16 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
 
 
     # Aggregate results across the different diagnoses investigated
-    RA_summary = pandas.DataFrame({
-        diagnosis: res['RA']
+    amp_summary = pandas.DataFrame({
+        diagnosis: res['amp']
         for diagnosis, res in results.items()
     })
-    time_varying_RA_summary = pandas.DataFrame({
-        diagnosis: res['time_varying_RA_summary']
+    time_varying_amp_summary = pandas.DataFrame({
+        diagnosis: res['time_varying_amp_summary']
         for diagnosis, res in results.items()
     })
-    competing_outcomes_RA_summary = pandas.DataFrame({
-        diagnosis: res['competing_outcomes_RA_summary']
+    competing_outcomes_amp_summary = pandas.DataFrame({
+        diagnosis: res['competing_outcomes_amp_summary']
         for diagnosis, res in results.items()
     })
     def label(df, diag):
@@ -312,10 +311,10 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR):
         for diagnosis, res in results.items()
     })
 
-    RA_summary.to_csv(fig_dir / "RA_summary.txt", sep="\t")
-    time_varying_RA_summary.to_csv(fig_dir / "time_varying_RA_summary.txt", sep="\t")
-    competing_outcomes_RA_summary.to_csv(fig_dir / "competing_outcomes_RA_summary.txt", sep="\t")
+    amp_summary.to_csv(fig_dir / "amp_summary.txt", sep="\t")
+    time_varying_amp_summary.to_csv(fig_dir / "time_varying_amp_summary.txt", sep="\t")
+    competing_outcomes_amp_summary.to_csv(fig_dir / "competing_outcomes_amp_summary.txt", sep="\t")
     summary.to_csv(fig_dir / "model.summary.txt", sep="\t")
     zph_ps.to_csv(fig_dir / "zph.ps.txt", sep="\t")
 
-    return RA_summary, time_varying_RA_summary, competing_outcomes_RA_summary, zph_ps, results
+    return amp_summary, time_varying_amp_summary, competing_outcomes_amp_summary, zph_ps, results
