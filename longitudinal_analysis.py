@@ -23,9 +23,9 @@ BONFERRONI_CUTOFF = 0.05
 MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
 RESULTS_DIR = pathlib.Path("../longitudinal/")
 
-def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None, y_break=5):
+def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
-    fig, ax = pylab.subplots(nrows=1, figsize=(8,6), sharex=True)
+    fig, ax = pylab.subplots(nrows=1, figsize=(10,6), sharex=True)
     x = 0
     x_ticks = []
     x_minorticks = [-0.5]
@@ -36,15 +36,17 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
         ax.scatter(x+numpy.arange(len(pt)), -numpy.log10(pt.p), color=color_by[key])
         x += len(pt)
         x_minorticks.append(x-0.5)
-    ax.set_ylabel("-log10(p-value)")
-    ax.axhline(-numpy.log10(BONFERRONI_CUTOFF), c="k", zorder = 2)
-    ax.axhline(-numpy.log10(FDR_CUTOFF), c="k", linestyle="--", zorder = 2)
+    bonferroni_cutoff = BONFERRONI_CUTOFF / len(tests_df)
+    fdr_cutoff = tests_df[tests_df.q < 0.05].p.max()
+    ax.axhline(-numpy.log10(bonferroni_cutoff), c="k", zorder = 2)
+    ax.axhline(-numpy.log10(fdr_cutoff), c="k", linestyle="--", zorder = 2)
     ax.set_xticks(x_ticks)
     ax.set_xticks(x_minorticks, minor=True)
-    ax.set_xticklabels(x_ticklabels, rotation=90)
+    ax.set_xticklabels(x_ticklabels, rotation=45, ha="right", va="top", rotation_mode="anchor")
+    ax.set_ylabel("-log10(p-value)")
     ax.xaxis.set_tick_params(which="major", bottom=False, top=False)
     ax.xaxis.set_tick_params(which="minor", length=10)
-    ax.set_ylim(0,y_break)
+    ax.set_ylim(0)
     ax.set_xlim(-1, x+1)
     fig.tight_layout(h_pad=0.01)
     return fig
@@ -65,8 +67,7 @@ def summary():
         minor_group_by="phecode",
         group_by=tests.category,
         color_by=color_by)
-    legend = util.legend_from_colormap(fig, color_by, ncol=2, fontsize="small", loc="upper left", bbox_to_anchor=(1.0,0.9))
-    fig.savefig(OUTDIR/"FIG2.manhattan_plot.png", bbox_extra_artists=[legend], bbox_inches='tight')
+    fig.savefig(OUTDIR/"FIG2.manhattan_plot.png", dpi=300)
 
     ### TIMELINE
     # Make a timeline of the study design timing so that readers can easily see when data was collected
