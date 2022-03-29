@@ -305,10 +305,10 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
             "age_diff_p": summary.loc['temp_amplitude:age_at_actigraphy_catunder_65', 'Pr(>|z|)'],
             "over_65_p": summary.loc['temp_amplitude', 'Pr(>|z|)'],
             "under_65_p": wt_under65[2][0],
-            "over_65_std_logHR": summary.loc['temp_amplitude', 'coef'] * variable_SD,
-            "under_65_std_logHR": wt_under65[4][0] * variable_SD,
-            "over_65_std_logHR_se": summary.loc['temp_amplitude', 'robust se'] * variable_SD,
-            "under_65_std_logHR_se": wt_under65[4][1] * variable_SD,
+            "over_65_logHR": summary.loc['temp_amplitude', 'coef'],
+            "under_65_logHR": wt_under65[4][0],
+            "over_65_logHR_se": summary.loc['temp_amplitude', 'robust se'],
+            "under_65_logHR_se": wt_under65[4][1],
         })
         predictive_tests_by_age_cox_list.append(header)
 

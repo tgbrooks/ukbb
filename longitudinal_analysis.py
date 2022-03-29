@@ -334,7 +334,7 @@ def demographics_table():
     return demographics
 
 def predict_diagnoses_plots():
-    phenotypes = predictive_tests_cox.set_index("phecode").loc[top_phenotypes].sort_values(by="std_logHR", ascending=False).index
+    phenotypes = predictive_tests_cox.set_index("phecode").loc[top_phenotypes].sort_values(by="logHR", ascending=False).index
     tests = predictive_tests_cox.set_index('phecode').reindex(phenotypes)
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
@@ -353,67 +353,67 @@ def predict_diagnoses_plots():
     axes[0].set_xlabel("-log10 p-value")
 
     axes[1].scatter(
-        numpy.exp(tests.std_logHR),
+        numpy.exp(-tests.logHR),
         ys,
         color='k',
     )
     for i, (idx, row) in enumerate(tests.iterrows()):
         axes[1].plot(
-            numpy.exp([row.std_logHR- row.std_logHR_se*1.96, row.std_logHR+ row.std_logHR_se*1.96]),
+            numpy.exp([-row.logHR- row.logHR_se*1.96, -row.logHR+ row.logHR_se*1.96]),
             [ys[i], ys[i]],
             color='k',
         )
     axes[1].axvline(1, color="k")
-    axes[1].set_xlabel("HR per SD")
+    axes[1].set_xlabel("HR per °C")
 
     # By sex
     axes[2].scatter(
-        numpy.exp(tests_by_sex.std_male_logHR),
+        numpy.exp(-tests_by_sex.male_logHR),
         ys + 0.1,
         color=color_by_sex['Male'],
     )
     axes[2].scatter(
-        numpy.exp(tests_by_sex.std_female_logHR),
+        numpy.exp(-tests_by_sex.female_logHR),
         ys-0.1,
         color=color_by_sex['Female'],
     )
     for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
         axes[2].plot(
-            numpy.exp([row.std_male_logHR - row.std_male_logHR_se*1.96, row.std_male_logHR+ row.std_male_logHR_se*1.96]),
+            numpy.exp([-row.male_logHR - row.male_logHR_se*1.96, -row.male_logHR+ row.male_logHR_se*1.96]),
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_sex["Male"],
         )
         axes[2].plot(
-            numpy.exp([row.std_female_logHR- row.std_female_logHR_se*1.96, row.std_female_logHR + row.std_female_logHR_se*1.96]),
+            numpy.exp([-row.female_logHR- row.female_logHR_se*1.96, -row.female_logHR + row.female_logHR_se*1.96]),
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
-    axes[2].set_xlabel("HR per SD\nBy Sex")
+    axes[2].set_xlabel("HR per °C\nby sex")
     axes[2].axvline(1, color="k")
 
     #By age
     axes[3].scatter(
-        numpy.exp(tests_by_age.under_65_std_logHR),
+        numpy.exp(-tests_by_age.under_65_logHR),
         ys + 0.1,
         color=color_by_age['under 65'],
     )
     axes[3].scatter(
-        numpy.exp(tests_by_age.over_65_std_logHR),
+        numpy.exp(-tests_by_age.over_65_logHR),
         ys-0.1,
         color=color_by_age['over 65'],
     )
     for i, (idx, row) in enumerate(tests_by_age.iterrows()):
         axes[3].plot(
-            numpy.exp([row.under_65_std_logHR - row.under_65_std_logHR_se*1.96, row.under_65_std_logHR + row.under_65_std_logHR_se*1.96]),
+            numpy.exp([-row.under_65_logHR - row.under_65_logHR_se*1.96, -row.under_65_logHR + row.under_65_logHR_se*1.96]),
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_age['under 65'],
         )
         axes[3].plot(
-            numpy.exp([row.over_65_std_logHR - row.over_65_std_logHR_se*1.96, row.over_65_std_logHR + row.over_65_std_logHR_se*1.96]),
+            numpy.exp([-row.over_65_logHR - row.over_65_logHR_se*1.96, -row.over_65_logHR + row.over_65_logHR_se*1.96]),
             [ys[i]-+ 0.1, ys[i] - 0.1],
             color=color_by_age['over 65'],
         )
-    axes[3].set_xlabel("HR per SD\nBy Age")
+    axes[3].set_xlabel("HR per °C\nby age")
     axes[3].axvline(1, color="k")
     fig.tight_layout(rect=(0,0,0.85,1))
     util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
@@ -426,18 +426,22 @@ def predict_diagnoses_effect_size_tables():
     # for select phecodes
     phecodes = ['250', '401', '496', '272', '585', '480', '300']
     results = predictive_tests_cox.set_index("phecode").loc[phecodes]
-    HR_1SD = numpy.exp(results.std_logHR).round(2).astype(str)
-    HR_1SD_lower = numpy.exp(results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
-    HR_1SD_upper = numpy.exp(results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
-    HR_2SD = numpy.exp(results.std_logHR*2).round(2).astype(str)
-    HR_2SD_lower = numpy.exp((results.std_logHR - 1.96* results.std_logHR_se)*2).round(2).astype(str)
-    HR_2SD_upper = numpy.exp((results.std_logHR + 1.96* results.std_logHR_se)*2).round(2).astype(str)
+    HR_1SD = numpy.exp(-results.std_logHR).round(2).astype(str)
+    HR_1SD_lower = numpy.exp(-results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
+    HR_1SD_upper = numpy.exp(-results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
+    HR_2SD = numpy.exp(-results.std_logHR*2).round(2).astype(str)
+    HR_2SD_lower = numpy.exp((-results.std_logHR - 1.96* results.std_logHR_se)*2).round(2).astype(str)
+    HR_2SD_upper = numpy.exp((-results.std_logHR + 1.96* results.std_logHR_se)*2).round(2).astype(str)
+    HR_1DC = numpy.exp(-results.logHR).round(2).astype(str)
+    HR_1DC_lower = numpy.exp((-results.logHR - 1.96* results.logHR_se)).round(2).astype(str)
+    HR_1DC_upper = numpy.exp((-results.logHR + 1.96* results.logHR_se)).round(2).astype(str)
 
     print("Hazard Ratios of common diagnoses per SD of temp Amp")
     results = pandas.DataFrame({
         "diagnosis": results.meaning,
         "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
         "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
+        "HR at 1°C": HR_1DC + " (" + HR_1DC_lower + "-" + HR_1DC_upper + ")",
     })
     print(results)
     return results
@@ -539,7 +543,7 @@ if __name__ == '__main__':
     survival = longitudinal_statistics.survival_association(data, OUTDIR, RECOMPUTE)
     print("Survival association:")
     print(pandas.Series(survival))
-    print(f"Survival HR per 2SD increase:\n{numpy.exp(2*survival['std_logHR']):0.2f} ({numpy.exp(2*(survival['std_logHR'] - 1.96*survival['std_logHR_se'])):0.2f}-{numpy.exp(2*(survival['std_logHR'] + 1.96*survival['std_logHR_se'])):0.2f})")
+    print(f"Survival HR per 1°C decrease:\n{numpy.exp(-survival['logHR']):0.2f} ({numpy.exp((-survival['logHR'] - 1.96*survival['logHR_se'])):0.2f}-{numpy.exp((-survival['logHR'] + 1.96*survival['logHR_se'])):0.2f})")
 
 
     #### Prepare color maps for the plots
