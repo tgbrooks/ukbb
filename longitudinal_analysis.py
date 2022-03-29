@@ -20,6 +20,7 @@ import util
 DPI = 300
 FDR_CUTOFF = 0.1
 BONFERRONI_CUTOFF = 0.05
+MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
 RESULTS_DIR = pathlib.Path("../longitudinal/")
 
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None, y_break=5):
@@ -251,10 +252,9 @@ def temperature_calibration_plots():
     device = activity_summary.loc[data.index, 'file-deviceID']
     random_device = pandas.Series(device.sample(frac=1.0).values, index=device.index)
     temp_mean = full_activity[full_activity.run == 0].set_index("id").loc[data.index, 'temp_mean_mean']
-    temp_RA = data['temp_RA']
     temp_amplitude = data['temp_amplitude']
 
-    # Plot the (mis)-calibration of the tempreature variables by device cluster
+    # Plot the (mis)-calibration of the tempreature variables by device
     fig, axes = pylab.subplots(figsize=(5,3), ncols=2)
     for (name, measure), ax in zip({"mean": temp_mean, "amplitude": temp_amplitude}.items(), axes):
         device_mean = measure.groupby(device).mean()
@@ -264,22 +264,23 @@ def temperature_calibration_plots():
         bins = numpy.linspace(m,M,21)
         ax.hist(random_mean, bins=bins, color='k', alpha=0.5, label="Randomized" if ax == axes[0] else None)
         ax.hist(device_mean, bins=bins, color='r', alpha=0.5, label="True" if ax == axes[0] else None)
-        ax.set_xlabel(f"Temperature {name}")
+        ax.set_xlabel(f"Temp. {name}")
     fig.legend()
     fig.tight_layout()
     fig.savefig(OUTDIR/f"FIGS3.temperature_calibration.png", dpi=300)
 
     # Plot the cluster-level histograms
-    activity = full_activity.copy().set_index('id')
-    activity = activity[activity.run == 0]
-    activity['device_id'] = activity_summary['file-deviceID']
-    activity['device_cluster'] = pandas.cut( activity.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
+    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
+    full_activity['device_id'] = full_activity.run_id.astype(float).map(full_summary['file-deviceID'])
+    full_activity['device_cluster'] = pandas.cut(full_activity.device_id, [0, 7_500, 12_500, 20_000, 50_000])
+    clust_map = dict(zip(["A", "B", "C", "D"], full_activity.device_cluster.cat.categories))
+    full_activity.device_cluster.cat.rename_categories(clust_map.keys(), inplace=True)
     fig, ax = pylab.subplots(figsize=(3,3))
     bins = numpy.linspace(
-        activity.temp_amplitude.quantile(0.01),
-        activity.temp_amplitude.quantile(0.99),
+        full_activity.temp_amplitude.quantile(0.01),
+        full_activity.temp_amplitude.quantile(0.99),
         31)
-    for cluster, grouping in activity.groupby('device_cluster'):
+    for cluster, grouping in full_activity.groupby('device_cluster'):
         ax.hist(grouping.temp_amplitude, bins=bins, label="Cluster " + cluster, alpha=0.4, density=True)
     ax.set_xlabel("Temp. amplitude (C)")
     ax.set_ylabel("Density")
@@ -288,20 +289,27 @@ def temperature_calibration_plots():
     fig.savefig(OUTDIR/"FIGS3.temperature_calibration.histogram.png", dpi=300)
 
     # Plot the temperature variable versus device ID
-    fig, ax = pylab.subplots(figsize=(4,3))
+    fig, ax = pylab.subplots(figsize=(5,3))
     ax.scatter(
-        activity.index.map(device),
-        activity.temp_amplitude,
+        full_activity.device_id,
+        full_activity.temp_amplitude,
         s = 1,
-        alpha=0.01,
+        alpha=0.02,
         color = 'k',
     )
     ax.set_xlabel("Device ID")
     ax.set_ylabel("Temp. amplitude (C)")
+    ax.set_ylim(0,7) # Don't need to show extreme outliers
     ax.axvline(7500.5, linestyle="--", color='k')
     ax.axvline(12500.5, linestyle="--", color='k')
+    ax.axvline(20000.5, linestyle="--", color='k')
+    for clust_name, d in full_activity.groupby("device_cluster"):
+        clust = clust_map[clust_name]
+        med = d.temp_amplitude.median()
+        ax.plot([clust.left, clust.right], [med, med], color='r')
     fig.tight_layout()
     fig.savefig(OUTDIR/"FIGS3.temperature_calibration.by_id.png", dpi=300)
+
 
 def demographics_table():
     # Create a table of demographics of the population studied, compared to the overall UK Biobank
@@ -325,7 +333,7 @@ def demographics_table():
     return demographics
 
 def predict_diagnoses_plots():
-    phenotypes = predictive_tests_cox.set_index("phecode").loc[top_phenotypes].sort_values(by="std_logHR").index
+    phenotypes = predictive_tests_cox.set_index("phecode").loc[top_phenotypes].sort_values(by="std_logHR", ascending=False).index
     tests = predictive_tests_cox.set_index('phecode').reindex(phenotypes)
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
@@ -424,7 +432,7 @@ def predict_diagnoses_effect_size_tables():
     HR_2SD_lower = numpy.exp((results.std_logHR - 1.96* results.std_logHR_se)*2).round(2).astype(str)
     HR_2SD_upper = numpy.exp((results.std_logHR + 1.96* results.std_logHR_se)*2).round(2).astype(str)
 
-    print("Hazard Ratios of common diagnoses per SD of temp_RA")
+    print("Hazard Ratios of common diagnoses per SD of temp Amp")
     results = pandas.DataFrame({
         "diagnosis": results.meaning,
         "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
@@ -477,7 +485,7 @@ def correct_for_seasonality_and_cluster():
 def repeat_measurements():
     # Within-person variability
     intra_individual = full_activity.groupby("id").twice_corrected_temp_amplitude.std().mean()
-    print(f"Intra-individual variance {intra_individual:0.2f} (C)")
+    print(f"Intra-individual variability: SD = {intra_individual:0.2f} (C)")
 
 
 if __name__ == '__main__':
@@ -509,7 +517,7 @@ if __name__ == '__main__':
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
 
     # Whether subjects have complete data
-    complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_RA']].isna().any(axis=1))
+    complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_amplitude']].isna().any(axis=1))
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
@@ -523,6 +531,7 @@ if __name__ == '__main__':
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
 
+    # Survival analysis
     survival = longitudinal_statistics.survival_association(data, OUTDIR, RECOMPUTE)
     print("Survival association:")
     print(pandas.Series(survival))
@@ -558,3 +567,4 @@ if __name__ == '__main__':
 
     predict_diagnoses_effect_size_tables()
     demographics_table()
+    repeat_measurements()
