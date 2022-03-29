@@ -433,6 +433,53 @@ def predict_diagnoses_effect_size_tables():
     print(results)
     return results
 
+def correct_for_seasonality_and_cluster():
+    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
+    good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
+
+    # Seasonal correction for full (i.e. with seasonal repeated measurements) activity data
+    starts = pandas.to_datetime(full_summary['file-startTime'])
+    actigraphy_start_date = full_activity.run_id.astype(float).map(starts)
+    year_start = pandas.to_datetime(actigraphy_start_date.dt.year.astype(str) + "-01-01")
+    year_fraction = (actigraphy_start_date - year_start) / (pandas.to_timedelta("1Y"))
+    full_activity['cos_year_fraction'] = numpy.cos(year_fraction*2*numpy.pi)
+    full_activity['sin_year_fraction'] = numpy.sin(year_fraction*2*numpy.pi)
+
+    # Compute the cosinor fit of log(temp_amplitude) over the duration of the year
+    full_activity['log_temp_amplitude'] = numpy.log(full_activity.temp_amplitude)
+    full_activity.loc[full_activity.log_temp_amplitude == float('-Inf'), 'log_temp_amplitude'] = float("NaN") # 2 subjects get log(0) but we just drop them
+    fit = smf.ols(
+        f"log_temp_amplitude ~ cos_year_fraction + sin_year_fraction",
+        data = full_activity.loc[good, ['log_temp_amplitude', 'cos_year_fraction', 'sin_year_fraction', 'id']].dropna(),
+    ).fit()
+    full_activity['corrected_temp_amplitude'] = numpy.exp(
+        full_activity.log_temp_amplitude
+        - full_activity['cos_year_fraction'] * fit.params['cos_year_fraction']
+        - full_activity['sin_year_fraction'] * fit.params['sin_year_fraction']
+    )
+
+    # Investigate device id groups
+    device = full_summary.loc[full_activity.run_id.astype(float), 'file-deviceID']
+    full_activity['device_id'] = device.values
+    full_activity['device_cluster'] = pandas.cut( full_activity.device_id, [0, 7_500, 12_500, 20_000, 50_000]).cat.rename_categories(["A", "B", "C", "D"])
+
+    # Correct for device cluster
+    cluster_med = full_activity.groupby("device_cluster").corrected_temp_amplitude.median()
+    overall_med = full_activity.corrected_temp_amplitude.median()
+    full_activity['twice_corrected_temp_amplitude'] = full_activity.corrected_temp_amplitude / full_activity.device_cluster.map(cluster_med).astype(float) * overall_med
+
+    # Zero out implausibly high values
+    full_activity.loc[~good, 'twice_corrected_temp_amplitude'] = float("NaN")
+
+    # Set these values in the data
+    data['temp_amplitude'] = data.index.map(full_activity.query("run == 0.0").set_index("id").twice_corrected_temp_amplitude)
+
+def repeat_measurements():
+    # Within-person variability
+    intra_individual = full_activity.groupby("id").twice_corrected_temp_amplitude.std().mean()
+    print(f"Intra-individual variance {intra_individual:0.2f} (C)")
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
@@ -466,6 +513,9 @@ if __name__ == '__main__':
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
+
+    # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
+    correct_for_seasonality_and_cluster()
 
     #### Run (or load from disk if they already exist) 
     #### the statistical tests
