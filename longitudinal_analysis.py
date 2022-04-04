@@ -122,11 +122,17 @@ def generate_results_table():
     #### Combine all tables into the summary with the header file
     results_file = OUTDIR / "results.xlsx"
     print(f"Writing out the complete results table to {results_file}")
+    # Add descriptive columns for easy reading (effect size with 95% CI)
+    ptc = predictive_tests_cox.copy()
+    def format_effect_size(row):
+        return f"{numpy.exp(-2*row.std_logHR):0.2f} ({numpy.exp(-2*(row.std_logHR + 1.96*row.std_logHR_se)):0.2f} - {numpy.exp(-2*(row.std_logHR - 1.96*row.std_logHR_se)):0.2f})"
+    ptc['HR per 2SD decrease (95% CI)'] = predictive_tests_cox.apply(format_effect_size, axis=1)
+
     import openpyxl
     workbook = openpyxl.load_workbook("../longitudinal_study_table_header.xlsx")
     workbook.save(results_file)
     with pandas.ExcelWriter(results_file, mode="a") as writer:
-        predictive_tests_cox.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
+        ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
         predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
         predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
         phecode_details.T.to_excel(writer, sheet_name="PheCODEs")
