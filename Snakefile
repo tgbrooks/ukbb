@@ -143,7 +143,7 @@ rule process_ukbb_table_general:
         "../data/ukb34939.tab",
         "../data/ukb41264.tab",
         "../data/ukb44535.tab",
-        "../data/ukb503910.txt",
+        "../data/ukb50910.tab",
         "../Data_Dictionary_Showcase.csv",
         "../Codings_Showcase.csv",
     output:
