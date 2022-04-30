@@ -17,8 +17,8 @@ print(f"Found {len(activity_features_batches)} activity feature batches to consi
 
 rule all:
     input:
-        #"../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
-        #"../processed/activity_features_aggregate_seasonal.txt", #NOTE: slow, as above
+        "../processed/activity_features_aggregate.txt", #NOTE: this one takes a long time, even if there is no work to be done, comment if already finished
+        "../processed/activity_features_aggregate_seasonal.txt", #NOTE: slow, as above
         "../processed/ukbb_mental_health.h5",
         "../processed/ukbb_employment.h5",
         "../processed/ukbb_data_table.h5",
@@ -143,6 +143,7 @@ rule process_ukbb_table_general:
         "../data/ukb34939.tab",
         "../data/ukb41264.tab",
         "../data/ukb44535.tab",
+        "../data/ukb50910.tab",
         "../Data_Dictionary_Showcase.csv",
         "../Codings_Showcase.csv",
     output:
@@ -150,7 +151,7 @@ rule process_ukbb_table_general:
     resources:
         mem_mb = 180000
     shell:
-        "./process_ukbb_table.py -t {input[0]} {input[1]} {input[2]} -o {output.general_table} -s all_general_fields"
+        "./process_ukbb_table.py -t {input[0]} {input[1]} {input[2]} {input[3]} -o {output.general_table} -s all_general_fields"
 
 rule process_icd10_codes:
     input:
