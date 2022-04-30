@@ -83,6 +83,10 @@ def load_activity(ukbb):
     activity = full_activity[full_activity.run == 0]
     activity.set_index('id', inplace=True)
 
+    # Some participants will not be present in the ukbb or have no actual data in the table
+    # we exclude those now
+    activity = activity[activity.index.map(~ukbb['sex'].isna())]
+
 
     ## Select the activity variables that have between-person variance greater than their within-person variance
     # and for the summary variables, use only those that are overall summary variables
