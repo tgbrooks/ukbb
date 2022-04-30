@@ -61,7 +61,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
 
     if ax is None:
         fig, ax = pylab.subplots()
-    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label)
+    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label, linewidth=2)
 
     if show_variance:
         low_average = resampled.quantile(0.25)
@@ -70,7 +70,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
                         low_average,
                         high_average,
                         facecolor=color,
-                        alpha=0.25,
+                        alpha=0.20,
                         )
 
     if show_confidence_intervals:
@@ -81,7 +81,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
                         low,
                         high,
                         facecolor=color,
-                        alpha=0.25,
+                        alpha=0.20,
                         )
 
     #ax.plot(low_average.index / pandas.to_timedelta("1H"), low_average, label="75th percentile")

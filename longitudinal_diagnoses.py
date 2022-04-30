@@ -160,7 +160,6 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
         }
     phecode_details = pandas.DataFrame(phecode_group_details)
-    phecode_details.to_csv("misc/phecode_details.txt", sep="\t")
 
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
