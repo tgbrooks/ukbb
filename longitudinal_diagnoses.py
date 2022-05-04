@@ -24,7 +24,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     phecode_info['exclude_start'] = [x.split('-')[0].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
     phecode_info['exclude_end'] = [x.split('-')[1].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
     phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv", dtype=dict(PHECODE=str))
-    phecode_map.set_index(phecode_map.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
+    phecode_map.set_index(phecode_map.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
     #  Determine the set of phecodes to exclude from 'controls' for a given diagnosis
     # So phecode_exclusions maps phecode -> excluded where excluded is a phecode that
@@ -55,7 +55,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     # v1.2 Downloaded from https://phewascatalog.org/phecodes
     phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv", dtype=dict(phecode=str))
     phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
-    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
+    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
     phecode_map_icd9['PHECODE'] = phecode_map_icd9.PHECODE.str.lstrip('0')
 
     # Map the phecodes to their parent / grandparent PheCODEs
@@ -93,7 +93,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             right_on = "phecode",
         )[['ICD10', 'parent', 'Exl. Phecodes', 'Excl. Phenotypes']].rename(columns={"parent": "PHECODE"})
     ]).drop_duplicates()
-    phecode_map_extended.set_index(phecode_map_extended.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
+    phecode_map_extended.set_index(phecode_map_extended.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
     phecode_map_icd9_extended = pandas.concat([
         phecode_map_icd9,
         pandas.merge(
@@ -103,7 +103,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             right_on = "phecode",
         )[['ICD9', 'parent']].rename(columns={"parent": "PHECODE"})
     ]).drop_duplicates()
-    phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
+    phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     ##### Load Patient Data
     icd10_entries = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
@@ -146,22 +146,6 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
         how="left",
     )
 
-    ## Gather the information about where the phecodes come from
-    phecode_groups = list(phecode_info.index)
-    phecode_group_details = {}
-    for group in phecode_groups:
-        phecode_group_details[group] = {
-            "Meaning": phecode_info.phenotype.loc[group],
-            "Category": phecode_info.category.loc[group],
-            "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
-            "ICD10_codes": ';'.join(sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)),
-            "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
-            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map.PheCODE == group,'Meaning'])),
-            "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
-        }
-    phecode_details = pandas.DataFrame(phecode_group_details)
-    phecode_details.to_csv("misc/phecode_details.txt", sep="\t")
-
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
     first_date = pandas.to_datetime(icd10_entries.first_date)
@@ -201,5 +185,27 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     }).reset_index()
     case_status.loc[case_status.case_status == 'exclude', 'first_date'] = float("NaN")
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
+
+    ## Gather the information about where the phecodes come from
+    phecode_groups = list(phecode_info.index)
+    phecode_group_details = {}
+    for group in phecode_groups:
+        ICD10_codes = sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)
+        ICD10_codes_stripped = [code.replace('.', '') for code in ICD10_codes]
+        case_subjects = case_status[(case_status.PHECODE == group)].query("case_status == 'case'").ID
+        icd10_counts = icd10_entries[icd10_entries.ID.isin(case_subjects) & (icd10_entries.ICD10.isin(ICD10_codes_stripped))].ICD10.value_counts()
+        case_counts = [icd10_counts.get(icd10,default=0) for icd10 in ICD10_codes_stripped]
+        phecode_group_details[group] = {
+            "Meaning": phecode_info.phenotype.loc[group],
+            "Category": phecode_info.category.loc[group],
+            "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
+            "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
+            "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
+            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map.PheCODE == group,'Meaning'])),
+            "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
+        }
+    phecode_details = pandas.DataFrame(phecode_group_details)
+    phecode_details.to_csv("misc/phecode_details.txt", sep="\t")
+
 
     return case_status, phecode_info, phecode_details
