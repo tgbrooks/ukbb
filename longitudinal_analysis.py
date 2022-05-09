@@ -550,6 +550,7 @@ if __name__ == '__main__':
     print("Survival association:")
     print(pandas.Series(survival))
     print(f"Survival HR per 1°C decrease:\n{numpy.exp(-survival['logHR']):0.2f} ({numpy.exp((-survival['logHR'] - 1.96*survival['logHR_se'])):0.2f}-{numpy.exp((-survival['logHR'] + 1.96*survival['logHR_se'])):0.2f})")
+    print(f"Survival HR per 2 SD decrease:\n{numpy.exp(-2*survival['std_logHR']):0.2f} ({numpy.exp((-2*survival['std_logHR'] - 1.96*2*survival['std_logHR_se'])):0.2f}-{numpy.exp((-2*survival['std_logHR'] + 1.96*2*survival['std_logHR_se'])):0.2f})")
 
 
     #### Prepare color maps for the plots
