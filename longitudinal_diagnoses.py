@@ -1,6 +1,7 @@
 import pandas
+import pathlib
 
-def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
+def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
     and whose start of actigraphy measurement date is given in the Series actigraphy_start_date
@@ -187,25 +188,29 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
 
     ## Gather the information about where the phecodes come from
-    phecode_groups = list(phecode_info.index)
-    phecode_group_details = {}
-    for group in phecode_groups:
-        ICD10_codes = sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)
-        ICD10_codes_stripped = [code.replace('.', '') for code in ICD10_codes]
-        case_subjects = case_status[(case_status.PHECODE == group)].query("case_status == 'case'").ID
-        icd10_counts = icd10_entries[icd10_entries.ID.isin(case_subjects) & (icd10_entries.ICD10.isin(ICD10_codes_stripped))].ICD10.value_counts()
-        case_counts = [icd10_counts.get(icd10,default=0) for icd10 in ICD10_codes_stripped]
-        phecode_group_details[group] = {
-            "Meaning": phecode_info.phenotype.loc[group],
-            "Category": phecode_info.category.loc[group],
-            "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
-            "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
-            "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
-            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map_extended.PheCODE == group,'Meaning'])),
-            "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
-        }
-    phecode_details = pandas.DataFrame(phecode_group_details)
-    phecode_details.to_csv("misc/phecode_details.txt", sep="\t")
+    details_file = pathlib.Path("misc/phecode_details.txt")
+    if RECOMPUTE or not details_file.exists():
+        phecode_groups = list(phecode_info.index)
+        phecode_group_details = {}
+        for group in phecode_groups:
+            ICD10_codes = sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)
+            ICD10_codes_stripped = [code.replace('.', '') for code in ICD10_codes]
+            case_subjects = case_status[(case_status.PHECODE == group)].query("case_status == 'case'").ID
+            icd10_counts = icd10_entries[icd10_entries.ID.isin(case_subjects) & (icd10_entries.ICD10.isin(ICD10_codes_stripped))].ICD10.value_counts()
+            case_counts = [icd10_counts.get(icd10,default=0) for icd10 in ICD10_codes_stripped]
+            phecode_group_details[group] = {
+                "Meaning": phecode_info.phenotype.loc[group],
+                "Category": phecode_info.category.loc[group],
+                "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
+                "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
+                "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
+                "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map_extended.PheCODE == group,'Meaning'])),
+                "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
+            }
+        phecode_details = pandas.DataFrame(phecode_group_details)
+        phecode_details.to_csv(details_file, sep="\t")
+    else:
+        phecode_details = pandas.read_csv(details_file, sep="\t", index_col=0, dtype=str)
 
 
     return case_status, phecode_info, phecode_details
