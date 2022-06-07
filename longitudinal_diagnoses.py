@@ -201,7 +201,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
             "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
             "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
-            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map.PheCODE == group,'Meaning'])),
+            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map_extended.PheCODE == group,'Meaning'])),
             "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
         }
     phecode_details = pandas.DataFrame(phecode_group_details)
