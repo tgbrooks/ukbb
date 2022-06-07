@@ -4,9 +4,11 @@ Main script to run the longitudinal associations in a phenome-wide study
 
 import pathlib
 import pandas
+import pylab
 import numpy
 import statsmodels.formula.api as smf
 import statsmodels.api as sm
+import scipy.stats
 
 
 import phewas_preprocess
@@ -50,6 +52,149 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
     ax.set_xlim(-1, x+1)
     fig.tight_layout(h_pad=0.01)
     return fig
+
+def fancy_case_control_plot(data, case_status, code, title, var="acceleration_RA", normalize=False, confidence_interval=False, rescale=True, annotate=False):
+    import matplotlib
+    CONTROL_COLOR = "teal"
+    CASE_COLOR = "orange"
+
+    def gaussian_kde(data, *args, **kwargs):
+        # Gaussian KDE but drops NAs
+        d = data[~data.isna()]
+        return scipy.stats.gaussian_kde(d, *args, **kwargs)
+
+    diagnoses = case_status[case_status.PHECODE == code].set_index("ID")
+    status = pandas.Series(
+        data.index.map(diagnoses.case_status).add_categories(['control']).fillna("control"),
+        index = data.index,
+    )
+    case = (status == 'case')
+    control = (status == 'control')
+    xbottom = 0
+    xtop = 5 # degrees
+    point_width = 0.01
+    bandwidth = 0.50
+    label = "Temperature Amplitude (°C)"
+    eval_x = numpy.linspace(xbottom, xtop, int(0.5/point_width + 1))
+
+    case_scaling = (case).sum() * point_width if rescale else 1
+    control_scaling = (control).sum() * point_width if rescale else 1
+    case_avg = data[var][case].mean()
+    control_avg = data[var][control].mean()
+    total_incidence = case.sum()/(case.sum() + control.sum())
+
+    def densities_and_incidence(data):
+        case_density = gaussian_kde(data[var][case], bw_method=bandwidth)(eval_x) * case_scaling
+        control_density = gaussian_kde(data[var][control], bw_method=bandwidth)(eval_x) * control_scaling
+        incidence = case_density / (control_density  + case_density)
+        return case_density, control_density, incidence
+    
+    case_density, control_density, incidence = densities_and_incidence(data)
+
+    if confidence_interval:
+        N = 40
+        incidences = numpy.empty((len(eval_x), N))
+        for i in range(N):
+            sample = data.sample(len(data), replace=True)
+            _, _, sampled_incidence = densities_and_incidence(sample)
+            incidences[:,i] = sampled_incidence
+        incidences = numpy.sort(incidences, axis=1)
+        lower_bound = incidences[:,0]
+        upper_bound = incidences[:,-1]
+        middle = incidences[:,incidences.shape[1]//2]
+
+    fig, (ax1,ax3,ax2) = pylab.subplots(nrows=3, sharex=True,
+                                        gridspec_kw = {"hspace":0.1,
+                                                    "height_ratios":[0.2,0.2,0.6]})
+
+    # Plot the data
+    ax1.fill_between(eval_x, 0, control_density, color=CONTROL_COLOR)
+    ax3.fill_between(eval_x, 0, case_density, color=CASE_COLOR)
+    if confidence_interval:
+        ax2.fill_between(eval_x, lower_bound, upper_bound, color='lightgray')
+        #ax2.fill_between(eval_x, lower_bound, middle, color='lightgray')
+        #ax2.fill_between(eval_x, middle, upper_bound, color='lightgray')
+    #ax2.plot(eval_x, middle, color='k')
+    ax2.plot(eval_x, incidence, color='k')
+
+    # Plot avgs
+    ax1.axvline(control_avg, c='k', linestyle="--")
+    ax3.axvline(case_avg, c='k', linestyle="--")
+    ax2.axhline(total_incidence, c='k', linestyle="--")
+
+    # Label plot
+    ax1.set_ylabel(f"Controls\nN={(control).sum()}")
+    ax2.set_ylabel(f"Incidence\n(overall={total_incidence:0.1%})")
+    ax3.set_ylabel(f"Cases\nN={case.sum()}") 
+    ax2.set_xlabel(label)
+
+    ax1.spines['left'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
+    ax1.tick_params(bottom=False)
+    ax3.tick_params(bottom=False)
+    ax1.yaxis.set_ticks([])
+    #ax2.xaxis.set_ticks_position('none')
+    ax2.yaxis.set_ticks_position('right')
+    if not normalize:
+        ax2.yaxis.set_ticks([0, 0.25, 0.5, 0.75, 1])
+        ax2.yaxis.set_ticklabels(["0%", "25%", "50%", "75%","100%"])
+    else:
+        ax2.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(xmax=1))
+    ax3.spines['left'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
+    ax3.spines['bottom'].set_visible(False)
+    ax3.yaxis.set_ticks([])
+
+    # Set axis limits
+    ax1.set_xlim(xbottom, xtop)
+    if not normalize:
+        max_density = max(numpy.max(case_density), numpy.max(control_density))
+        ax1.set_ylim(0, max_density)
+        ax3.set_ylim(0, max_density)
+        ax2.set_ylim(0, 1)
+    else:
+        ax1.set_ylim(0)
+        ax3.set_ylim(0)
+        ax2.set_ylim(0, numpy.minimum(numpy.max(middle)*1.3, 1.0))
+    ax3.invert_yaxis()
+
+    if annotate:
+        ax1.annotate("Control mean",
+                        xy=(control_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax3.annotate("Case mean",
+                        xy=(case_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax2.annotate("Overall prevalence",
+                        xy=((xtop*0.9 + xbottom*0.1), total_incidence),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"},
+                        )
+        i = len(eval_x)//5
+        ax2.annotate("95% confidence interval",
+                        xy=(eval_x[i], upper_bound[i]),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="center",
+                        va="bottom",
+                        arrowprops={"arrowstyle": "->"},#"-[, lengthB=5.0"},
+                        )
+
+    ax1.set_title(title)
+    return fig
+
 
 def summary():
 
