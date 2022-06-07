@@ -18,7 +18,7 @@ import day_plots
 import util
 
 DPI = 300
-FDR_CUTOFF = 0.1
+FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
 MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
 RESULTS_DIR = pathlib.Path("../longitudinal/")
@@ -37,7 +37,7 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
         x += len(pt)
         x_minorticks.append(x-0.5)
     bonferroni_cutoff = BONFERRONI_CUTOFF / len(tests_df)
-    fdr_cutoff = tests_df[tests_df.q < 0.05].p.max()
+    fdr_cutoff = tests_df[tests_df.q < FDR_CUTOFF].p.max()
     ax.axhline(-numpy.log10(bonferroni_cutoff), c="k", zorder = 2)
     ax.axhline(-numpy.log10(fdr_cutoff), c="k", linestyle="--", zorder = 2)
     ax.set_xticks(x_ticks)
