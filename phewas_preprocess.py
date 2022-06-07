@@ -1,6 +1,8 @@
 import numpy
 import pandas
 
+
+YEAR = 365.25 * pandas.to_timedelta("1D")
 # We will reject all individual measurements beyond this zscore cutoff value
 ZSCORE_OUTLIER_CUTOFF = 7
 
@@ -61,7 +63,7 @@ self_report_circadian_variables = {
 def load_ukbb():
     ''' Overall UK Biobank data table '''
     ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
-    ukbb.columns = ukbb.columns.str.replace("[,:/]","_") # Can't use special characters easily
+    ukbb.columns = ukbb.columns.str.replace("[,:/]","_", regex=True) # Can't use special characters easily
 
     # Update death information
     deaths = pandas.read_csv("../data/patient_records/death.txt", sep='\t', parse_dates=["date_of_death"], dayfirst=True).drop_duplicates(['eid', 'date_of_death']).set_index('eid')
@@ -80,7 +82,7 @@ def load_activity(ukbb):
     full_activity.rename(columns={"Unnamed: 0": "run_id"}, inplace=True)
     full_activity['id'] = full_activity.run_id.apply(lambda x: int(x.split('.')[0]))
     full_activity['run'] = full_activity.run_id.apply(lambda x: int(x.split('.')[1]))
-    activity = full_activity[full_activity.run == 0]
+    activity = full_activity[full_activity.run == 0].copy()
     activity.set_index('id', inplace=True)
 
     # Some participants will not be present in the ukbb or have no actual data in the table
@@ -116,9 +118,9 @@ def load_activity(ukbb):
     activity = activity[okay]
     print(f"Dropped total {(~okay).sum()} entries out of {len(okay)} due to bad quality, wear-time, or DST crossover")
 
-    activity.columns = activity.columns.str.replace("-","_") # Can't use special characters easily
+    activity.columns = activity.columns.str.replace("-","_", regex=False) # Can't use special characters easily
 
-    activity_variance.index = activity_variance.index.str.replace("-","_") # Can't use special characjers easily
+    activity_variance.index = activity_variance.index.str.replace("-","_", regex=False) # Can't use special characjers easily
 
     ## Process activity variables that need cleaning
     activity.phase = activity.phase % 24
@@ -128,7 +130,7 @@ def load_activity(ukbb):
     # compute the 'fraction of year' value (0 = January 1st, 1 = December 31st)
     actigraphy_start_date = activity.index.map(pandas.to_datetime(activity_summary['file-startTime']))
     year_start = pandas.to_datetime(actigraphy_start_date.year.astype(str) + "-01-01")
-    year_fraction = (actigraphy_start_date - year_start) / (pandas.to_timedelta("1Y"))
+    year_fraction = (actigraphy_start_date - year_start) / YEAR
     cos_year_fraction = numpy.cos(year_fraction*2*numpy.pi)
     sin_year_fraction = numpy.sin(year_fraction*2*numpy.pi)
 
@@ -193,13 +195,13 @@ def load_phecode(selected_ids):
     # ICD10 | PHECODE | Exl. Phecodes | Excl. Phenotypes
     phecode_info = pandas.read_csv("../phecode_definitions1.2.csv", index_col=0)
     phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv")
-    phecode_map.set_index(phecode_map.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
+    phecode_map.set_index(phecode_map.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
     # and convert to phecodes
     # v1.2 Downloaded from https://phewascatalog.org/phecodes
     phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv")
     phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
-    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
+    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","" ,regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     # ## Load the ICD10/9 code data
     icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t")
@@ -341,7 +343,7 @@ def load_data(cohort):
         else:
             return str(int(year)) + "-01-01"
     data['birth_year_dt'] = pandas.to_datetime(data.birth_year.apply(year_to_jan_first)) # As datetime
-    data['age_at_actigraphy'] = (data.actigraphy_start_date - data.birth_year_dt) / pandas.to_timedelta("1Y")
+    data['age_at_actigraphy'] = (data.actigraphy_start_date - data.birth_year_dt) / YEAR
     data['age_at_actigraphy_cat'] = pandas.cut(
         data.age_at_actigraphy,
         AGE_BINS
@@ -387,8 +389,8 @@ def load_data(cohort):
     data.date_of_death_censored.fillna(data.date_of_death_censored.max(), inplace=True)
     data['date_of_death_censored_number'] = (data.date_of_death_censored - data.date_of_death_censored.min()).dt.total_seconds()
     data['uncensored'] = (~data.date_of_death.isna()).astype(int)
-    data['age_at_death_censored'] = (pandas.to_datetime(data.date_of_death) - data.birth_year_dt) / pandas.to_timedelta("1Y")
-    data['entry_age'] = (data.actigraphy_start_date - data.birth_year_dt) / pandas.to_timedelta("1Y")
+    data['age_at_death_censored'] = (pandas.to_datetime(data.date_of_death) - data.birth_year_dt) / YEAR
+    data['entry_age'] = (data.actigraphy_start_date - data.birth_year_dt) / YEAR
     data.age_at_death_censored.fillna(data.age_at_death_censored.max(), inplace=True)
 
     return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
