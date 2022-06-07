@@ -285,20 +285,6 @@ def load_phecode(selected_ids):
 
     return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
 
-def phecode_count_summary():
-    # TODO: do we want to use this anymore?
-    ## Tally the number of occurances of each phecode (at the lowest level, not just groups)
-    phecode_count_details = pandas.concat([
-        icd10_entries[['ID', 'PHECODE']],
-        icd9_entries[['ID', 'PHECODE']],
-        self_reported[['ID', 'phecode']].rename(columns={"phecode":"PHECODE"})
-    ]).groupby('PHECODE').ID.nunique()
-    phecode_count_details = pandas.DataFrame({"count": phecode_count_details})
-    phecode_count_details['phecode_meaning'] = phecode_count_details.index.map(phecode_info.phenotype)
-    phecode_count_details['phecode_category'] = phecode_count_details.index.map(phecode_info.category)
-    #phecode_count_details.to_csv("phecode_counts.txt", sep="\t", header=True)
-    return phecode_count_details
-
 def load_medications(cohort_ids):
     medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t",
          dtype=dict(medication_code=int))
