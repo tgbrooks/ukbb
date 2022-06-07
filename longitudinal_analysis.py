@@ -706,7 +706,7 @@ if __name__ == '__main__':
     color_by_age = {"under 65": '#32a852', "over 65": '#37166b'}
 
     # The top phenotypes that we will highlight
-    top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '327.3', '480', '272', '327', '740', '550.2', '716']
+    top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '480', '272', '327', '740', '333']
 
     ## Make the plots
     if not args.no_plots:
