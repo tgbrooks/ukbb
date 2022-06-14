@@ -490,7 +490,7 @@ def predict_diagnoses_plots():
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
-    fig, axes = pylab.subplots(figsize=(9,7), ncols=4, sharey=True)
+    fig, axes = pylab.subplots(figsize=(8,7), ncols=4, sharey=True)
     ys = numpy.arange(len(tests))
     axes[0].barh(
         ys,
@@ -575,8 +575,7 @@ def predict_diagnoses_plots():
 def predict_diagnoses_effect_size_tables():
     # Generate a table of the effect sizes for predcitive tests (prop hazard models)
     # for select phecodes
-    phecodes = ['250', '401', '496', '272', '585', '480', '300']
-    results = predictive_tests_cox.set_index("phecode").loc[phecodes]
+    results = predictive_tests_cox.set_index("phecode").loc[top_phenotypes]
     HR_1SD = numpy.exp(-results.std_logHR).round(2).astype(str)
     HR_1SD_lower = numpy.exp(-results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
     HR_1SD_upper = numpy.exp(-results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
@@ -593,7 +592,8 @@ def predict_diagnoses_effect_size_tables():
         "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
         "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
         "HR at 1°C": HR_1DC + " (" + HR_1DC_lower + "-" + HR_1DC_upper + ")",
-    })
+        "HR": HR_1SD,
+    }).sort_values(by="HR", ascending=False).drop(columns="HR")
     print(results)
     return results
 
@@ -706,7 +706,7 @@ if __name__ == '__main__':
     color_by_age = {"under 65": '#32a852', "over 65": '#37166b'}
 
     # The top phenotypes that we will highlight
-    top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '480', '272', '327', '740', '333']
+    top_phenotypes = ['250.2', '401.1', '571.5', '585', '562.1', '480', '272', '327', '740', '333', '300', '332']
 
     ## Make the plots
     if not args.no_plots:
