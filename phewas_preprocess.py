@@ -306,15 +306,29 @@ def load_data(cohort):
     data_full = activity.join(ukbb, how="inner")
     print(f"Data starting size: {data_full.shape}")
 
+    # Actigraphy device metadata
+    # Device id's cluster into three groups with large gaps between them and significant
+    # differences in some measurements, particularly light and temperature
+    # We give name them clusters A/B/C
+    data_full['device_id'] = activity_summary['file-deviceID']
+    data_full['device_cluster'] = pandas.cut( data_full.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
+
 
     # Down sample for testing
     numpy.random.seed(0)
     cohort_id_ranges = {
         0: slice(0, None),  # Everyone
-        1: slice(0, 25000), # Exploratory cohort1
-        2: slice(25000,None), # Everyone not in cohort1
+        1: slice(0, 25000), # RANDOM Exploratory cohort1
+        2: slice(25000,None), # RANDOM Everyone not in cohort1
+        10: data_full.device_cluster == "A",
+        11: data_full.device_cluster.isin(['B', 'C']),
     }
-    selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], replace=False)[cohort_id_ranges[cohort]]
+    if cohort in [0, 1,2]:
+        # Our randomized cohorts
+        selected_ids = numpy.random.choice(data_full.index, size=data_full.shape[0], replace=False)[cohort_id_ranges[cohort]]
+    else:
+        # Cohorts that are selected based off of device-id
+        selected_ids = data_full.index[cohort_id_ranges[cohort]]
 
     data = data_full.loc[selected_ids].copy()
     print(f"Data size after selecting test set: {data.shape}")
@@ -334,13 +348,6 @@ def load_data(cohort):
         data.age_at_actigraphy,
         AGE_BINS
     ).astype("category").cat.rename_categories(["under_65", "over_65"])
-
-    # Actigraphy device metadata
-    # Device id's cluster into three groups with large gaps between them and significant
-    # differences in some measurements, particularly light and temperature
-    # We give name them clusters A/B/C
-    data['device_id'] = activity_summary['file-deviceID']
-    data['device_cluster'] = pandas.cut( data.device_id, [0, 7_500, 12_500, 20_000]).cat.rename_categories(["A", "B", "C"])
 
     # Use device clusters to correct some actigraphy values
     correct_for_device_cluster(data, 'temp_amplitude', multiplicative=True)
