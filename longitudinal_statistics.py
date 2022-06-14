@@ -12,6 +12,8 @@ MIN_N = 200
 MIN_N_BY_AGE = 400
 MIN_N_PER_SEX = 200
 
+YEAR = 365.25 * pandas.to_timedelta("1D")
+
 import rpy2
 import rpy2.robjects as robjects
 import rpy2.robjects.packages
@@ -57,7 +59,7 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
         d['diagnosis_date'] = d.index.map(diagnoses.first_date)
         d['censored'] = d.case_status != 'case'
         d.diagnosis_date.fillna(d.date_of_death.fillna(last_date), inplace=True)
-        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / YEAR
         d['use'] = d.case_status.isin(['case', 'control']) # Drop anyone excluded
         d['event'] = 'censored' # censored/diagnosed/death for event type
         d.loc[~d.censored, 'event'] = 'diagnosed'
@@ -142,7 +144,7 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         d['diagnosis_date'] = d.index.map(diagnoses.first_date)
         d['censored'] = d.case_status != 'case'
         d.diagnosis_date.fillna(d.date_of_death.fillna(last_date), inplace=True)
-        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / YEAR
         d['use'] = d.case_status.isin(['case', 'control']) # Drop anyone excluded
         d['event'] = 'censored' # censored/diagnosed/death for event type
         d.loc[~d.censored, 'event'] = 'diagnosed'
@@ -246,7 +248,7 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
         d['diagnosis_date'] = d.index.map(diagnoses.first_date)
         d['censored'] = d.case_status != 'case'
         d.diagnosis_date.fillna(d.date_of_death.fillna(last_date), inplace=True)
-        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / pandas.to_timedelta("1Y")
+        d['event_age'] = (d.diagnosis_date - d.birth_year_dt) / YEAR
         d['use'] = d.case_status.isin(['case', 'control']) # Drop anyone excluded
         d['event'] = 'censored' # censored/diagnosed/death for event type
         d.loc[~d.censored, 'event'] = 'diagnosed'
@@ -326,9 +328,9 @@ def survival_association(data, OUTDIR, RECOMPUTE=False, variable="temp_amplitude
 
     predictive_tests_cox_list = []
     print(f"Running survival test for {variable}")
-    d['event_age'] = (d.date_of_death - d.birth_year_dt) / pandas.to_timedelta("1Y")
+    d['event_age'] = (d.date_of_death - d.birth_year_dt) / YEAR
     d['status'] = ~d.event_age.isna()
-    d.event_age.fillna((last_date - d.birth_year_dt) / pandas.to_timedelta("1Y"), inplace=True)
+    d.event_age.fillna((last_date - d.birth_year_dt) / YEAR, inplace=True)
     d['time_to_event'] = d.event_age - d.age_at_actigraphy
 
     # Final collection of data we use for the models
