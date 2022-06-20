@@ -1,5 +1,4 @@
-# ukbb
-UK Biobank Actigraphy Anlaysis - Biorhythm Atlas
+# UK Biobank Actigraphy Anlaysis - Biorhythm Atlas
 
 A study associating actigraphy (wrist worn accelerometry and associated sensors) data to disease phenotypes in the UK Biobank.
 
