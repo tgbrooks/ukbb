@@ -1,6 +1,9 @@
 import numpy
 import pandas
+import statsmodels.formula.api as smf
 
+
+MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
 
 YEAR = 365.25 * pandas.to_timedelta("1D")
 # We will reject all individual measurements beyond this zscore cutoff value
@@ -87,7 +90,7 @@ def load_activity(ukbb):
 
     # Some participants will not be present in the ukbb or have no actual data in the table
     # we exclude those now
-    activity = activity[activity.index.map(~ukbb['sex'].isna())]
+    activity = activity[activity.index.map(~ukbb['sex'].isna())].copy()
 
 
     ## Select the activity variables that have between-person variance greater than their within-person variance
@@ -115,7 +118,7 @@ def load_activity(ukbb):
     print(f"Dropping {((~weartime) & calibrated).sum()} for bad weartime")
     print(f"Dropping {((~no_DST)  & weartime & calibrated).sum()} for daylight savings transition crossover")
     okay = (calibrated & weartime & no_DST)
-    activity = activity[okay]
+    activity = activity[activity.index.map(okay)].copy()
     print(f"Dropped total {(~okay).sum()} entries out of {len(okay)} due to bad quality, wear-time, or DST crossover")
 
     activity.columns = activity.columns.str.replace("-","_", regex=False) # Can't use special characters easily
@@ -125,19 +128,6 @@ def load_activity(ukbb):
     ## Process activity variables that need cleaning
     activity.phase = activity.phase % 24
     activity.temp_phase = activity.temp_phase % 24
-
-    ## Correct activity measures based off of seasonality
-    # compute the 'fraction of year' value (0 = January 1st, 1 = December 31st)
-    actigraphy_start_date = activity.index.map(pandas.to_datetime(activity_summary['file-startTime']))
-    year_start = pandas.to_datetime(actigraphy_start_date.year.astype(str) + "-01-01")
-    year_fraction = (actigraphy_start_date - year_start) / YEAR
-    cos_year_fraction = numpy.cos(year_fraction*2*numpy.pi)
-    sin_year_fraction = numpy.sin(year_fraction*2*numpy.pi)
-
-    for var in activity_variables:
-        if var.startswith("self_report"):
-            continue
-        activity[var] = activity[var] - cos_year_fraction * activity_variance.loc[var].cos - sin_year_fraction * activity_variance.loc[var].sin
 
     self_report_data = {}
     for variable, var_data in self_report_circadian_variables.items():
@@ -156,10 +146,10 @@ def load_activity(ukbb):
     # Create absolute deviation variables from phase variables
     # since both extreme low and high phase are expected to be correlated with outcomes
     # and we do the same for sleep duration measures
-    for var in activity_variable_descriptions.index:
-        if var.endswith('_abs_dev'):
-            base_var = var[:-8]
-            activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
+    #for var in activity_variable_descriptions.index:
+    #    if var.endswith('_abs_dev'):
+    #        base_var = var[:-8]
+    #        activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
 
     # List the activity variables
     activity_variables = activity.columns
@@ -400,6 +390,47 @@ def load_diagnoses(data):
         data[group] = data.index.map(phecode_data[group].astype(int)).fillna(0)
 
     return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
+
+def correct_for_seasonality_and_cluster(data, activity_summary, activity_summary_seasonal):
+    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
+    good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
+
+    # Seasonal correction for full (i.e. with seasonal repeated measurements) activity data
+    starts = pandas.to_datetime(full_summary['file-startTime'])
+    actigraphy_start_date = full_activity.run_id.astype(float).map(starts)
+    year_start = pandas.to_datetime(actigraphy_start_date.dt.year.astype(str) + "-01-01")
+    year_fraction = (actigraphy_start_date - year_start) / (YEAR)
+    full_activity['cos_year_fraction'] = numpy.cos(year_fraction*2*numpy.pi)
+    full_activity['sin_year_fraction'] = numpy.sin(year_fraction*2*numpy.pi)
+
+    # Compute the cosinor fit of log(temp_amplitude) over the duration of the year
+    full_activity['log_temp_amplitude'] = numpy.log(full_activity.temp_amplitude)
+    full_activity.loc[full_activity.log_temp_amplitude == float('-Inf'), 'log_temp_amplitude'] = float("NaN") # 2 subjects get log(0) but we just drop them
+    fit = smf.ols(
+        f"log_temp_amplitude ~ cos_year_fraction + sin_year_fraction",
+        data = full_activity.loc[good, ['log_temp_amplitude', 'cos_year_fraction', 'sin_year_fraction', 'id']].dropna(),
+    ).fit()
+    full_activity['corrected_temp_amplitude'] = numpy.exp(
+        full_activity.log_temp_amplitude
+        - full_activity['cos_year_fraction'] * fit.params['cos_year_fraction']
+        - full_activity['sin_year_fraction'] * fit.params['sin_year_fraction']
+    )
+
+    # Investigate device id groups
+    device = full_summary.loc[full_activity.run_id.astype(float), 'file-deviceID']
+    full_activity['device_id'] = device.values
+    full_activity['device_cluster'] = pandas.cut( full_activity.device_id, [0, 7_500, 12_500, 20_000, 50_000]).cat.rename_categories(["A", "B", "C", "D"])
+
+    # Correct for device cluster
+    cluster_med = full_activity.groupby("device_cluster").corrected_temp_amplitude.median()
+    overall_med = full_activity.corrected_temp_amplitude.median()
+    full_activity['twice_corrected_temp_amplitude'] = full_activity.corrected_temp_amplitude / full_activity.device_cluster.map(cluster_med).astype(float) * overall_med
+
+    # Zero out implausibly high values
+    full_activity.loc[~good, 'twice_corrected_temp_amplitude'] = float("NaN")
+
+    # Set these values in the data
+    data['temp_amplitude'] = data.index.map(full_activity.query("run == 0.0").set_index("id").twice_corrected_temp_amplitude)
 
 
 if __name__ == "__main__":
