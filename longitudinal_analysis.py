@@ -6,8 +6,6 @@ import pathlib
 import pandas
 import pylab
 import numpy
-import statsmodels.formula.api as smf
-import statsmodels.api as sm
 import scipy.stats
 
 
@@ -22,8 +20,7 @@ import util
 DPI = 300
 FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
-MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
-RESULTS_DIR = pathlib.Path("../longitudinal/")
+RESULTS_DIR = pathlib.Path("../results/longitudinal/")
 
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
@@ -597,46 +594,6 @@ def predict_diagnoses_effect_size_tables():
     print(results)
     return results
 
-def correct_for_seasonality_and_cluster():
-    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
-    good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
-
-    # Seasonal correction for full (i.e. with seasonal repeated measurements) activity data
-    starts = pandas.to_datetime(full_summary['file-startTime'])
-    actigraphy_start_date = full_activity.run_id.astype(float).map(starts)
-    year_start = pandas.to_datetime(actigraphy_start_date.dt.year.astype(str) + "-01-01")
-    year_fraction = (actigraphy_start_date - year_start) / (pandas.to_timedelta("1Y"))
-    full_activity['cos_year_fraction'] = numpy.cos(year_fraction*2*numpy.pi)
-    full_activity['sin_year_fraction'] = numpy.sin(year_fraction*2*numpy.pi)
-
-    # Compute the cosinor fit of log(temp_amplitude) over the duration of the year
-    full_activity['log_temp_amplitude'] = numpy.log(full_activity.temp_amplitude)
-    full_activity.loc[full_activity.log_temp_amplitude == float('-Inf'), 'log_temp_amplitude'] = float("NaN") # 2 subjects get log(0) but we just drop them
-    fit = smf.ols(
-        f"log_temp_amplitude ~ cos_year_fraction + sin_year_fraction",
-        data = full_activity.loc[good, ['log_temp_amplitude', 'cos_year_fraction', 'sin_year_fraction', 'id']].dropna(),
-    ).fit()
-    full_activity['corrected_temp_amplitude'] = numpy.exp(
-        full_activity.log_temp_amplitude
-        - full_activity['cos_year_fraction'] * fit.params['cos_year_fraction']
-        - full_activity['sin_year_fraction'] * fit.params['sin_year_fraction']
-    )
-
-    # Investigate device id groups
-    device = full_summary.loc[full_activity.run_id.astype(float), 'file-deviceID']
-    full_activity['device_id'] = device.values
-    full_activity['device_cluster'] = pandas.cut( full_activity.device_id, [0, 7_500, 12_500, 20_000, 50_000]).cat.rename_categories(["A", "B", "C", "D"])
-
-    # Correct for device cluster
-    cluster_med = full_activity.groupby("device_cluster").corrected_temp_amplitude.median()
-    overall_med = full_activity.corrected_temp_amplitude.median()
-    full_activity['twice_corrected_temp_amplitude'] = full_activity.corrected_temp_amplitude / full_activity.device_cluster.map(cluster_med).astype(float) * overall_med
-
-    # Zero out implausibly high values
-    full_activity.loc[~good, 'twice_corrected_temp_amplitude'] = float("NaN")
-
-    # Set these values in the data
-    data['temp_amplitude'] = data.index.map(full_activity.query("run == 0.0").set_index("id").twice_corrected_temp_amplitude)
 
 def repeat_measurements():
     # Within-person variability
@@ -646,7 +603,7 @@ def repeat_measurements():
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
+    parser = argparse.ArgumentParser(description=f"run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
     parser.add_argument("--cohort", help="Cohort number to load data for", type = int)
     parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
     parser.add_argument("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
@@ -682,7 +639,7 @@ if __name__ == '__main__':
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
-    correct_for_seasonality_and_cluster()
+    phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
 
     #### Run (or load from disk if they already exist) 
     #### the statistical tests
