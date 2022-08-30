@@ -1,6 +1,12 @@
 import pandas
 import pathlib
 
+# Time between actigraphy reading and the first allowed diagnoses
+# All subjects whose first diagnosis occurs this much after actigraphy
+# will be counted as cases. Anyone with this diagnosis prior to that cutoff
+# will be excluded from analysis as neither control nor case
+LAG_TIME = 365.25 * pandas.to_timedelta("1D")
+
 def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
@@ -150,11 +156,12 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=F
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
     first_date = pandas.to_datetime(icd10_entries.first_date)
-    icd10_entries_after_actigraphy = icd10_entries[first_date > icd10_entries.ID.map(actigraphy_start_date)].copy()
+    cutoff_time = icd10_entries.ID.map(actigraphy_start_date) + LAG_TIME
+    icd10_entries_after_actigraphy = icd10_entries[first_date > cutoff_time].copy()
     icd10_entries_after_actigraphy['novel'] = True
     # All icd9 / self-reported diagnoses are prior as well as earlier ICD10s
     prior_existing_diagnosis_long = pandas.concat([
-        icd10_entries.loc[first_date <= icd10_entries.ID.map(actigraphy_start_date), ['ID', 'PHECODE']],
+        icd10_entries.loc[first_date <= cutoff_time, ['ID', 'PHECODE']],
         icd9_entries[['ID', 'PHECODE']],
         self_reported[['ID', 'PheCODE']].rename(columns={"PheCODE": "PHECODE"}),
     ]).drop_duplicates()
@@ -170,7 +177,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=F
     ]).drop_duplicates().dropna()
     prior_existing_diagnosis_long['novel'] = False
 
-    # True if a case - first diagnosis occurs after actigraphy
+    # True if a case - first diagnosis occurs after actigraphy + LAG_TIME
     # False if excluded due to a prior diagnosis
     # If control, then not present at all
     case_or_prior = pandas.concat([
