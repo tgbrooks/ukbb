@@ -391,7 +391,7 @@ def load_diagnoses(data):
 
     return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
 
-def correct_for_seasonality_and_cluster(data, activity_summary, activity_summary_seasonal):
+def correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal):
     full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
     good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
 
