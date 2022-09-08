@@ -276,7 +276,7 @@ def generate_results_table():
     with pandas.ExcelWriter(results_file, mode="a") as writer:
         ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
         predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
-        predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
+        predictive_tests_by_age_cox.to_excel(writer, sheet_name="By Age", index=False)
         phecode_details.T.to_excel(writer, sheet_name="PheCODEs")
 
 def temperature_trace_plots(N_IDS=500):
@@ -487,11 +487,14 @@ def predict_diagnoses_plots():
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
+    HR_limits = (0.75, 1.7)
+
     fig, axes = pylab.subplots(figsize=(8,7), ncols=4, sharey=True)
     ys = numpy.arange(len(tests))
     axes[0].barh(
         ys,
         -numpy.log10(tests.p),
+        height = 0.5,
         color='k')
     axes[0].set_yticks(numpy.arange(len(tests)))
     axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(x, 30)))
@@ -533,39 +536,38 @@ def predict_diagnoses_plots():
         )
         axes[2].plot(
             numpy.exp([-row.female_logHR- row.female_logHR_se*1.96, -row.female_logHR + row.female_logHR_se*1.96]),
-            [ys[i]-+ 0.1, ys[i] - 0.1],
+            [ys[i] - 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
     axes[2].set_xlabel("HR per °C\nby sex")
     axes[2].axvline(1, color="k")
 
     #By age
-    axes[3].scatter(
-        numpy.exp(-tests_by_age.under_65_logHR),
-        ys + 0.1,
-        color=color_by_age['under 65'],
-    )
-    axes[3].scatter(
-        numpy.exp(-tests_by_age.over_65_logHR),
-        ys-0.1,
-        color=color_by_age['over 65'],
-    )
-    for i, (idx, row) in enumerate(tests_by_age.iterrows()):
-        axes[3].plot(
-            numpy.exp([-row.under_65_logHR - row.under_65_logHR_se*1.96, -row.under_65_logHR + row.under_65_logHR_se*1.96]),
-            [ys[i] + 0.1, ys[i] + 0.1],
-            color=color_by_age['under 65'],
+    age_categories = sorted(data.age_at_actigraphy_cat.unique())
+    age_cat_y_offsets = numpy.linspace(0.3, -0.3, num=len(age_categories))
+    for age_cat, y_offset in zip(age_categories, age_cat_y_offsets):
+        HR = tests_by_age[f'age{age_cat}_logHR']
+        SE = tests_by_age[f'age{age_cat}_logHR_se']
+        axes[3].scatter(
+            numpy.exp(-HR),
+            ys + y_offset,
+            color=color_by_age[age_cat],
         )
-        axes[3].plot(
-            numpy.exp([-row.over_65_logHR - row.over_65_logHR_se*1.96, -row.over_65_logHR + row.over_65_logHR_se*1.96]),
-            [ys[i]-+ 0.1, ys[i] - 0.1],
-            color=color_by_age['over 65'],
-        )
-    axes[3].set_xlabel("HR per °C\nby age")
-    axes[3].axvline(1, color="k")
-    fig.tight_layout(rect=(0,0,0.85,1))
+        for i, (idx, row) in enumerate(tests_by_age.iterrows()):
+            axes[3].plot(
+                numpy.exp([-HR[i] - SE[i]*1.96, -HR[i] + SE[i]*1.96]),
+                [ys[i] + y_offset, ys[i] + y_offset],
+                color=color_by_age[age_cat],
+            )
+        axes[3].set_xlabel("HR per °C\nby age")
+        axes[3].axvline(1, color="k")
+        fig.tight_layout(rect=(0,0,0.85,1))
+
+    for ax in axes[1:4]:
+        ax.set_xlim(HR_limits)
+
     util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
-    util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
+    util.legend_from_colormap(fig, color_by_age, loc=(0.85, 0.4))
 
     fig.savefig(OUTDIR / "FIG2.summary_results.png", dpi=300)
 
@@ -637,6 +639,9 @@ if __name__ == '__main__':
     case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date)
     n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
+    last_diagnosis = case_status.first_date.max()
+    follow_ups = (last_diagnosis - data[complete_cases].actigraphy_start_date - longitudinal_diagnoses.LAG_TIME) / (365.25 * pandas.to_timedelta("1D"))
+    print(f"Follow-up times were {follow_ups.mean():0.2f} ({follow_ups.min():0.2f} - {follow_ups.max():0.2f} min-max) years (after actigraphy + lag time)")
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
     phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
@@ -646,6 +651,11 @@ if __name__ == '__main__':
     predictive_tests_cox = longitudinal_statistics.predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
+
+    print(f"Total tests performed (at least 200 cases): {len(predictive_tests_cox)}")
+    bonferroni_corrected_p = predictive_tests_cox.p * len(predictive_tests_cox)
+    print(f"Significant tests by Bonferroni corrected p < {BONFERRONI_CUTOFF}: {(bonferroni_corrected_p < BONFERRONI_CUTOFF).sum()}")
+    print(f"Significant tests by FDR q < {FDR_CUTOFF}: {(predictive_tests_cox.q < FDR_CUTOFF).sum()}")
 
     # Survival analysis
     survival = longitudinal_statistics.survival_association(data, OUTDIR, RECOMPUTE)
@@ -660,10 +670,13 @@ if __name__ == '__main__':
                                 zip(phecode_info.category.unique(),
                                     [pylab.get_cmap("tab20")(i) for i in range(20)])}
     color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
-    color_by_age = {"under 65": '#32a852', "over 65": '#37166b'}
+    age_categories = sorted(data.age_at_actigraphy_cat.unique())
+    color_by_age = {age_cat: pylab.get_cmap("viridis")(i) for i, age_cat in zip(numpy.linspace(0,1, len(age_categories)), age_categories)}
 
     # The top phenotypes that we will highlight
     top_phenotypes = ['250.2', '401.1', '571.5', '585', '562.1', '480', '272', '327', '740', '333', '300', '332']
+    # For the smaller cohorts, some of these (like Parkinson's) may have too few to test, we drop them from plots
+    top_phenotypes = [phecode for phecode in top_phenotypes if phecode in predictive_tests_cox.phecode.values]
 
     ## Make the plots
     if not args.no_plots:

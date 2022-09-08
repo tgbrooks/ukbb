@@ -14,8 +14,8 @@ ZSCORE_OUTLIER_CUTOFF = 7
 EXTRA_ACTIVITY_VARIABLES = ["temp_L1_time", "temp_phase"]
 
 # Bins to group by age (at the time of actigraphy) in years
-#AGE_BINS  = [ 40, 55, 60, 65, 70, 80 ]
-AGE_BINS = [40, 65, 80]
+AGE_BINS  = [ 40, 55, 60, 65, 70, 80 ]
+#AGE_BINS = [40, 65, 80]
 
 ## Add self-reported variables to activity document
 # they need to be converted to 0,1 and NaNs
@@ -337,7 +337,7 @@ def load_data(cohort):
     data['age_at_actigraphy_cat'] = pandas.cut(
         data.age_at_actigraphy,
         AGE_BINS
-    ).astype("category").cat.rename_categories(["under_65", "over_65"])
+    ).astype("category").cat.rename_categories([f'{a}-{b}' for a,b in zip(AGE_BINS[:-1], AGE_BINS[1:])])
 
     # Use device clusters to correct some actigraphy values
     correct_for_device_cluster(data, 'temp_amplitude', multiplicative=True)
@@ -351,20 +351,20 @@ def load_data(cohort):
     data['ethnicity_white'] = data.ethnicity.isin(["British", "Any other white background", "Irish", "White"])
     data['overall_health_good'] = data.overall_health.isin(["Good", "Excellent"])
     data.loc[data.overall_health.isin(['Do not know', 'Prefer not to answer']), 'overall_health_good'] = float("NaN")
-    data['smoking_ever'] = data.smoking.isin(['Previous', 'Current'])
-    data.loc[data.smoking == 'Prefer not to answer', 'smoking_ever'] = float("NaN")
-    data['high_income'] = data.household_income.isin(['52,000 to 100,000', 'Greater than 100,000'])
-    data.loc[data.high_income == 'Do not know', 'high_income'] = float("NaN")
+    #data['smoking_ever'] = data.smoking.isin(['Previous', 'Current'])
+    #data.loc[data.smoking == 'Prefer not to answer', 'smoking_ever'] = float("NaN")
+    #data['high_income'] = data.household_income.isin(['52,000 to 100,000', 'Greater than 100,000'])
+    #data.loc[data.high_income == 'Do not know', 'high_income'] = float("NaN")
     data['college_education'] = data['education_College_or_University_degree']
-    data['alcohol'] = data.alcohol_frequency.map({
-        "Prefer not to answer": float("NaN"),
-        "Never": "never",
-        "Special occaisions only": "never",
-        "One to three times a month": "sometimes",
-        "Once or twice a week": "sometimes",
-        "Three or four times a week": "often",
-        "Daily or almost daily": "often",
-    })
+    #data['alcohol'] = data.alcohol_frequency.map({
+    #    "Prefer not to answer": float("NaN"),
+    #    "Never": "never",
+    #    "Special occaisions only": "never",
+    #    "One to three times a month": "sometimes",
+    #    "Once or twice a week": "sometimes",
+    #    "Three or four times a week": "often",
+    #    "Daily or almost daily": "often",
+    #})
 
 
     # Process death data, appropriate for Cox proportional hazards model

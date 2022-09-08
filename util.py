@@ -85,5 +85,7 @@ def wrap(string, N):
 
 def capitalize(string):
     # Capitalize first letter in each word, broken by any of a large number of characters
-    split = re.split(r"([\s&,\\/]*)", string)
-    return ''.join(s.capitalize() for s in split)
+    split = re.split(r"([\s&,\\/]+)", string)
+    def cap_word(word):
+        return word[0].upper() + word[1:]
+    return ''.join(cap_word(s) for s in split)
