@@ -61,7 +61,7 @@ def plot_average_trace(ids, var="acceleration", directory="../processed/acc_anal
 
     if ax is None:
         fig, ax = pylab.subplots()
-    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label, linewidth=2)
+    ax.plot(grand_average.index/ pandas.to_timedelta("1H"), grand_average, c=color, label=label, linewidth=4)
 
     if show_variance:
         low_average = resampled.quantile(0.25)
