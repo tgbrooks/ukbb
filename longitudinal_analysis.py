@@ -4,9 +4,9 @@ Main script to run the longitudinal associations in a phenome-wide study
 
 import pathlib
 import pandas
+import pylab
 import numpy
-import statsmodels.formula.api as smf
-import statsmodels.api as sm
+import scipy.stats
 
 
 import phewas_preprocess
@@ -18,10 +18,9 @@ import day_plots
 import util
 
 DPI = 300
-FDR_CUTOFF = 0.1
+FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
-MAX_TEMP_AMPLITUDE = 10 # CUTOFF for values that are implausible or driven by extreme environments
-RESULTS_DIR = pathlib.Path("../longitudinal/")
+RESULTS_DIR = pathlib.Path("../results/longitudinal/")
 
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
@@ -37,7 +36,7 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
         x += len(pt)
         x_minorticks.append(x-0.5)
     bonferroni_cutoff = BONFERRONI_CUTOFF / len(tests_df)
-    fdr_cutoff = tests_df[tests_df.q < 0.05].p.max()
+    fdr_cutoff = tests_df[tests_df.q < FDR_CUTOFF].p.max()
     ax.axhline(-numpy.log10(bonferroni_cutoff), c="k", zorder = 2)
     ax.axhline(-numpy.log10(fdr_cutoff), c="k", linestyle="--", zorder = 2)
     ax.set_xticks(x_ticks)
@@ -50,6 +49,149 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
     ax.set_xlim(-1, x+1)
     fig.tight_layout(h_pad=0.01)
     return fig
+
+def fancy_case_control_plot(data, case_status, code, title, var="acceleration_RA", normalize=False, confidence_interval=False, rescale=True, annotate=False):
+    import matplotlib
+    CONTROL_COLOR = "teal"
+    CASE_COLOR = "orange"
+
+    def gaussian_kde(data, *args, **kwargs):
+        # Gaussian KDE but drops NAs
+        d = data[~data.isna()]
+        return scipy.stats.gaussian_kde(d, *args, **kwargs)
+
+    diagnoses = case_status[case_status.PHECODE == code].set_index("ID")
+    status = pandas.Series(
+        data.index.map(diagnoses.case_status).add_categories(['control']).fillna("control"),
+        index = data.index,
+    )
+    case = (status == 'case')
+    control = (status == 'control')
+    xbottom = 0
+    xtop = 5 # degrees
+    point_width = 0.01
+    bandwidth = 0.50
+    label = "Temperature Amplitude (°C)"
+    eval_x = numpy.linspace(xbottom, xtop, int(0.5/point_width + 1))
+
+    case_scaling = (case).sum() * point_width if rescale else 1
+    control_scaling = (control).sum() * point_width if rescale else 1
+    case_avg = data[var][case].mean()
+    control_avg = data[var][control].mean()
+    total_incidence = case.sum()/(case.sum() + control.sum())
+
+    def densities_and_incidence(data):
+        case_density = gaussian_kde(data[var][case], bw_method=bandwidth)(eval_x) * case_scaling
+        control_density = gaussian_kde(data[var][control], bw_method=bandwidth)(eval_x) * control_scaling
+        incidence = case_density / (control_density  + case_density)
+        return case_density, control_density, incidence
+    
+    case_density, control_density, incidence = densities_and_incidence(data)
+
+    if confidence_interval:
+        N = 40
+        incidences = numpy.empty((len(eval_x), N))
+        for i in range(N):
+            sample = data.sample(len(data), replace=True)
+            _, _, sampled_incidence = densities_and_incidence(sample)
+            incidences[:,i] = sampled_incidence
+        incidences = numpy.sort(incidences, axis=1)
+        lower_bound = incidences[:,0]
+        upper_bound = incidences[:,-1]
+        middle = incidences[:,incidences.shape[1]//2]
+
+    fig, (ax1,ax3,ax2) = pylab.subplots(nrows=3, sharex=True,
+                                        gridspec_kw = {"hspace":0.1,
+                                                    "height_ratios":[0.2,0.2,0.6]})
+
+    # Plot the data
+    ax1.fill_between(eval_x, 0, control_density, color=CONTROL_COLOR)
+    ax3.fill_between(eval_x, 0, case_density, color=CASE_COLOR)
+    if confidence_interval:
+        ax2.fill_between(eval_x, lower_bound, upper_bound, color='lightgray')
+        #ax2.fill_between(eval_x, lower_bound, middle, color='lightgray')
+        #ax2.fill_between(eval_x, middle, upper_bound, color='lightgray')
+    #ax2.plot(eval_x, middle, color='k')
+    ax2.plot(eval_x, incidence, color='k')
+
+    # Plot avgs
+    ax1.axvline(control_avg, c='k', linestyle="--")
+    ax3.axvline(case_avg, c='k', linestyle="--")
+    ax2.axhline(total_incidence, c='k', linestyle="--")
+
+    # Label plot
+    ax1.set_ylabel(f"Controls\nN={(control).sum()}")
+    ax2.set_ylabel(f"Incidence\n(overall={total_incidence:0.1%})")
+    ax3.set_ylabel(f"Cases\nN={case.sum()}") 
+    ax2.set_xlabel(label)
+
+    ax1.spines['left'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
+    ax1.tick_params(bottom=False)
+    ax3.tick_params(bottom=False)
+    ax1.yaxis.set_ticks([])
+    #ax2.xaxis.set_ticks_position('none')
+    ax2.yaxis.set_ticks_position('right')
+    if not normalize:
+        ax2.yaxis.set_ticks([0, 0.25, 0.5, 0.75, 1])
+        ax2.yaxis.set_ticklabels(["0%", "25%", "50%", "75%","100%"])
+    else:
+        ax2.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(xmax=1))
+    ax3.spines['left'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
+    ax3.spines['bottom'].set_visible(False)
+    ax3.yaxis.set_ticks([])
+
+    # Set axis limits
+    ax1.set_xlim(xbottom, xtop)
+    if not normalize:
+        max_density = max(numpy.max(case_density), numpy.max(control_density))
+        ax1.set_ylim(0, max_density)
+        ax3.set_ylim(0, max_density)
+        ax2.set_ylim(0, 1)
+    else:
+        ax1.set_ylim(0)
+        ax3.set_ylim(0)
+        ax2.set_ylim(0, numpy.minimum(numpy.max(middle)*1.3, 1.0))
+    ax3.invert_yaxis()
+
+    if annotate:
+        ax1.annotate("Control mean",
+                        xy=(control_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax3.annotate("Case mean",
+                        xy=(case_avg, numpy.max(control_density)/2),
+                        xytext=(-50,0),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"})
+        ax2.annotate("Overall prevalence",
+                        xy=((xtop*0.9 + xbottom*0.1), total_incidence),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="right",
+                        va="center",
+                        arrowprops={"arrowstyle": "->"},
+                        )
+        i = len(eval_x)//5
+        ax2.annotate("95% confidence interval",
+                        xy=(eval_x[i], upper_bound[i]),
+                        xytext=(0,25),
+                        textcoords="offset pixels",
+                        ha="center",
+                        va="bottom",
+                        arrowprops={"arrowstyle": "->"},#"-[, lengthB=5.0"},
+                        )
+
+    ax1.set_title(title)
+    return fig
+
 
 def summary():
 
@@ -134,7 +276,7 @@ def generate_results_table():
     with pandas.ExcelWriter(results_file, mode="a") as writer:
         ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
         predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
-        predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_excel(writer, sheet_name="By Age", index=False)
+        predictive_tests_by_age_cox.to_excel(writer, sheet_name="By Age", index=False)
         phecode_details.T.to_excel(writer, sheet_name="PheCODEs")
 
 def temperature_trace_plots(N_IDS=500):
@@ -345,11 +487,14 @@ def predict_diagnoses_plots():
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
-    fig, axes = pylab.subplots(figsize=(9,7), ncols=4, sharey=True)
+    HR_limits = (0.75, 1.7)
+
+    fig, axes = pylab.subplots(figsize=(8,7), ncols=4, sharey=True)
     ys = numpy.arange(len(tests))
     axes[0].barh(
         ys,
         -numpy.log10(tests.p),
+        height = 0.5,
         color='k')
     axes[0].set_yticks(numpy.arange(len(tests)))
     axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(x, 30)))
@@ -391,47 +536,45 @@ def predict_diagnoses_plots():
         )
         axes[2].plot(
             numpy.exp([-row.female_logHR- row.female_logHR_se*1.96, -row.female_logHR + row.female_logHR_se*1.96]),
-            [ys[i]-+ 0.1, ys[i] - 0.1],
+            [ys[i] - 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
         )
     axes[2].set_xlabel("HR per °C\nby sex")
     axes[2].axvline(1, color="k")
 
     #By age
-    axes[3].scatter(
-        numpy.exp(-tests_by_age.under_65_logHR),
-        ys + 0.1,
-        color=color_by_age['under 65'],
-    )
-    axes[3].scatter(
-        numpy.exp(-tests_by_age.over_65_logHR),
-        ys-0.1,
-        color=color_by_age['over 65'],
-    )
-    for i, (idx, row) in enumerate(tests_by_age.iterrows()):
-        axes[3].plot(
-            numpy.exp([-row.under_65_logHR - row.under_65_logHR_se*1.96, -row.under_65_logHR + row.under_65_logHR_se*1.96]),
-            [ys[i] + 0.1, ys[i] + 0.1],
-            color=color_by_age['under 65'],
+    age_categories = sorted(data.age_at_actigraphy_cat.unique())
+    age_cat_y_offsets = numpy.linspace(0.3, -0.3, num=len(age_categories))
+    for age_cat, y_offset in zip(age_categories, age_cat_y_offsets):
+        HR = tests_by_age[f'age{age_cat}_logHR']
+        SE = tests_by_age[f'age{age_cat}_logHR_se']
+        axes[3].scatter(
+            numpy.exp(-HR),
+            ys + y_offset,
+            color=color_by_age[age_cat],
         )
-        axes[3].plot(
-            numpy.exp([-row.over_65_logHR - row.over_65_logHR_se*1.96, -row.over_65_logHR + row.over_65_logHR_se*1.96]),
-            [ys[i]-+ 0.1, ys[i] - 0.1],
-            color=color_by_age['over 65'],
-        )
-    axes[3].set_xlabel("HR per °C\nby age")
-    axes[3].axvline(1, color="k")
-    fig.tight_layout(rect=(0,0,0.85,1))
+        for i, (idx, row) in enumerate(tests_by_age.iterrows()):
+            axes[3].plot(
+                numpy.exp([-HR[i] - SE[i]*1.96, -HR[i] + SE[i]*1.96]),
+                [ys[i] + y_offset, ys[i] + y_offset],
+                color=color_by_age[age_cat],
+            )
+        axes[3].set_xlabel("HR per °C\nby age")
+        axes[3].axvline(1, color="k")
+        fig.tight_layout(rect=(0,0,0.85,1))
+
+    for ax in axes[1:4]:
+        ax.set_xlim(HR_limits)
+
     util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
-    util.legend_from_colormap(fig, {str(k):v for k,v in color_by_age.items()}, loc=(0.85, 0.4))
+    util.legend_from_colormap(fig, color_by_age, loc=(0.85, 0.4))
 
     fig.savefig(OUTDIR / "FIG2.summary_results.png", dpi=300)
 
 def predict_diagnoses_effect_size_tables():
     # Generate a table of the effect sizes for predcitive tests (prop hazard models)
     # for select phecodes
-    phecodes = ['250', '401', '496', '272', '585', '480', '300']
-    results = predictive_tests_cox.set_index("phecode").loc[phecodes]
+    results = predictive_tests_cox.set_index("phecode").loc[top_phenotypes]
     HR_1SD = numpy.exp(-results.std_logHR).round(2).astype(str)
     HR_1SD_lower = numpy.exp(-results.std_logHR - 1.96* results.std_logHR_se).round(2).astype(str)
     HR_1SD_upper = numpy.exp(-results.std_logHR + 1.96* results.std_logHR_se).round(2).astype(str)
@@ -448,50 +591,11 @@ def predict_diagnoses_effect_size_tables():
         "HR at 1SD": HR_1SD + " (" + HR_1SD_lower + "-" + HR_1SD_upper + ")",
         "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
         "HR at 1°C": HR_1DC + " (" + HR_1DC_lower + "-" + HR_1DC_upper + ")",
-    })
+        "HR": HR_1SD,
+    }).sort_values(by="HR", ascending=False).drop(columns="HR")
     print(results)
     return results
 
-def correct_for_seasonality_and_cluster():
-    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
-    good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
-
-    # Seasonal correction for full (i.e. with seasonal repeated measurements) activity data
-    starts = pandas.to_datetime(full_summary['file-startTime'])
-    actigraphy_start_date = full_activity.run_id.astype(float).map(starts)
-    year_start = pandas.to_datetime(actigraphy_start_date.dt.year.astype(str) + "-01-01")
-    year_fraction = (actigraphy_start_date - year_start) / (pandas.to_timedelta("1Y"))
-    full_activity['cos_year_fraction'] = numpy.cos(year_fraction*2*numpy.pi)
-    full_activity['sin_year_fraction'] = numpy.sin(year_fraction*2*numpy.pi)
-
-    # Compute the cosinor fit of log(temp_amplitude) over the duration of the year
-    full_activity['log_temp_amplitude'] = numpy.log(full_activity.temp_amplitude)
-    full_activity.loc[full_activity.log_temp_amplitude == float('-Inf'), 'log_temp_amplitude'] = float("NaN") # 2 subjects get log(0) but we just drop them
-    fit = smf.ols(
-        f"log_temp_amplitude ~ cos_year_fraction + sin_year_fraction",
-        data = full_activity.loc[good, ['log_temp_amplitude', 'cos_year_fraction', 'sin_year_fraction', 'id']].dropna(),
-    ).fit()
-    full_activity['corrected_temp_amplitude'] = numpy.exp(
-        full_activity.log_temp_amplitude
-        - full_activity['cos_year_fraction'] * fit.params['cos_year_fraction']
-        - full_activity['sin_year_fraction'] * fit.params['sin_year_fraction']
-    )
-
-    # Investigate device id groups
-    device = full_summary.loc[full_activity.run_id.astype(float), 'file-deviceID']
-    full_activity['device_id'] = device.values
-    full_activity['device_cluster'] = pandas.cut( full_activity.device_id, [0, 7_500, 12_500, 20_000, 50_000]).cat.rename_categories(["A", "B", "C", "D"])
-
-    # Correct for device cluster
-    cluster_med = full_activity.groupby("device_cluster").corrected_temp_amplitude.median()
-    overall_med = full_activity.corrected_temp_amplitude.median()
-    full_activity['twice_corrected_temp_amplitude'] = full_activity.corrected_temp_amplitude / full_activity.device_cluster.map(cluster_med).astype(float) * overall_med
-
-    # Zero out implausibly high values
-    full_activity.loc[~good, 'twice_corrected_temp_amplitude'] = float("NaN")
-
-    # Set these values in the data
-    data['temp_amplitude'] = data.index.map(full_activity.query("run == 0.0").set_index("id").twice_corrected_temp_amplitude)
 
 def repeat_measurements():
     # Within-person variability
@@ -501,7 +605,7 @@ def repeat_measurements():
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
+    parser = argparse.ArgumentParser(description=f"run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
     parser.add_argument("--cohort", help="Cohort number to load data for", type = int)
     parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
     parser.add_argument("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
@@ -524,20 +628,23 @@ if __name__ == '__main__':
 
     #### Load and preprocess the underlying data
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
-    selected_ids = data.index
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
-
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
 
     # Whether subjects have complete data
     complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_amplitude']].isna().any(axis=1))
     complete_case_ids = complete_cases.index[complete_cases]
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
+
+    # Load case status
+    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date)
     n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
+    last_diagnosis = case_status.first_date.max()
+    follow_ups = (last_diagnosis - data[complete_cases].actigraphy_start_date - longitudinal_diagnoses.LAG_TIME) / (365.25 * pandas.to_timedelta("1D"))
+    print(f"Follow-up times were {follow_ups.mean():0.2f} ({follow_ups.min():0.2f} - {follow_ups.max():0.2f} min-max) years (after actigraphy + lag time)")
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
-    correct_for_seasonality_and_cluster()
+    phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
 
     #### Run (or load from disk if they already exist) 
     #### the statistical tests
@@ -545,11 +652,17 @@ if __name__ == '__main__':
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
 
+    print(f"Total tests performed (at least 200 cases): {len(predictive_tests_cox)}")
+    bonferroni_corrected_p = predictive_tests_cox.p * len(predictive_tests_cox)
+    print(f"Significant tests by Bonferroni corrected p < {BONFERRONI_CUTOFF}: {(bonferroni_corrected_p < BONFERRONI_CUTOFF).sum()}")
+    print(f"Significant tests by FDR q < {FDR_CUTOFF}: {(predictive_tests_cox.q < FDR_CUTOFF).sum()}")
+
     # Survival analysis
     survival = longitudinal_statistics.survival_association(data, OUTDIR, RECOMPUTE)
     print("Survival association:")
     print(pandas.Series(survival))
     print(f"Survival HR per 1°C decrease:\n{numpy.exp(-survival['logHR']):0.2f} ({numpy.exp((-survival['logHR'] - 1.96*survival['logHR_se'])):0.2f}-{numpy.exp((-survival['logHR'] + 1.96*survival['logHR_se'])):0.2f})")
+    print(f"Survival HR per 2 SD decrease:\n{numpy.exp(-2*survival['std_logHR']):0.2f} ({numpy.exp((-2*survival['std_logHR'] - 1.96*2*survival['std_logHR_se'])):0.2f}-{numpy.exp((-2*survival['std_logHR'] + 1.96*2*survival['std_logHR_se'])):0.2f})")
 
 
     #### Prepare color maps for the plots
@@ -557,10 +670,13 @@ if __name__ == '__main__':
                                 zip(phecode_info.category.unique(),
                                     [pylab.get_cmap("tab20")(i) for i in range(20)])}
     color_by_sex = {'Male': '#1f77b4', 'Female': '#ff7f0e'}
-    color_by_age = {"under 65": '#32a852', "over 65": '#37166b'}
+    age_categories = sorted(data.age_at_actigraphy_cat.unique())
+    color_by_age = {age_cat: pylab.get_cmap("viridis")(i) for i, age_cat in zip(numpy.linspace(0,1, len(age_categories)), age_categories)}
 
     # The top phenotypes that we will highlight
-    top_phenotypes = ['250.2', '401.1', '571', '585', '562.1', '327.3', '480', '272', '327', '740', '550.2', '716']
+    top_phenotypes = ['250.2', '401.1', '571.5', '585', '562.1', '480', '272', '327', '740', '333', '300', '332']
+    # For the smaller cohorts, some of these (like Parkinson's) may have too few to test, we drop them from plots
+    top_phenotypes = [phecode for phecode in top_phenotypes if phecode in predictive_tests_cox.phecode.values]
 
     ## Make the plots
     if not args.no_plots:

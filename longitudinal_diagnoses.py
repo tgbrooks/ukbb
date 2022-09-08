@@ -1,6 +1,13 @@
 import pandas
+import pathlib
 
-def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
+# Time between actigraphy reading and the first allowed diagnoses
+# All subjects whose first diagnosis occurs this much after actigraphy
+# will be counted as cases. Anyone with this diagnosis prior to that cutoff
+# will be excluded from analysis as neither control nor case
+LAG_TIME = 365.25 * pandas.to_timedelta("1D")
+
+def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
     and whose start of actigraphy measurement date is given in the Series actigraphy_start_date
@@ -24,7 +31,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     phecode_info['exclude_start'] = [x.split('-')[0].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
     phecode_info['exclude_end'] = [x.split('-')[1].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
     phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv", dtype=dict(PHECODE=str))
-    phecode_map.set_index(phecode_map.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
+    phecode_map.set_index(phecode_map.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
     #  Determine the set of phecodes to exclude from 'controls' for a given diagnosis
     # So phecode_exclusions maps phecode -> excluded where excluded is a phecode that
@@ -55,7 +62,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     # v1.2 Downloaded from https://phewascatalog.org/phecodes
     phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv", dtype=dict(phecode=str))
     phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
-    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
+    phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
     phecode_map_icd9['PHECODE'] = phecode_map_icd9.PHECODE.str.lstrip('0')
 
     # Map the phecodes to their parent / grandparent PheCODEs
@@ -93,7 +100,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             right_on = "phecode",
         )[['ICD10', 'parent', 'Exl. Phecodes', 'Excl. Phenotypes']].rename(columns={"parent": "PHECODE"})
     ]).drop_duplicates()
-    phecode_map_extended.set_index(phecode_map_extended.ICD10.str.replace(".",""), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
+    phecode_map_extended.set_index(phecode_map_extended.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
     phecode_map_icd9_extended = pandas.concat([
         phecode_map_icd9,
         pandas.merge(
@@ -103,7 +110,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
             right_on = "phecode",
         )[['ICD9', 'parent']].rename(columns={"parent": "PHECODE"})
     ]).drop_duplicates()
-    phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".",""), inplace=True) # Remove dots to match UKBB-style ICD9s
+    phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     ##### Load Patient Data
     icd10_entries = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
@@ -164,11 +171,12 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
     first_date = pandas.to_datetime(icd10_entries.first_date)
-    icd10_entries_after_actigraphy = icd10_entries[first_date > icd10_entries.ID.map(actigraphy_start_date)].copy()
+    cutoff_time = icd10_entries.ID.map(actigraphy_start_date) + LAG_TIME
+    icd10_entries_after_actigraphy = icd10_entries[first_date > cutoff_time].copy()
     icd10_entries_after_actigraphy['novel'] = True
     # All icd9 / self-reported diagnoses are prior as well as earlier ICD10s
     prior_existing_diagnosis_long = pandas.concat([
-        icd10_entries.loc[first_date <= icd10_entries.ID.map(actigraphy_start_date), ['ID', 'PHECODE']],
+        icd10_entries.loc[first_date <= cutoff_time, ['ID', 'PHECODE']],
         icd9_entries[['ID', 'PHECODE']],
         self_reported[['ID', 'PheCODE']].rename(columns={"PheCODE": "PHECODE"}),
     ]).drop_duplicates()
@@ -184,7 +192,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date):
     ]).drop_duplicates().dropna()
     prior_existing_diagnosis_long['novel'] = False
 
-    # True if a case - first diagnosis occurs after actigraphy
+    # True if a case - first diagnosis occurs after actigraphy + LAG_TIME
     # False if excluded due to a prior diagnosis
     # If control, then not present at all
     case_or_prior = pandas.concat([
