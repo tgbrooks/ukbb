@@ -636,7 +636,7 @@ if __name__ == '__main__':
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     # Load case status
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date)
+    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date, OUTDIR, RECOMPUTE)
     n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
     last_diagnosis = case_status.first_date.max()

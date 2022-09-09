@@ -7,7 +7,7 @@ import pathlib
 # will be excluded from analysis as neither control nor case
 LAG_TIME = 365.25 * pandas.to_timedelta("1D")
 
-def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=False):
+def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
     and whose start of actigraphy measurement date is given in the Series actigraphy_start_date
@@ -113,11 +113,11 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=F
     phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     ##### Load Patient Data
-    icd10_entries = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
+    icd10_entries_raw = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
     # Select our cohort from all the entries
-    icd10_entries.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
-    icd10_entries = icd10_entries.join(phecode_map_extended.PHECODE, on="ICD10")
-    icd10_entries = icd10_entries[icd10_entries.ID.isin(selected_ids)]
+    icd10_entries_raw = icd10_entries_raw[icd10_entries_raw.ID.isin(selected_ids)].copy()
+    icd10_entries_raw.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
+    icd10_entries = icd10_entries_raw.join(phecode_map_extended.PHECODE, on="ICD10")
 
     ### and the ICD9 data
     icd9_entries = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
@@ -152,21 +152,6 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=F
         right_on='Value',
         how="left",
     )
-
-    ## Gather the information about where the phecodes come from
-    phecode_groups = list(phecode_info.index)
-    phecode_group_details = {}
-    for group in phecode_groups:
-        phecode_group_details[group] = {
-            "Meaning": phecode_info.phenotype.loc[group],
-            "Category": phecode_info.category.loc[group],
-            "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
-            "ICD10_codes": ';'.join(sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)),
-            "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
-            "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map.PheCODE == group,'Meaning'])),
-            "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
-        }
-    phecode_details = pandas.DataFrame(phecode_group_details)
 
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
@@ -208,5 +193,33 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, RECOMPUTE=F
     }).reset_index()
     case_status.loc[case_status.case_status == 'exclude', 'first_date'] = float("NaN")
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
+
+    # summarize the phecode contents
+    details_file = pathlib.Path(OUTDIR / "phecode_details.txt")
+    if RECOMPUTE or not details_file.exists():
+        phecode_groups = list(phecode_info.index)
+        phecode_group_details = {}
+        icd10_entries_by_id = icd10_entries_raw.set_index("ID")
+        cases_only = case_status.query("case_status == 'case'")
+        for group in phecode_groups:
+            ICD10_codes = sorted(phecode_map_extended.loc[phecode_map_extended.PHECODE == group].ICD10)
+            ICD10_codes_stripped = [code.replace('.', '') for code in ICD10_codes]
+            case_subjects = cases_only[(cases_only.PHECODE == group)].ID
+            icd10_for_cases = icd10_entries_by_id.loc[case_subjects]
+            icd10_counts = icd10_for_cases[icd10_for_cases.ICD10.isin(ICD10_codes_stripped)].ICD10.value_counts()
+            case_counts = [icd10_counts.get(icd10,default=0) for icd10 in ICD10_codes_stripped]
+            phecode_group_details[group] = {
+                "Meaning": phecode_info.phenotype.loc[group],
+                "Category": phecode_info.category.loc[group],
+                "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
+                "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
+                "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
+                "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map_extended.PheCODE == group,'Meaning'])),
+                "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
+            }
+        phecode_details = pandas.DataFrame(phecode_group_details)
+        phecode_details.to_csv(details_file, sep="\t", index=False)
+    else:
+        phecode_details = pandas.read_csv(details_file, sep="\t")
 
     return case_status, phecode_info, phecode_details
