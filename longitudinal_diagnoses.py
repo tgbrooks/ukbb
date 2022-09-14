@@ -156,12 +156,19 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
     ## Get case data for those occuring after actigraphy
     # Only use icd10 since other data predates actigraphy
     first_date = pandas.to_datetime(icd10_entries.first_date)
-    cutoff_time = icd10_entries.ID.map(actigraphy_start_date) + LAG_TIME
-    icd10_entries_after_actigraphy = icd10_entries[first_date > cutoff_time].copy()
-    icd10_entries_after_actigraphy['novel'] = True
+    # People can be excluded for having a diagnosis predating their actigraphy (exact cutoff time)
+    # or from having a diagnosis within the lag period (lagged cutoff time)
+    # We track these separately, even though they are both excluded from the main study,
+    # so that we can report their numbers
+    exact_cutoff_time = icd10_entries.ID.map(actigraphy_start_date)
+    lagged_cutoff_time = icd10_entries.ID.map(actigraphy_start_date) + LAG_TIME
+    icd10_entries_after_actigraphy = icd10_entries[first_date > lagged_cutoff_time].copy()
+    icd10_entries_after_actigraphy['case_status'] = 'case'
+
     # All icd9 / self-reported diagnoses are prior as well as earlier ICD10s
+    # as well as ICD10s that occur before the actigraphy
     prior_existing_diagnosis_long = pandas.concat([
-        icd10_entries.loc[first_date <= cutoff_time, ['ID', 'PHECODE']],
+        icd10_entries.loc[first_date <= exact_cutoff_time, ['ID', 'PHECODE']],
         icd9_entries[['ID', 'PHECODE']],
         self_reported[['ID', 'PheCODE']].rename(columns={"PheCODE": "PHECODE"}),
     ]).drop_duplicates()
@@ -175,23 +182,53 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
             right_on=["excluded"]
         )[['ID', 'phecode']].rename(columns={"phecode": "PHECODE"})
     ]).drop_duplicates().dropna()
-    prior_existing_diagnosis_long['novel'] = False
+    prior_existing_diagnosis_long['case_status'] = 'prior_case' # Not a  case
 
-    # True if a case - first diagnosis occurs after actigraphy + LAG_TIME
-    # False if excluded due to a prior diagnosis
-    # If control, then not present at all
-    case_or_prior = pandas.concat([
+    # And those who obtain the diagnosis first within the lag period
+    within_lag_period_diagnosis_long = icd10_entries.loc[
+        (first_date <= lagged_cutoff_time) & (first_date > exact_cutoff_time),
+        ['ID', 'PHECODE'],
+    ]
+    # add in a lag-period 'diagnosis' for anyone with an excluded phecode
+    within_lag_period_diagnosis_long = pandas.concat([
+        within_lag_period_diagnosis_long,
+        pandas.merge(
+            within_lag_period_diagnosis_long,
+            phecode_exclusions,
+            left_on=["PHECODE"],
+            right_on=["excluded"]
+        )[['ID', 'phecode']].rename(columns={"phecode": "PHECODE"})
+    ]).drop_duplicates().dropna()
+    within_lag_period_diagnosis_long['case_status'] = 'within_lag_period_case' # Not a  case
+
+    # Classify each person as prior_case, within_lag_period_case, or case
+    # Order the three possibilities and take the first occurence within each individual
+    case_status_basic = pandas.concat([
         icd10_entries_after_actigraphy,
         prior_existing_diagnosis_long,
-    ]).groupby(["ID", "PHECODE"])['novel'].all()
+        within_lag_period_diagnosis_long,
+    ])
+    case_status_basic['case_status'] = case_status_basic['case_status'].astype('category').cat.reorder_categories(['prior_case', 'within_lag_period_case', 'case']).cat.as_ordered()
+    # We convert the three case status categories to integers since it's strangely MUCH faster than using them as categorical values for this
+    coding = {"prior_case": 0, "within_lag_period_case": 1, "case": 2}
+    reverse_coding = {b:a for a,b in coding.items()}
+    case_status_basic['case_status_coded'] = case_status_basic['case_status'].map(coding).astype(int)
+    case_status_basic = (
+        case_status_basic
+            .groupby(["ID", "PHECODE"])
+            .case_status_coded
+            .min() # prioritize prior_case status, then within_lag_period_case, then case
+            .astype('category')
+            .cat.rename_categories(reverse_coding)
+    )
 
     # Create the result dataframe
     phecode_first_date = icd10_entries_after_actigraphy.groupby(['ID', 'PHECODE']).first_date.min()
     case_status = pandas.DataFrame({
-        "case_status": case_or_prior.astype('category').cat.rename_categories({True: "case", False: "exclude"}),
+        "case_status": case_status_basic,
         "first_date": phecode_first_date,
     }).reset_index()
-    case_status.loc[case_status.case_status == 'exclude', 'first_date'] = float("NaN")
+    case_status.loc[case_status.case_status == 'prior_case', 'first_date'] = float("NaN")
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
 
     # summarize the phecode contents
