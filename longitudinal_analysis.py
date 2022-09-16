@@ -269,6 +269,7 @@ def generate_results_table():
     def format_effect_size(row):
         return f"{numpy.exp(-2*row.std_logHR):0.2f} ({numpy.exp(-2*(row.std_logHR + 1.96*row.std_logHR_se)):0.2f} - {numpy.exp(-2*(row.std_logHR - 1.96*row.std_logHR_se)):0.2f})"
     ptc['HR per 2SD decrease (95% CI)'] = predictive_tests_cox.apply(format_effect_size, axis=1)
+    #TODO: include the case counts
 
     import openpyxl
     workbook = openpyxl.load_workbook("../longitudinal_study_table_header.xlsx")
@@ -642,6 +643,11 @@ if __name__ == '__main__':
     last_diagnosis = case_status.first_date.max()
     follow_ups = (last_diagnosis - data[complete_cases].actigraphy_start_date - longitudinal_diagnoses.LAG_TIME) / (365.25 * pandas.to_timedelta("1D"))
     print(f"Follow-up times were {follow_ups.mean():0.2f} ({follow_ups.min():0.2f} - {follow_ups.max():0.2f} min-max) years (after actigraphy + lag time)")
+    assessment_to_actigraphy_delta = (data[complete_cases].actigraphy_start_date - pandas.to_datetime(data[complete_cases].blood_sample_time_collected_V0)) / (365.25 * pandas.to_timedelta("1D"))
+    print(f"Time delta between initial assessment and actigraphy readings: {assessment_to_actigraphy_delta.mean():0.2f} ({assessment_to_actigraphy_delta.min():0.2f} - {assessment_to_actigraphy_delta.max():0.2f} min-max)")
+    #TODO: display the time delta between assessment and actigraphy
+
+    #TODO: display number of individuals 1SD or 2 SD below population
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
     phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
@@ -651,6 +657,18 @@ if __name__ == '__main__':
     predictive_tests_cox = longitudinal_statistics.predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
+
+    #TODO: the numbers of individuals by exclusion status
+    phecode_counts = case_status.groupby("PHECODE").case_status.value_counts().unstack().loc[predictive_tests_cox.phecode]
+    subjects_at_actigraphy = len(complete_case_ids) - phecode_counts.prior_case
+    subjects_after_1year = len(complete_case_ids) - phecode_counts.prior_case - phecode_counts.within_lag_period_case
+    controls_final = len(complete_case_ids) - phecode_counts.prior_case - phecode_counts.within_lag_period_case - phecode_counts.case
+    print(f"Exclusions from prior diagnoses: N = {phecode_counts.prior_case.min()} - {phecode_counts.prior_case.max()}")
+    print(f"Exclusions from diagnoses within lag year: N = {phecode_counts.within_lag_period_case.min()} - {phecode_counts.within_lag_period_case.max()}")
+    print(f"Numbers of individuals in cohorts at start time of actigraphy: N = {subjects_at_actigraphy.min()} - {subjects_at_actigraphy.max()}")
+    print(f"Numbers of individuals in cohorts after 1 year lag period: N = {subjects_after_1year.min()} - {subjects_after_1year.max()}")
+    print(f"Numbers of subjects without an event: N = {controls_final.min()} - {controls_final.max()}")
+    print(f"Subjects with events: N = {phecode_counts.case.min()} - {phecode_counts.case.max()}")
 
     print(f"Total tests performed (at least 200 cases): {len(predictive_tests_cox)}")
     bonferroni_corrected_p = predictive_tests_cox.p * len(predictive_tests_cox)
