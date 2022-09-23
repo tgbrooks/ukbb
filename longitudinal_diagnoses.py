@@ -172,17 +172,23 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
         icd9_entries[['ID', 'PHECODE']],
         self_reported[['ID', 'PheCODE']].rename(columns={"PheCODE": "PHECODE"}),
     ]).drop_duplicates()
+    prior_existing_diagnosis_long['case_status'] = 'prior_case_exact' # Not a case - had the exact PHECODE diagnosis prior to start of actigraphy
     # add in a prior 'diagnosis' for anyone with an excluded phecode
-    prior_existing_diagnosis_long = pandas.concat([
-        prior_existing_diagnosis_long,
-        pandas.merge(
+    prior_from_exclusions = pandas.merge(
             prior_existing_diagnosis_long,
             phecode_exclusions,
             left_on=["PHECODE"],
             right_on=["excluded"]
         )[['ID', 'phecode']].rename(columns={"phecode": "PHECODE"})
-    ]).drop_duplicates().dropna()
-    prior_existing_diagnosis_long['case_status'] = 'prior_case' # Not a  case
+    prior_from_exclusions['case_status'] = 'prior_case' # Not a case - had one of the excluded PHECODE diagnoses prior to the start of actigraphy
+    prior_existing_diagnosis_long = (
+        pandas.concat([
+            prior_existing_diagnosis_long,
+            prior_from_exclusions,
+        ])
+        .drop_duplicates()
+        .dropna()
+    )
 
     # And those who obtain the diagnosis first within the lag period
     within_lag_period_diagnosis_long = icd10_entries.loc[
@@ -208,9 +214,9 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
         prior_existing_diagnosis_long,
         within_lag_period_diagnosis_long,
     ])
-    case_status_basic['case_status'] = case_status_basic['case_status'].astype('category').cat.reorder_categories(['prior_case', 'within_lag_period_case', 'case']).cat.as_ordered()
+    case_status_basic['case_status'] = case_status_basic['case_status'].astype('category').cat.set_categories(['prior_case_exact', 'prior_case', 'within_lag_period_case', 'case']).cat.as_ordered()
     # We convert the three case status categories to integers since it's strangely MUCH faster than using them as categorical values for this
-    coding = {"prior_case": 0, "within_lag_period_case": 1, "case": 2}
+    coding = {"prior_case_exact": 0, "prior_case": 1, "within_lag_period_case": 2, "case": 3}
     reverse_coding = {b:a for a,b in coding.items()}
     case_status_basic['case_status_coded'] = case_status_basic['case_status'].map(coding).astype(int)
     case_status_basic = (
@@ -228,7 +234,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
         "case_status": case_status_basic,
         "first_date": phecode_first_date,
     }).reset_index()
-    case_status.loc[case_status.case_status == 'prior_case', 'first_date'] = float("NaN")
+    case_status.loc[case_status.case_status.isin(['prior_case', 'prior_case_exact']), 'first_date'] = float("NaN")
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
 
     # summarize the phecode contents

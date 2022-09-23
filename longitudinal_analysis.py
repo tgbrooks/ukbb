@@ -14,6 +14,7 @@ import longitudinal_statistics
 import longitudinal_diagnoses
 import longitudinal_diagnostics
 import day_plots
+import baseline_statistics
 
 import util
 
@@ -658,8 +659,18 @@ if __name__ == '__main__':
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_age_cox = longitudinal_statistics.predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
 
-    #TODO: the numbers of individuals by exclusion status
-    phecode_counts = case_status.groupby("PHECODE").case_status.value_counts().unstack().loc[predictive_tests_cox.phecode]
+    # Display the numbers of individuals by their case/prior case/excluded status
+    case_status_collapsed = case_status.set_index("PHECODE").case_status.map({
+        "prior_case_exact": "prior_case", # Map exact priors to priors for these counts
+        "prior_case": "prior_case",
+        "within_lag_period_case": "within_lag_period_case",
+        "case": "case"
+    }).reset_index()
+    phecode_counts = (
+        case_status_collapsed.groupby("PHECODE").case_status.value_counts().unstack()
+        .loc[predictive_tests_cox.phecode]
+        .astype(int)
+    )
     subjects_at_actigraphy = len(complete_case_ids) - phecode_counts.prior_case
     subjects_after_1year = len(complete_case_ids) - phecode_counts.prior_case - phecode_counts.within_lag_period_case
     controls_final = len(complete_case_ids) - phecode_counts.prior_case - phecode_counts.within_lag_period_case - phecode_counts.case
