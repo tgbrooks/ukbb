@@ -646,9 +646,9 @@ if __name__ == '__main__':
     print(f"Follow-up times were {follow_ups.mean():0.2f} ({follow_ups.min():0.2f} - {follow_ups.max():0.2f} min-max) years (after actigraphy + lag time)")
     assessment_to_actigraphy_delta = (data[complete_cases].actigraphy_start_date - pandas.to_datetime(data[complete_cases].blood_sample_time_collected_V0)) / (365.25 * pandas.to_timedelta("1D"))
     print(f"Time delta between initial assessment and actigraphy readings: {assessment_to_actigraphy_delta.mean():0.2f} ({assessment_to_actigraphy_delta.min():0.2f} - {assessment_to_actigraphy_delta.max():0.2f} min-max)")
-    #TODO: display the time delta between assessment and actigraphy
 
-    #TODO: display number of individuals 1SD or 2 SD below population
+    temp_amplitude_zscores = scipy.stats.zscore(data[complete_cases].temp_amplitude)
+    print(f"At risk population: 1SD below mean: {(temp_amplitude_zscores <-1).mean():0.2%} 2SD below mean: {(temp_amplitude_zscores < -2).mean():0.2%}")
 
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
     phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
