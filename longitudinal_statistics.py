@@ -283,7 +283,8 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
                 Surv(time_to_event, event == 'diagnosed') ~ {variable} * age_at_actigraphy_cat + BMI + sex + overall_health + smoking + college_education + ethnicity_white + alcohol_frequency + townsend_deprivation_index -age_at_actigraphy_cat + strata(age_at_actigraphy_cat),
                 data=d2,
                 id=ID,
-                cluster=ID,
+                #cluster=ID,
+                robust=FALSE,
             )
             res
             ''')
@@ -321,12 +322,19 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
                 header.update({
                     f"age{age_cat}_p": summary.loc['temp_amplitude', 'Pr(>|z|)'],
                     f"age{age_cat}_logHR": summary.loc['temp_amplitude', 'coef'],
-                    f"age{age_cat}_logHR_se": summary.loc['temp_amplitude', 'robust se'],
+                    f"age{age_cat}_logHR_se": summary.loc['temp_amplitude', 'se(coef)'],
                 })
+        interaction_p = robjects.r("""
+            a <- anova(res);
+            a['temp_amplitude:age_at_actigraphy_cat', 'Pr(>|Chi|)']
+        """)[0]
+        header.update({
+            "overall_age_diff_p": interaction_p
+        })
         predictive_tests_by_age_cox_list.append(header)
 
     predictive_tests_by_age_cox = pandas.DataFrame(predictive_tests_by_age_cox_list)
-    #predictive_tests_by_age_cox['age_diff_q'] = bh_fdr_with_nans(predictive_tests_by_age_cox.age_diff_p.fillna(1))
+    predictive_tests_by_age_cox['overall_age_diff_q'] = bh_fdr_with_nans(predictive_tests_by_age_cox.overall_age_diff_p.fillna(1))
     #predictive_tests_by_age_cox.sort_values(by="age_diff_p").to_csv(OUTDIR / "predictive_tests_by_age.cox.txt", sep="\t", index=False)
     predictive_tests_by_age_cox.to_csv(OUTDIR / "predictive_tests_by_age.cox.txt", sep="\t", index=False)
 
