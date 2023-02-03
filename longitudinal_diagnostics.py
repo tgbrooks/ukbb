@@ -87,7 +87,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplit
         # First, we have the standard base model
         rfit = robjects.r(f'''
         res <- coxph(
-            Surv(time_to_event, event == 'diagnosed') ~ {variable} + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event == 'diagnosed') ~ {variable} + BMI + age_at_actigraphy_cat + sex + overall_health + smoking + college_education + ethnicity_white + alcohol_frequency + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -97,129 +97,134 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplit
         ''')
 
         # Next, we check for proportinoal hazards assumption met (i.e. hazard ratio is constant in time)
-        zph = robjects.r('''
-        zph <- cox.zph(res)
-        print(zph)
-        zph
-        ''')
+        try:
+            zph = robjects.r('''
+            zph <- cox.zph(res)
+            print(zph)
+            zph
+            ''')
+        except Exception as e:
+            print("Error in ZPH for {diagnosis} - SKIPPING")
+            print(e)
+            results[diagnosis] = { "zph_status": f"failed - {e}" }
+        else:
+            # Extract results from R into summary objects
+            zph_ps = pandas.Series(
+                numpy.array(robjects.r("zph$table[,'p']")),
+                index = robjects.r("rownames(zph$table)"),
+            )
+            coeffs = pandas.Series(
+                numpy.array(robjects.r("coefficients(res)")),
+                index = numpy.array(robjects.r("names(coefficients(res))"))
+            )
+            summary = pandas.DataFrame(
+                numpy.array(robjects.r('summary(res)$coefficients')),
+                index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
+                columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
+            )
+            amp_summary = {
+                    'p': summary.loc['temp_amplitude', 'Pr(>|z|)'],
+                    'logHR': summary.loc['temp_amplitude', 'coef'],
+                    'logHR_se': summary.loc['temp_amplitude', 'robust se'],
+                    'std_logHR': summary.loc['temp_amplitude', 'coef'] * variable_SD,
+                    'std_logHR_se': summary.loc['temp_amplitude', 'robust se'] * variable_SD,
+            }
+            results[diagnosis] = {
+                'coeffs': coeffs,
+                'summary': summary,
+                'amp': amp_summary,
+                'zph_ps': zph_ps,
+            }
 
-        # Extract results from R into summary objects
-        zph_ps = pandas.Series(
-            numpy.array(robjects.r("zph$table[,'p']")),
-            index = robjects.r("rownames(zph$table)"),
-        )
-        coeffs = pandas.Series(
-            numpy.array(robjects.r("coefficients(res)")),
-            index = numpy.array(robjects.r("names(coefficients(res))"))
-        )
-        summary = pandas.DataFrame(
-            numpy.array(robjects.r('summary(res)$coefficients')),
-            index = numpy.array(robjects.r('rownames(summary(res)$coefficients)')),
-            columns = numpy.array(robjects.r('colnames(summary(res)$coefficients)')),
-        )
-        amp_summary = {
-                'p': summary.loc['temp_amplitude', 'Pr(>|z|)'],
-                'logHR': summary.loc['temp_amplitude', 'coef'],
-                'logHR_se': summary.loc['temp_amplitude', 'robust se'],
-                'std_logHR': summary.loc['temp_amplitude', 'coef'] * variable_SD,
-                'std_logHR_se': summary.loc['temp_amplitude', 'robust se'] * variable_SD,
-        }
-        results[diagnosis] = {
-            'coeffs': coeffs,
-            'summary': summary,
-            'amp': amp_summary,
-            'zph_ps': zph_ps,
-        }
 
+            # Plot zph results
+            # for manually checking linearity of non-prop. hazards effects
+            fig_dir = OUTDIR / 'diagnosis_figs'
+            fig_dir.mkdir(exist_ok=True)
+            for i, var in enumerate(zph_ps.index):
+                if var == "GLOBAL":
+                    continue
+                output_img = str(fig_dir /  f'{diagnosis}.{var}.png')
+                rcode = f'''
+                png({repr(output_img)})
+                plot(zph[{i+1}], col=2)
+                dev.off()
+                '''
+                robjects.r(rcode)
 
-        # Plot zph results
-        # for manually checking linearity of non-prop. hazards effects
-        fig_dir = OUTDIR / 'diagnosis_figs'
-        fig_dir.mkdir(exist_ok=True)
-        for i, var in enumerate(zph_ps.index):
-            if var == "GLOBAL":
-                continue
-            output_img = str(fig_dir /  f'{diagnosis}.{var}.png')
-            rcode = f'''
-            png({repr(output_img)})
-            plot(zph[{i+1}], col=2)
-            dev.off()
-            '''
-            robjects.r(rcode)
+            # Find the variables that cox.zph identifies as time-varying
+            # by comparing p-values to ZPH_PS_CUTOFF
+            time_varying = []
+            for var in ["temp_amplitude", "BMI", "townsend_deprivation_index"]:
+                if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
+                    time_varying.append(var)
+            time_varying_cat = []
+            for var in ["age_at_actigraphy_cat", "sex", "overall_health", "smoking", "college_education", "ethnicity_white", "alcohol_frequency"]:
+                if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
+                    time_varying_cat.append(var)
 
-        # Find the variables that cox.zph identifies as time-varying
-        # by comparing p-values to ZPH_PS_CUTOFF
-        time_varying = []
-        for var in ["temp_amplitude", "BMI", "townsend_deprivation_index"]:
-            if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
-                time_varying.append(var)
-        time_varying_cat = []
-        for var in ["age_at_actigraphy_cat", "sex", "overall_good_health", "smoking_ever", "college_education", "ethnicity_white", "alcohol"]:
-            if any(zph_ps[zph_ps.index.str.startswith(var)] < ZPH_PS_CUTOFF):
-                time_varying_cat.append(var)
+            #### Run with time-interaction as identified by cox.zph above
+            # Manually expand the dataset with `time_interaction` with a limited number of time bins
+            # so that the memory explosion is manageable - coxph's tt support for this crashes with our large dataset even after down-sampling
+            # this approximates time interactions with a more manageable number of intervals (NUM_TIME_BINS)
+            time_bins = pandas.cut(d2.time_to_event, NUM_TIME_BINS).unique()
+            d2['start'] = 0
+            d2_time = time_interaction(d2, time_varying, 'start', "time_to_event", "event", time_bins)
+            d2_time['start_state'] = 'censored'
+            with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
+                d2_time_r = robjects.conversion.py2rpy(d2_time)
+            robjects.globalenv['d2_time'] = d2_time_r
 
-        #### Run with time-interaction as identified by cox.zph above
-        # Manually expand the dataset with `time_interaction` with a limited number of time bins
-        # so that the memory explosion is manageable - coxph's tt support for this crashes with our large dataset even after down-sampling
-        # this approximates time interactions with a more manageable number of intervals (NUM_TIME_BINS)
-        time_bins = pandas.cut(d2.time_to_event, NUM_TIME_BINS).unique()
-        d2['start'] = 0
-        d2_time = time_interaction(d2, time_varying, 'start', "time_to_event", "event", time_bins)
-        d2_time['start_state'] = 'censored'
-        with robjects.conversion.localconverter(robjects.default_converter + pandas2ri.converter):
-            d2_time_r = robjects.conversion.py2rpy(d2_time)
-        robjects.globalenv['d2_time'] = d2_time_r
+            # Time interactions model with manually expanded dataset
+            non_time_varying = " ".join([f"+ {cov}" for cov in COVARIATES if cov not in time_varying_cat])
+            time_varying_factors = ' '.join(f"+ {var}_time" for var in time_varying)
+            strata = ', '.join(time_varying_cat)
+            strata = f"+ strata({strata})" if len(time_varying_cat) > 0 else ''
+            rfit2 = robjects.r(f'''
+            res2 <- coxph(
+                Surv(start, end, event == 'diagnosed') ~ {variable} {non_time_varying}  {time_varying_factors} {strata},
+                data=d2_time,
+                id=ID,
+                cluster=ID,
+                istate=start_state,
+            )
+            print(summary(res2))
+            res2
+            ''')
 
-        # Time interactions model with manually expanded dataset
-        non_time_varying = " ".join([f"+ {cov}" for cov in COVARIATES if cov not in time_varying_cat])
-        time_varying_factors = ' '.join(f"+ {var}_time" for var in time_varying)
-        strata = ', '.join(time_varying_cat)
-        strata = f"+ strata({strata})" if len(time_varying_cat) > 0 else ''
-        rfit2 = robjects.r(f'''
-        res2 <- coxph(
-            Surv(start, end, event == 'diagnosed') ~ {variable} {non_time_varying}  {time_varying_factors} {strata},
-            data=d2_time,
-            id=ID,
-            cluster=ID,
-            istate=start_state,
-        )
-        print(summary(res2))
-        res2
-        ''')
-
-        # Extract results of time-varying datasets
-        tv_summary = pandas.DataFrame(
-            numpy.array(robjects.r('summary(res2)$coefficients')),
-            index = numpy.array(robjects.r('rownames(summary(res2)$coefficients)')),
-            columns = numpy.array(robjects.r('colnames(summary(res2)$coefficients)')),
-        )
-        tv_amp_summary = {
-                'p': tv_summary.loc['temp_amplitude', 'Pr(>|z|)'],
-                'logHR': tv_summary.loc['temp_amplitude', 'coef'],
-                'logHR_se': tv_summary.loc['temp_amplitude', 'robust se'],
-                'std_logHR': tv_summary.loc['temp_amplitude', 'coef'] * variable_SD,
-                'std_logHR_se': tv_summary.loc['temp_amplitude', 'robust se'] * variable_SD,
-        }
-        if 'temp_amplitude' in time_varying:
-            tv_amp_summary.update({
-                'p_time': tv_summary.loc['temp_amplitude_time', 'coef'], # p-value of slope of amp effect over time
-                'logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'], # change per year from mean diagnosis time
-                'logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'],
-                'std_logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'] * variable_SD,
-                'std_logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'] * variable_SD,
+            # Extract results of time-varying datasets
+            tv_summary = pandas.DataFrame(
+                numpy.array(robjects.r('summary(res2)$coefficients')),
+                index = numpy.array(robjects.r('rownames(summary(res2)$coefficients)')),
+                columns = numpy.array(robjects.r('colnames(summary(res2)$coefficients)')),
+            )
+            tv_amp_summary = {
+                    'p': tv_summary.loc['temp_amplitude', 'Pr(>|z|)'],
+                    'logHR': tv_summary.loc['temp_amplitude', 'coef'],
+                    'logHR_se': tv_summary.loc['temp_amplitude', 'robust se'],
+                    'std_logHR': tv_summary.loc['temp_amplitude', 'coef'] * variable_SD,
+                    'std_logHR_se': tv_summary.loc['temp_amplitude', 'robust se'] * variable_SD,
+            }
+            if 'temp_amplitude' in time_varying:
+                tv_amp_summary.update({
+                    'p_time': tv_summary.loc['temp_amplitude_time', 'coef'], # p-value of slope of amp effect over time
+                    'logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'], # change per year from mean diagnosis time
+                    'logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'],
+                    'std_logHR_time': tv_summary.loc['temp_amplitude_time', 'coef'] * variable_SD,
+                    'std_logHR_time_se': tv_summary.loc['temp_amplitude_time', 'robust se'] * variable_SD,
+                })
+            results[diagnosis].update({
+                "time_varying_summary":  tv_summary,
+                "time_varying_amp_summary": tv_amp_summary,
+                "time_varying_factors": time_varying,
             })
-        results[diagnosis].update({
-            "time_varying_summary":  tv_summary,
-            "time_varying_amp_summary": tv_amp_summary,
-            "time_varying_factors": time_varying,
-        })
 
 
         ### Run with non-linear temp_amplitude effects
         # Fit a spline over temp_amplitude
         rfit3 = robjects.r('''
         res3 <- coxph(
-            Surv(time_to_event, event=='diagnosed') ~ pspline(temp_amplitude, df=3) + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event=='diagnosed') ~ pspline(temp_amplitude, df=3) + BMI + age_at_actigraphy_cat + sex + overall_health + smoking + college_education + ethnicity_white + alcohol_frequency + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -252,7 +257,7 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplit
         ### Run with competing-outcomes effects (i.e. death vs diagnosis)
         rfit4 = robjects.r('''
         res4 <- coxph(
-            Surv(time_to_event, event) ~ temp_amplitude + BMI + age_at_actigraphy_cat + sex + overall_health_good + smoking_ever + college_education + ethnicity_white + alcohol + townsend_deprivation_index,
+            Surv(time_to_event, event) ~ temp_amplitude + BMI + age_at_actigraphy_cat + sex + overall_health + smoking + college_education + ethnicity_white + alcohol_frequency + townsend_deprivation_index,
             data=d2,
             id=ID,
             cluster=ID,
@@ -288,14 +293,17 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplit
     amp_summary = pandas.DataFrame({
         diagnosis: res['amp']
         for diagnosis, res in results.items()
+        if 'amp' in res
     })
     time_varying_amp_summary = pandas.DataFrame({
         diagnosis: res['time_varying_amp_summary']
         for diagnosis, res in results.items()
+        if 'time_varying_amp_summary' in res
     })
     competing_outcomes_amp_summary = pandas.DataFrame({
         diagnosis: res['competing_outcomes_amp_summary']
         for diagnosis, res in results.items()
+        if 'competing_outcomes_amp_summary' in res
     })
     def label(df, diag):
         df = df.copy()
@@ -304,11 +312,13 @@ def diagnostics(data, case_status, top_phenotypes, OUTDIR, variable="temp_amplit
     summary = pandas.concat([
         label(res['summary'], diagnosis)
         for diagnosis, res in results.items()
+        if 'summary' in res
     ])
 
     zph_ps = pandas.DataFrame({
         diagnosis: res['zph_ps']
         for diagnosis, res in results.items()
+        if 'zph_ps' in res
     })
 
     amp_summary.to_csv(fig_dir / "amp_summary.txt", sep="\t")

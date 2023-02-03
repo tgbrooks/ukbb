@@ -594,6 +594,7 @@ def predict_diagnoses_effect_size_tables():
         "HR at 2SD": HR_2SD + " (" + HR_2SD_lower + "-" + HR_2SD_upper + ")",
         "HR at 1°C": HR_1DC + " (" + HR_1DC_lower + "-" + HR_1DC_upper + ")",
         "HR": HR_1SD,
+        "N": results.N_cases,
     }).sort_values(by="HR", ascending=False).drop(columns="HR")
     print(results)
     return results
