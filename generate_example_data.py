@@ -41,15 +41,24 @@ activity_summary_seasonal = pandas.read_csv("../processed/activity_summary_aggre
 icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t")
 icd9_entries_all = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
 
+variance = pandas.read_csv("../processed/inter_intra_personal_variance.seasonal_correction.txt", sep="\t")
+
+self_report = pandas.read_csv("../processed/ukbb_self_reported_conditions.txt", sep="\t")
+
 #%
 main_data_columns = [
     'ethnicity',
     'overall_health',
     'BMI',
+    'sex',
     'birth_year',
+    'smoking',
+    'alcohol_frequency',
+    'townsend_deprivation_index',
     'education_College_or_University_degree',
     *list(phewas_preprocess.self_report_circadian_variables.keys()),
-    'date_of_death'
+    'date_of_death',
+    'blood_sample_time_collected_V0',
 ]
 activity_columns = [
     'temp_amplitude',
@@ -116,6 +125,9 @@ act_start = control_deaths.join(control_act_summary['file-startTime'])
 date_of_death = pandas.to_datetime(act_start['file-startTime']) + np.array([np.random.uniform(0,6) * pandas.to_timedelta("1d") * 365.25 for _ in range(control_deaths.shape[0])])
 date_of_death = date_of_death.dt.date
 control_deaths['date_of_death'] = control_deaths.index.map(date_of_death)
+control_deaths.index.name = "eid"
+
+control_self_reports = self_report[self_report.ID.isin(control_ids)][['ID', 'condition_code']]
 
 #% ## Generate the 'cases'
 
@@ -156,6 +168,7 @@ act_start = case_deaths.join(case_act_summary['file-startTime'])
 date_of_death = pandas.to_datetime(act_start['file-startTime']) + np.array([np.random.uniform(0,6) * pandas.to_timedelta("1d") * 365.25 for _ in range(case_deaths.shape[0])])
 date_of_death = date_of_death.dt.date
 case_deaths['date_of_death'] = case_deaths.index.map(date_of_death)
+case_deaths.index.name = "eid"
 
 diag_date = pandas.to_datetime(case_act_summary['file-startTime']) + np.array([np.random.uniform(0,6) * pandas.to_timedelta("1d") * 365.25 for _ in range(N_CASES)])
 diag_date = diag_date.dt.date
@@ -173,6 +186,7 @@ joined_act_summary = pandas.concat([case_act_summary, control_act_summary])
 joined_act_summary_seasonal = control_act_summary_seasonal # no case_act_summary_seasonal made
 joined_icd10_codes = case_icd10_codes # no diagnoses for controls
 joined_icd9_codes = icd9_entries_all.iloc[:0] # Empty icd9 codes... we don't care
+joined_self_reports = control_self_reports # No self reports for the cases since we don't want them excluded
 
 ##### Write out the files
 joined_ukbb.to_hdf(OUTDIR / "ukbb_data_table.h5", key="data", mode="w", format="table")
@@ -182,3 +196,5 @@ joined_act_summary.to_csv(OUTDIR / "activity_summary_aggregate.txt", sep="\t")
 joined_act_summary_seasonal.to_csv(OUTDIR / "activity_summary_aggregate_seasonal.txt", sep="\t")
 joined_icd10_codes.to_csv(OUTDIR / "ukbb_icd10_entries.txt", sep="\t", index=False)
 joined_icd9_codes.to_csv(OUTDIR / "ukbb_icd9_entries.txt", sep="\t")
+variance.to_csv(OUTDIR / "inter_intra_personal_variance.seasonal_correction.txt", sep="\t", index=False) # Just copy this file, no PI
+joined_self_reports.to_csv(OUTDIR / "ukbb_self_reported_conditions.txt", sep="\t")

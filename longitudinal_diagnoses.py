@@ -7,7 +7,7 @@ import pathlib
 # will be excluded from analysis as neither control nor case
 LAG_TIME = 365.25 * pandas.to_timedelta("1D")
 
-def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, RECOMPUTE=False):
+def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, OUTDIR, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
     and whose start of actigraphy measurement date is given in the Series actigraphy_start_date
@@ -113,20 +113,20 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
     phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     ##### Load Patient Data
-    icd10_entries_raw = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
+    icd10_entries_raw = pandas.read_csv(INPUTDIR/"ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
     # Select our cohort from all the entries
     icd10_entries_raw = icd10_entries_raw[icd10_entries_raw.ID.isin(selected_ids)].copy()
     icd10_entries_raw.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
     icd10_entries = icd10_entries_raw.join(phecode_map_extended.PHECODE, on="ICD10")
 
     ### and the ICD9 data
-    icd9_entries = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
+    icd9_entries = pandas.read_csv(INPUTDIR/"ukbb_icd9_entries.txt", sep="\t")
     icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
     icd9_entries = icd9_entries.join(phecode_map_icd9_extended.PHECODE, on="ICD9")
     icd9_entries = icd9_entries[icd9_entries.ID.isin(selected_ids)]
 
     # Self-reported conditions from the interview stage of the UK Biobank
-    self_reported = pandas.read_csv("../processed/ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
+    self_reported = pandas.read_csv(INPUTDIR/"ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
     data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
     codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
     condition_code_to_meaning = codings[codings.Coding  == data_fields.loc[20002].Coding].drop_duplicates(subset=["Value"], keep=False).set_index("Value")

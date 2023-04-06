@@ -63,22 +63,22 @@ self_report_circadian_variables = {
 }
 
 
-def load_ukbb():
+def load_ukbb(input_dir):
     ''' Overall UK Biobank data table '''
-    ukbb = pandas.read_hdf("../processed/ukbb_data_table.h5")
+    ukbb = pandas.read_hdf(input_dir / "ukbb_data_table.h5")
     ukbb.columns = ukbb.columns.str.replace("[,:/]","_", regex=True) # Can't use special characters easily
 
     # Update death information
-    deaths = pandas.read_csv("../data/patient_records/death.txt", sep='\t', parse_dates=["date_of_death"], dayfirst=True).drop_duplicates(['eid', 'date_of_death']).set_index('eid')
+    deaths = pandas.read_csv(input_dir / "patient_records/death.txt", sep='\t', parse_dates=["date_of_death"], dayfirst=True).drop_duplicates(['eid', 'date_of_death']).set_index('eid')
     ukbb['date_of_death'] = ukbb.index.map(deaths.date_of_death)
 
     return ukbb
 
-def load_activity(ukbb):
+def load_activity(ukbb, input_dir):
     ''' Subject-level activity data '''
-    full_activity = pandas.read_csv("../processed/activity_features_aggregate_seasonal.txt", sep="\t", dtype={'Unnamed: 0': str})
-    activity_summary = pandas.read_csv("../processed/activity_summary_aggregate.txt", index_col=0, sep="\t")
-    activity_summary_seasonal = pandas.read_csv("../processed/activity_summary_aggregate_seasonal.txt", index_col=0, sep="\t")
+    full_activity = pandas.read_csv(input_dir / "activity_features_aggregate_seasonal.txt", sep="\t", dtype={'Unnamed: 0': str})
+    activity_summary = pandas.read_csv(input_dir / "activity_summary_aggregate.txt", index_col=0, sep="\t")
+    activity_summary_seasonal = pandas.read_csv(input_dir / "activity_summary_aggregate_seasonal.txt", index_col=0, sep="\t")
     activity_summary_seasonal["ID"] = activity_summary_seasonal.index.astype(int)
 
     # Separate out the user ID from the run number (0 = original, 1-4 are seasonal repeats)
@@ -95,7 +95,7 @@ def load_activity(ukbb):
 
     ## Select the activity variables that have between-person variance greater than their within-person variance
     # and for the summary variables, use only those that are overall summary variables
-    activity_variance = pandas.read_csv("../processed/inter_intra_personal_variance.seasonal_correction.txt", sep="\t", index_col=0)
+    activity_variance = pandas.read_csv(input_dir / "inter_intra_personal_variance.seasonal_correction.txt", sep="\t", index_col=0)
     activity_variance['summary_var'] = activity_variance.index.isin(activity_summary.columns)
     activity_variance['use'] = (~activity_variance.summary_var) | activity_variance.index.str.contains("overall-")
     good_variance = (activity_variance.corrected_intra_personal_normalized < 1)
@@ -178,7 +178,7 @@ def correct_for_device_cluster(data, variable, multiplicative=True):
     else:
         data[variable] = d - data.device_cluster.map(category_medians).astype(float) + grand_median
 
-def load_phecode(selected_ids):
+def load_phecode(selected_ids, input_dir):
     # Load the PheCode mappings
     # Downloaded from https://phewascatalog.org/phecodes_icd10
     # Has columns:
@@ -194,21 +194,21 @@ def load_phecode(selected_ids):
     phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","" ,regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     # ## Load the ICD10/9 code data
-    icd10_entries_all = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t")
+    icd10_entries_all = pandas.read_csv(input_dir / "ukbb_icd10_entries.txt", sep="\t")
     # Select our cohort from all the entries
     icd10_entries = icd10_entries_all[icd10_entries_all.ID.isin(selected_ids)].copy()
     icd10_entries.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
     icd10_entries = icd10_entries.join(phecode_map.PHECODE, on="ICD10")
 
     ### and the ICD9 data
-    icd9_entries_all = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
+    icd9_entries_all = pandas.read_csv(input_dir / "ukbb_icd9_entries.txt", sep="\t")
     # Select our cohort from all the entries
     icd9_entries = icd9_entries_all[icd9_entries_all.ID.isin(selected_ids)].copy()
     icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
     icd9_entries = icd9_entries.join(phecode_map_icd9.PHECODE, on="ICD9")
 
     # Self-reported conditions from the interview stage of the UK Biobank
-    self_reported_all = pandas.read_csv("../processed/ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
+    self_reported_all = pandas.read_csv(input_dir / "ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
     self_reported = self_reported_all[self_reported_all.ID.isin(selected_ids)].copy()
     data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
     codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
@@ -275,8 +275,8 @@ def load_phecode(selected_ids):
 
     return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
 
-def load_medications(cohort_ids):
-    medications = pandas.read_csv("../processed/ukbb_medications.txt", sep="\t",
+def load_medications(cohort_ids, input_dir):
+    medications = pandas.read_csv(input_dir / "ukbb_medications.txt", sep="\t",
          dtype=dict(medication_code=int))
     data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
     codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
@@ -288,9 +288,9 @@ def load_medications(cohort_ids):
     medications = medications[medications.ID.isin(cohort_ids)]
     return medications
 
-def load_data(cohort):
-    ukbb = load_ukbb()
-    activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = load_activity(ukbb)
+def load_data(cohort, input_dir):
+    ukbb = load_ukbb(input_dir)
+    activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = load_activity(ukbb, input_dir)
 
     # Gather all the data
     data_full = activity.join(ukbb, how="inner")
@@ -378,11 +378,11 @@ def load_data(cohort):
 
     return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
     
-def load_diagnoses(data):
+def load_diagnoses(data, input_dir):
     ''' Load phecode information and insert into data '''
     selected_ids = data.index
     # Load phecode data
-    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_phecode(selected_ids)
+    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_phecode(selected_ids, input_dir)
 
     # Gather phecode diagnosis information for each subject
     for group in phecode_groups:
@@ -431,7 +431,3 @@ def correct_for_seasonality_and_cluster(data, full_activity, activity_summary, a
 
     # Set these values in the data
     data['temp_amplitude'] = data.index.map(full_activity.query("run == 0.0").set_index("id").twice_corrected_temp_amplitude)
-
-
-if __name__ == "__main__":
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity, phecode_data, phecode_gorups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_data(1)
