@@ -107,9 +107,6 @@ def load_activity(ukbb, input_dir):
     activity = activity[activity.columns[activity.columns.isin(activity_variables)]]
     print(f"Selected {len(activity.columns)} after discarding those with poor intra-personal variance")
 
-    # Load descriptions + categorization of activity variables
-    activity_variable_descriptions = pandas.read_excel("../table_header.xlsx", index_col="Activity Variable", sheet_name="Variables", engine="openpyxl")
-
     # drop activity for people who fail basic QC
     calibrated = activity_summary['quality-goodCalibration'].astype(bool)
     weartime = activity_summary['quality-goodWearTime'].astype(bool)
@@ -143,14 +140,6 @@ def load_activity(ukbb, input_dir):
     self_report_data = pandas.DataFrame(self_report_data)
     activity = activity.join(self_report_data)
 
-    # Create absolute deviation variables from phase variables
-    # since both extreme low and high phase are expected to be correlated with outcomes
-    # and we do the same for sleep duration measures
-    #for var in activity_variable_descriptions.index:
-    #    if var.endswith('_abs_dev'):
-    #        base_var = var[:-8]
-    #        activity[var] = (activity[base_var] - activity[base_var].mean(axis=0)).abs()
-
     # List the activity variables
     activity_variables = activity.columns
 
@@ -183,13 +172,13 @@ def load_phecode(selected_ids, input_dir):
     # Downloaded from https://phewascatalog.org/phecodes_icd10
     # Has columns:
     # ICD10 | PHECODE | Exl. Phecodes | Excl. Phenotypes
-    phecode_info = pandas.read_csv("../phecode_definitions1.2.csv", index_col=0)
-    phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv")
+    phecode_info = pandas.read_csv("metadata/phecode_definitions1.2.csv", index_col=0)
+    phecode_map = pandas.read_csv("metadata/Phecode_map_v1_2_icd10_beta.csv")
     phecode_map.set_index(phecode_map.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
     # and convert to phecodes
     # v1.2 Downloaded from https://phewascatalog.org/phecodes
-    phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv")
+    phecode_map_icd9 = pandas.read_csv("metadata/phecode_icd9_map_unrolled.csv")
     phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
     phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","" ,regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
@@ -210,15 +199,15 @@ def load_phecode(selected_ids, input_dir):
     # Self-reported conditions from the interview stage of the UK Biobank
     self_reported_all = pandas.read_csv(input_dir / "ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
     self_reported = self_reported_all[self_reported_all.ID.isin(selected_ids)].copy()
-    data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
-    codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
+    data_fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col="FieldID")
+    codings = pandas.read_csv("metadata/Codings_Showcase.csv", dtype={"Coding": int})
     condition_code_to_meaning = codings[codings.Coding  == data_fields.loc[20002].Coding].drop_duplicates(subset=["Value"], keep=False).set_index("Value")
     self_reported["condition"] = self_reported.condition_code.astype(str).map(condition_code_to_meaning.Meaning)
 
     # Convert self-reported conditions to phecodes
 
     # Load Manaully mapped self-reports to phecodes
-    self_report_phecode_map = pandas.read_csv("../self_report_conditions_meanings.txt", sep="\t", index_col=0)
+    self_report_phecode_map = pandas.read_csv("metadata/self_report_conditions_meanings.txt", sep="\t", index_col=0)
     self_reported["phecode"] = self_reported.condition_code.map(self_report_phecode_map['PheCODE'])
 
 
@@ -278,8 +267,8 @@ def load_phecode(selected_ids, input_dir):
 def load_medications(cohort_ids, input_dir):
     medications = pandas.read_csv(input_dir / "ukbb_medications.txt", sep="\t",
          dtype=dict(medication_code=int))
-    data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
-    codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
+    data_fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col="FieldID")
+    codings = pandas.read_csv("metadata/Codings_Showcase.csv", dtype={"Coding": int})
     medication_code_to_meaning = codings[codings.Coding  == data_fields.loc[20003].Coding].drop_duplicates(subset=["Value"], keep=False)
     medication_code_to_meaning.Value = medication_code_to_meaning.Value.astype(int)
     medication_code_to_meaning.set_index("Value", inplace=True)

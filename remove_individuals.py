@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+'''
+This script is used for compliance with the UKBB's occaisonal requests
+for removal of individuals from the study.
+'''
 
 import argparse
 
