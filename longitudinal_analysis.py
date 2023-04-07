@@ -273,7 +273,7 @@ def generate_results_table():
     #TODO: include the case counts
 
     import openpyxl
-    workbook = openpyxl.load_workbook("../longitudinal_study_table_header.xlsx")
+    workbook = openpyxl.load_workbook("metadata/longitudinal_study_table_header.xlsx")
     workbook.save(results_file)
     with pandas.ExcelWriter(results_file, mode="a") as writer:
         ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
