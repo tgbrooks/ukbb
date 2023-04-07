@@ -180,6 +180,7 @@ case_icd10_codes = pandas.DataFrame({
 
 #### Join all the data together
 joined_ukbb = pandas.concat([case_ukbb, control_ukbb])
+joined_ukbb['actigraphy_file'] = '90004_0_0' # everyone has actigraphy in this synthetic data
 joined_deaths = pandas.concat([case_deaths, control_deaths])
 joined_activity = pandas.concat([case_activity, control_activity, control_activity_seasonal])
 joined_act_summary = pandas.concat([case_act_summary, control_act_summary])
