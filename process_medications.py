@@ -24,7 +24,7 @@ import pandas
 # These two file contain the information describing the fields in the UKBB
 # they can be downloaded from 
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
+fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col=2)
 
 num_entries = fields.loc[MEDICATION_FIELD].Array
 
