@@ -1,0 +1,447 @@
+Value	Coding	Meaning	counts	PheCODE	PheCode Meaning	Note										
+1065	6	hypertension	130979	401	Hypertension											
+1473	6	high cholesterol	61640	272.11	Hypercholesterolemia											
+1111	6	asthma	58279	495	Asthma											
+1465	6	osteoarthritis	40688	740	Osteoarthrosis											
+1286	6	depression	28251	296.2	Depression											
+1387	6	hayfever/allergic rhinitis	28150	476	Allergic rhinitis											
+99999	6	unclassifiable	25692													
+1226	6	hypothyroidism/myxoedema	24236	244	Hypothyroidism											
+1220	6	diabetes	21724	250	Diabetes mellitus											
+1138	6	gastro-oesophageal reflux (gord) / gastric reflux	20999	530.11	GERD											
+1074	6	angina	16123	411	Ischemic Heart Disease											
+1265	6	migraine	14387	340	Migraine											
+1452	6	eczema/dermatitis	12564	939	Atopic/contact dermatitis due to other or unspecified											
+1075	6	heart attack/myocardial infarction	11519	411.2	Myocardial infarction											
+1154	6	irritable bowel syndrome	11491	564.1	Irritable Bowel Syndrome											
+1474	6	hiatus hernia	11133	550.2	Diaphragmatic hernia											
+1094	6	deep venous thrombosis (dvt)	9943	452.2	Deep vein thrombosis [DVT]											
+1294	6	back problem	8839	722	Intervertebral disc disorders	most frequent & likely in older people										
+1312	6	prolapsed disc/slipped disc	8192	722.1	Displacement of intervertebral disc											
+1162	6	cholelithiasis/gall stones	8169	574	Cholelithiasis and cholecystitis											
+1351	6	uterine fibroids	8064	218	Benign neoplasm of uterus											
+1309	6	osteoporosis	8043	743.1	Osteoporosis											
+1278	6	cataract	7316	366	Cataract											
+1466	6	gout	6979	274.1	Gout											
+1398	6	pneumonia	6916	480	Pneumonia											
+1113	6	emphysema/chronic bronchitis	6813	496.1	Emphysema											
+1287	6	anxiety/panic attacks	6725	300	Anxiety disorders											
+1081	6	stroke	6692	433.21	"Cerebral artery occlusion, with cerebral infarction"											
+1396	6	enlarged prostate	6564	600	Hyperplasia of prostate											
+1464	6	rheumatoid arthritis	5658	714.1	Rheumatoid arthritis											
+1453	6	psoriasis	5577	696	Psoriasis and related disorders											
+1458	6	diverticular disease/diverticulitis	5402	562.2	Diverticulitis											
+1277	6	glaucoma	5314	365	Glaucoma											
+1476	6	sciatica	4686	764	Sciatica											
+1415	6	ear/vestibular disorder	4269	386	Vertiginous syndromes and other disorders of vestibular system											
+1502	6	appendicitis	4269	540.1	Appendicitis											
+1386	6	allergy or anaphylactic reaction to drug	4257	979	Adverse drug events and drug allergies											
+1436	6	headaches (not migraine)	4244	339	Other headache syndromes											
+1311	6	spine arthritis/spondylitis	4239	715.2	Ankylosing spondylitis											
+1349	6	ovarian cyst or cysts	4124	628	Ovarian cyst											
+1093	6	pulmonary embolism  dvt	4117	415.11	"Pulmonary embolism and infarction, acute"											
+1402	6	endometriosis	4057	615	Endometriosis											
+1264	6	epilepsy	4054	345	"Epilepsy, recurrent seizures, convulsions"											
+1538	6	arthritis (nos)	3932	740.1	Osteoarthritis; localized	most likely in older population of UKBB										
+1297	6	muscle/soft tissue problem	3899	729	Other disorders of soft tissues	best guess										
+1242	6	eye/eyelid problem	3884	374	Other disorders of eyelids	most likely										
+1225	6	hyperthyroidism/thyrotoxicosis	3859	242	Thyrotoxicosis with or without goiter											
+1197	6	kidney stone/ureter stone/bladder stone	3842	594	Urinary calculus											
+1142	6	gastric/stomach ulcers	3655	531	Peptic ulcer (excl. esophageal)											
+1471	6	atrial fibrillation	3653	427.2	Atrial fibrillation and flutter											
+1412	6	bronchitis	3640	483	Acute bronchitis and bronchiolitis											
+1406	6	muscle or soft tissue injuries	3565	870	Open wounds of head; neck; and trunk	best guess										
+1374	6	allergy/hypersensitivity/anaphylaxis	3552	949	"Allergies, other"	assume here that most experiences an allergic reaction of some sorts and only few went into shock = 946 Anaphylactic shock NOS										
+1478	6	cervical spondylosis	3447	721	Spondylosis and allied disorders											
+1598	6	tonsiltis	3442	474	Acute and chronic tonsillitis											
+1078	6	heart valve problem/heart murmur	3381	395	Heart valve disorders											
+1223	6	type 2 diabetes	3376	250.2	Type 2 diabetes											
+1416	6	chronic sinusitis	3103	475	Chronic sinusitis											
+1467	6	other joint disorder	3065	716	Other arthropathies											
+1330	6	iron deficiency anaemia	3030	280	Iron deficiency anemias											
+1534	6	back pain	2962	760	Back pain											
+1201	6	bladder problem (not cancer)	2946	596	Other disorders of bladder	closest										
+1353	6	vaginal prolapse/uterine prolapse	2696	618.2	Uterine/Uterovaginal prolapse											
+1077	6	heart arrhythmia	2663	427.5	Arrhythmia (cardiac) NOS											
+1463	6	ulcerative colitis	2596	555.2	Ulcerative colitis											
+1440	6	tuberculosis (tb)	2551	10	Tuberculosis											
+1295	6	joint disorder	2373	741	Symptoms and disorders of the joints											
+1072	6	essential hypertension	2359	401.1	Essential hypertension											
+1196	6	urinary tract infection/kidney infection	2313	591	Urinary tract infection											
+1385	6	allergy or anaphylactic reaction to food	2241	930	Allergic reaction to food											
+1482	6	chronic fatigue syndrome	2171	798.1	Chronic fatigue syndrome											
+1417	6	nasal polyps	2090	471	Nasal polyps											
+1405	6	other renal/kidney problem	2068	586	Other disorders of the kidney and ureters											
+1456	6	malabsorption/coeliac disease	2050	557	Intestinal malabsorption (non-celiac)											
+1457	6	duodenal ulcer	2031	531.3	Duodenal ulcer											
+1513	6	inguinal hernia	2023	550.1	Inguinal hernia											
+1651	6	fracture lower leg / ankle	2023	800	Fracture of lower limb											
+1434	6	other neurological problem	2021	349	Other and unspecified disorders of the nervous system	best guess										
+1247	6	meningitis	2002	320	Meningitis											
+1073	6	gestational hypertension/pre-eclampsia	1980	642.1	Preeclampsia and eclampsia											
+1571	6	chickenpox	1943	79.1	Varicella infection											
+1413	6	nasal/sinus disorder	1879													
+1367	6	breast cysts	1874													
+1537	6	joint pain	1808													
+1494	6	varicose veins	1799	454	Varicose veins											
+1202	6	urinary frequency / incontinence	1786	599.4	Urinary incontinence											
+1082	6	transient ischaemic attack (tia)	1779	433.31	Transient cerebral ischemia											
+1261	6	multiple sclerosis	1777	335	Multiple sclerosis											
+1112	6	chronic obstructive airways disease/copd	1665													
+1266	6	head injury	1656													
+1281	6	retinal detachment	1647	361	Retinal detachments and defects											
+1066	6	heart/cardiac problem	1633													
+1190	6	peritonitis	1619	567	Peritonitis and retroperitoneal infections											
+1123	6	sleep apnoea	1615	327.3	Sleep apnea											
+1568	6	measles / morbillivirus	1615													
+1125	6	pleurisy	1612	507	Pleurisy; pleural effusion											
+1331	6	pernicious anaemia	1518	281.11	Pernicious anemia											
+1352	6	uterine polyps	1487	622.1	Polyp of corpus uteri											
+1666	6	benign breast lump	1481	610	Benign mammary dysplasias											
+1462	6	crohns disease	1476													
+1460	6	rectal or colon adenoma/polyps	1474													
+1139	6	oesophagitis/barretts oesophagus	1470	530.13	Barrett's esophagus											
+1257	6	trapped nerve/compressed nerve	1449													
+1479	6	rheumatic fever	1441	41.21	Rheumatic fever / chorea											
+1505	6	haemorrhoids / piles	1425													
+1291	6	mania/bipolar disorder/manic depression	1416	296.1	Bipolar											
+1442	6	helicobacter pylori	1415	41.8	H. pylori											
+1421	6	meniere's disease	1377	386.1	Meniere's disease											
+1313	6	ankylosing spondylitis	1369	715.2	Ankylosing spondylitis											
+1556	6	menorrhagia (unknown cause)	1340													
+1224	6	thyroid problem (not cancer)	1317													
+1459	6	colitis/not crohns or ulcerative colitis	1277	555	Inflammatory bowel disease and other gastroenteritis and colitis											
+1617	6	osteopenia	1238	743	"Osteoporosis, osteopenia and pathological fracture"											
+1276	6	diabetic eye disease	1171													
+1126	6	spontaneous pneumothorax/recurrent pneumothorax	1141	506	Empyema and pneumothorax											
+1114	6	bronchiectasis	1135	496.3	Bronchiectasis											
+1637	6	fracture wrist / colles fracture	1126													
+1293	6	bone disorder	1119													
+1156	6	infective/viral hepatitis	1111	70	Viral hepatitis											
+1135	6	stomach disorder	1079													
+1165	6	pancreatitis	1058	577	Diseases of pancreas											
+1634	6	fracture forearm / wrist	1051													
+1569	6	mumps / epidemic parotitis	1042													
+1633	6	fracture upper arm / humerus / elbow	1026													
+1559	6	miscarriage	1004	634	Miscarriage; stillbirth											
+1371	6	sarcoidosis	1003	697	Sarcoidosis											
+1377	6	polymyalgia rheumatica	998	717	Polymyalgia Rheumatica											
+1477	6	psoriatic arthropathy	938	696.42	Psoriatic arthropathy											
+1067	6	peripheral vascular disease	917	443	Peripheral vascular disease											
+1446	6	anaemia	915													
+1533	6	disc degeneration	878													
+1136	6	liver/biliary/pancreas problem	864													
+1516	6	bph / benign prostatic hypertrophy	861													
+1262	6	parkinsons disease	857	332	Parkinson's disease											
+1207	6	prostate problem (not cancer)	844													
+1541	6	carpal tunnel syndrome	843													
+1597	6	tinnitus / tiniitis	841	389.4	Tinnitus											
+1348	6	gynaecological disorder (not cancer)	839													
+1117	6	other respiratory problems	834													
+1275	6	retinal problem	809													
+1143	6	gastritis/gastric erosions	808													
+1454	6	blistering/desquamating skin disorder	792													
+1267	6	spinal injury	762													
+1660	6	rosacea	761	695.3	Rosacea											
+1485	6	irregular heart beat	760													
+1529	6	dry eyes	756	375.1	Dry eyes											
+1308	6	osteomyelitis	752	710.1	Osteomyelitis											
+1408	6	alcohol dependency	746	317	Alcohol-related disorders											
+1542	6	fibromyalgia	742													
+1288	6	nervous breakdown	726													
+1663	6	abnormal smear (cervix)	701	792	Abnormal Papanicolaou smear of cervix and cervical HPV											
+1214	6	testicular problems (not cancer)	674													
+1279	6	eye trauma	668													
+1255	6	peripheral neuropathy	661	356	Hereditary and idiopathic peripheral neuropathy											
+1441	6	malaria	658													
+1510	6	dyspepsia / indigestion	653	536.8	Dyspepsia and other specified disorders of function of stomach											
+1381	6	systemic lupus erythematosis/sle	644	695.42	Systemic lupus erythematosus											
+1628	6	fracture nose	635													
+1350	6	polycystic ovaries/polycystic ovarian syndrome	623	256.4	Polycystic ovaries											
+1289	6	schizophrenia	618	295	Schizophrenia and other psychotic disorders											
+1567	6	infectious mononucleosis / glandular fever / epstein barr virus (ebv)	588	79.2	Infectious mononucleosis											
+1652	6	fracture tibia	586													
+1500	6	vertigo	585	386.9	Dizziness and giddiness (Light-headedness and vertigo)											
+1137	6	other abdominal problem	580													
+1570	6	rubella / german measles	579													
+1614	6	stress	561													
+1403	6	female infertility	555	626.8	"Infertility, female"											
+1677	6	scarlet fever / scarlatina	550													
+1155	6	hepatitis	542	70.9	Hepatitis	Some viruses cause hepatitis but not all hepatitises are caused by viruses										
+1631	6	fracture clavicle / collar bone	533													
+1561	6	raynaud's phenomenon/disease	520	443.1	Raynaud's syndrome											
+1400	6	peptic ulcer	518	531	Peptic ulcer (excl. esophageal)											
+1572	6	whooping cough / pertussis	510													
+1653	6	fracture fibula	510													
+1157	6	non-infective hepatitis	506													
+1610	6	thyroid goitre	504													
+1639	6	fracture finger	499													
+1250	6	bell's palsy/facial nerve palsy	497													
+1616	6	insomnia	497	327.4	Insomnia											
+1163	6	cholecystitis	491	574	Cholelithiasis and cholecystitis											
+1251	6	spinal cord disorder	491													
+1243	6	psychological/psychiatric problem	489													
+1274	6	eye infection	477													
+1439	6	hiv/aids	472	71	Human immunodeficiency virus [HIV] disease											
+1382	6	sjogren's syndrome/sicca syndrome	469	709.2	Sicca syndrome											
+1644	6	fracture rib	469													
+1086	6	subarachnoid haemorrhage	457	818.2	Subarachnoid hemorrhage (injury)											
+1445	6	clotting disorder/excessive bleeding	457													
+1414	6	throat or larynx disorder	441													
+1545	6	neck problem/injury	439													
+1222	6	type 1 diabetes	438	250.1	Type 1 diabetes											
+1407	6	burns	436	1000	Burns											
+1532	6	disc problem	436													
+1451	6	hereditary/genetic haematological disorder	432													
+1512	6	umbilical hernia	431	550.4	Umbilical hernia											
+1508	6	jaundice (unknown cause)	421	573.5	Jaundice (not of newborn)											
+1327	6	low platelets/platelet disorder	414													
+1558	6	ectopic pregnancy	413	634.3	Ectopic pregnancy											
+1573	6	shingles	411													
+1079	6	cardiomyopathy	408	425	Cardiomyopathy											
+1665	6	menopausal symptoms / menopause	407	627	Menopausal and postmenopausal disorders											
+1599	6	constipation	403	563	Constipation											
+1194	6	renal failure not requiring dialysis	398	585	Renal failure											
+1514	6	cystitis	395	592.1	Cystitis											
+1531	6	post-natal depression	378													
+1470	6	anorexia/bulimia/other eating disorder	370	305.2	Eating disorder											
+1087	6	leg claudication/ intermittent claudication	369													
+1554	6	cervical intra-epithelial neoplasia (cin) / precancerous cells cervix	367	180.3	Cervical intraepithelial neoplasia [CIN] [Cervical dysplasia]											
+1158	6	liver failure/cirrhosis	355	571	Chronic liver disease and cirrhosis											
+1526	6	polio / poliomyelitis	355	324	Other CNS infection and poliomyelitis											
+1469	6	post-traumatic stress disorder	346	300.9	Posttraumatic stress disorder											
+1646	6	fracture vertebra / crush fracture / vertebral collapse	343													
+1427	6	polycystic kidney	342													
+1626	6	fracture skull / head	341													
+1238	6	pituitary adenoma/tumour	337													
+1425	6	cerebral aneurysm	335	433.5	Cerebral aneurysm											
+1535	6	scoliosis	330	737.3	Kyphoscoliosis and scoliosis											
+1511	6	abdominal hernia	325	550	Abdominal hernia											
+1664	6	dysmenorrhoea / dysmenorrhea	324	626.2	Dysmenorrhea											
+1648	6	fracture neck of femur / hip	322													
+1544	6	dupuytren's contracture	320	728.71	Contracture of palmar fascia [Dupuytren's disease]											
+1200	6	ureteric obstruction/hydronephrosis	317	595	Hydronephrosis											
+1656	6	fracture toe	317													
+1076	6	heart failure/pulmonary odema	315													
+1563	6	urticaria	314	947	Urticaria											
+1246	6	encephalitis	312	323	Encephalitis											
+1625	6	cellulitis	309													
+1650	6	fracture patella / knee	309													
+1518	6	erectile dysfunction / impotence	305	605	Erectile dysfunction [ED]											
+1548	6	acne/acne vulgaris	298	706.1	Acne											
+1657	6	septicaemia / sepsis	297	994	Sepsis and SIRS											
+1528	6	macular degeneration	295	362.2	Degeneration of macula and posterior pole of retina											
+1134	6	oesophageal disorder	293													
+1623	6	tennis elbow / lateral epicondylitis	293													
+1654	6	fracture foot	291													
+1649	6	fracture shaft of femur	287													
+1221	6	gestational diabetes	286													
+1364	6	breast disease (not cancer)	284													
+1394	6	peripheral nerve injury	284													
+1619	6	tendonitis / tendinitis / tenosynovitis	281													
+1668	6	allergy to house dust mite	281													
+1249	6	cranial nerve problem/palsy	278													
+1193	6	renal failure requiring dialysis	267	585.31	Renal dialysis											
+1161	6	gall bladder disease	266													
+1080	6	pericardial problem	263													
+1495	6	lymphoedema	262													
+1632	6	fracture shoulder / scapula	262													
+1254	6	peripheral nerve disorder	255													
+1428	6	thyroiditis	250	245	Thyroiditis											
+1638	6	fracture hand	248													
+1487	6	svt / supraventricular tachycardia	243	427.11	Paroxysmal supraventricular tachycardia											
+1504	6	anal fissure	243													
+1420	6	otosclerosis	239													
+1499	6	labyrinthitis	239	386.3	Labyrinthitis											
+1192	6	renal/kidney failure	232	585	Renal failure											
+1282	6	retinal artery/vein occlusion	222													
+1290	6	deliberate self-harm/suicide attempt	220	297.2	Suicide or self-inflicted injury											
+1530	6	iritis	219													
+1635	6	fracture radius	219													
+1523	6	trigemminal neuralgia	213	352.1	Trigeminal nerve disorders [CN5]											
+1627	6	fracture jaw	211													
+1497	6	pneumothorax	208	506	Empyema and pneumothorax											
+1679	6	undescended testicle	208													
+1372	6	vasculitis	201													
+1419	6	vocal cord polyp	200													
+1438	6	polycythaemia vera	199	200.1	Polycythemia vera											
+1647	6	fracture pelvis	198													
+1373	6	connective tissue disorder	196	709	Diffuse diseases of connective tissue											
+1256	6	acute infective polyneuritis/guillain-barre syndrome	195													
+1083	6	subdural haemorrhage/haematoma	194	430.3	Subdural hemorrhage											
+1120	6	asbestosis	194													
+1472	6	emphysema	191	496.1	Emphysema											
+1549	6	lichen planus	191	695.7	Prurigo and Lichen											
+1560	6	breast fibroadenoma	191	610.2	Fibroadenosis of breast											
+1602	6	bowel / intestinal obstruction	191													
+1562	6	food intolerance	190													
+1461	6	inflammatory bowel disease	187	555	Inflammatory bowel disease and other gastroenteritis and colitis											
+1575	6	herpes simplex	186	54	Herpes simplex											
+1578	6	hepatitis a	186	70.1	Viral hepatitis A											
+1234	6	adrenocortical insufficiency/addison's disease	184													
+1629	6	fracture face / orbit / eye socket	184													
+1517	6	prostatitis	183	601.1	Prostatitis											
+1540	6	plantar fascitis	181													
+1430	6	hypopituitarism	180													
+1191	6	gastrointestinal bleeding	177													
+1555	6	cervical polyps	177													
+1258	6	chronic/degenerative neurological problem	174													
+1322	6	myositis/myopathy	174	359.2	Myopathy	"agree, other option Myalgia and myositis unspecified 770"										
+1655	6	fracture metatarsal	172													
+1455	6	chronic skin ulcers	166													
+1229	6	parathyroid gland problem (not cancer)	164													
+1340	6	thalassaemia	164													
+1384	6	scleroderma/systemic sclerosis	163	709.3	Systemic sclerosis											
+1603	6	rectal prolapse	162													
+1661	6	vitiligo	162	694	Dyschromia and Vitiligo											
+1433	6	cerebral palsy	160	343	Infantile cerebral palsy											
+1613	6	blepharitis / eyelid infection	159													
+1366	6	fibrocystic disease	158													
+1115	6	interstitial lung disease	157													
+1636	6	fracture ulna	156													
+1435	6	optic neuritis	155	377.3	Optic neuritis/neuropathy											
+1491	6	brain haemorrhage	155	430	Intracranial hemorrhage											
+1468	6	diabetic neuropathy/ulcers	153													
+1550	6	lichen sclerosis	153													
+1683	6	benign neuroma	148													
+1536	6	spinal stenosis	147	720	Spinal stenosis											
+1585	6	mitral regurgitation / incompetence	140													
+1525	6	benign / essential tremor	139	333.1	Essential tremor											
+1608	6	nephritis	138	580	Nephritis; nephrosis; renal sclerosis											
+1437	6	myasthenia gravis	137	358.1	Myasthenia gravis											
+1448	6	neutropenia/lymphopenia	134													
+1501	6	pyloric stenosis	133													
+1509	6	gastroenteritis/dysentry	133	555	Inflammatory bowel disease and other gastroenteritis and colitis											
+1580	6	hepatitis c	130	70.3	Viral hepatitis C											
+1605	6	femoral hernia	130	550.3	Femoral hernia											
+1620	6	bursitis	128	726.3	Bursitis											
+1667	6	alopecia / hair loss	126	704.1	Alopecia											
+1640	6	fracture thumb	125													
+1263	6	dementia/alzheimers/cognitive impairment	124	290.1	Dementias											
+1240	6	neurological injury/trauma	122	292	Neurological disorders											
+1121	6	pulmonary fibrosis	119	502	Postinflammatory pulmonary fibrosis											
+1659	6	meningioma / benign meningeal tumour	118													
+1230	6	parathyroid hyperplasia/adenoma	117													
+1589	6	pericarditis	113	420.2	Pericarditis											
+1579	6	hepatitis b	109	70.2	Viral hepatitis B											
+1228	6	thyroid radioablation therapy	106													
+1615	6	obsessive compulsive disorder (ocd)	106	300.3	Obsessive-compulsive disorders											
+1140	6	oesophageal stricture	105	530.3	Stricture and stenosis of esophagus											
+1522	6	grave's disease	104	242.1	Graves' disease											
+1503	6	anal problem	102													
+1426	6	myocarditis	101	420.1	Myocarditis											
+1587	6	aortic regurgitation / incompetence	99													
+1594	6	respiratory infection	99													
+1376	6	giant cell/temporal arteritis	97	446.5	Giant cell arteritis											
+1662	6	cervical erosion	96													
+1122	6	fibrosing alveolitis/unspecified alveolitis	95	504.1	Idiopathic fibrosing alveolitis											
+1606	6	incisional hernia	95	550.6	Incisional hernia											
+1378	6	wegners granulmatosis	94													
+1068	6	venous thromboembolic disease	93													
+1588	6	hypertrophic cardiomyopathy (hcm / hocm)	93	425	Cardiomyopathy											
+1618	6	soft tissue inflammation	91													
+1483	6	atrial flutter	90	427.22	Atrial flutter											
+1488	6	mitral valve prolapse	90													
+1551	6	ovarian problem	90													
+1515	6	pyelonephritis	89	590	Pyelonephritis											
+1237	6	disorder or pituitary gland	88													
+1611	6	hyperparathyroidism	88	252.1	Hyperparathyroidism											
+1669	6	contact dermatitis	88													
+1490	6	aortic stenosis	87													
+1492	6	aortic aneurysm	87	442.1	Aortic aneurysm											
+1507	6	haemochromatosis	86	275.11	Hereditary hemochromatosis											
+1506	6	primary biliary cirrhosis	84	571.6	Primary biliary cirrhosis											
+1484	6	wolff parkinson white / wpw syndrome	79													
+1210	6	scrotal problem (not cancer)	75													
+1431	6	hyperprolactinaemia	75													
+1552	6	uterine problem	75													
+1630	6	fracture neck / cervical fracture	75													
+1557	6	pelvic inflammatory disease/ pid	74	614.3	Pelvic inflammatory disease (PID)											
+1245	6	brain abscess/intracranial abscess	73													
+1397	6	other demyelinating disease (not multiple sclerosis)	73	341	Other demyelinating diseases of central nervous system											
+1604	6	alcoholic liver disease / alcoholic cirrhosis	73													
+1339	6	sickle cell disease	72													
+1524	6	spina bifida	72	752.11	Spina bifida											
+1595	6	pleural plaques (not known asbestosis)	72													
+1670	6	allergy to elastoplast	71													
+1449	6	myeloproliferative disorder	70	200	Myeloproliferative disease											
+1519	6	kidney nephropathy	70													
+1239	6	cushings syndrome	68	255.11	Cushing's syndrome											
+1328	6	haemophilia	67													
+1160	6	bile duct obstruction/ascending cholangitis	66	575	Other biliary tract disease											
+1310	6	paget's disease	66	731.1	Osteitis deformans [Paget's disease of bone]											
+1429	6	acromegaly	66	253.11	Acromegaly and gigantism											
+1088	6	arterial embolism	65	444	Arterial embolism and thrombosis											
+1481	6	polymyositis	65	709.4	Polymyositis											
+1566	6	mrsa / methicillin resistant staphylococcus aureus	65	480.13	MRSA pneumonia											
+1584	6	mitral valve disease	65	394.2	Mitral valve disease											
+1600	6	bowel / intestinal perforation	65													
+1345	6	pemphigoid/pemphigus	64	695.22	Pemphigus and pemphigoid											
+1624	6	housemaid's knee (prepatellar bursitis)	62													
+1574	6	diphtheria	59													
+1681	6	hydatiform mole	58													
+1252	6	paraplegia	57													
+1450	6	monoclonal gammopathy/not myeloma	57													
+1586	6	aortic valve disease	57	394.3	Aortic valve disease											
+1259	6	motor neurone disease	56													
+1609	6	glomerulnephritis	56													
+1244	6	infection of nervous system	54													
+1260	6	myasthenia gravis	54	358.1	Myasthenia gravis											
+1410	6	other substance abuse/dependency	53													
+1141	6	oesophageal varicies	51													
+1164	6	pancreatic disease	51													
+1546	6	essential thrombocytosis	50													
+1475	6	sclerosing cholangitis	49	575.1	Cholangitis	"closest, sclerosing indicates transformation into scar tissue"										
+1409	6	opioid dependency	48													
+1411	6	lung abscess	48	480.5	Bronchopneumonia and lung abscess											
+1418	6	chronic laryngitis	46	473.1	Chronic laryngitis											
+1232	6	disorder of adrenal gland	45													
+1235	6	hyperaldosteronism/conn's syndrome	44	255.12	Hyperaldosteronism											
+1344	6	stevens johnson syndrome	44													
+1577	6	typhoid fever	44													
+1680	6	bowen's disease	44													
+1443	6	schistosomiasis/bilharzia	42													
+1671	6	allergy to nickel	42													
+1553	6	cervical problem	41													
+1233	6	adrenal tumour	40													
+1527	6	retinitis pigmentosa	40													
+1248	6	spinal abscess	39													
+1489	6	mitral stenosis	39													
+1593	6	varicose ulcer	39													
+1596	6	pleural effusion	39	507	Pleurisy; pleural effusion											
+1404	6	male infertility	36	609	Male infertility and abnormal spermatozoa											
+1332	6	aplastic anaemia	35	284	Aplastic anemia											
+1645	6	fracture sternum	34													
+1493	6	other venous/lymphatic disease	31													
+1480	6	dermatomyositis	29	709.5	Dermatomyositis											
+1124	6	respiratory failure	27	509	"Respiratory failure, insufficiency, arrest"											
+1380	6	polyartertis nodosa	27													
+1564	6	antiphospholipid syndrome	27													
+1236	6	phaeochromocytoma	26													
+1576	6	dengue fever	25													
+1159	6	bile duct disease	23													
+1432	6	carcinoid syndrome/tumour	22	259.2	Carcinoid syndrome											
+1486	6	sick sinus syndrome	20													
+1498	6	empyema	20	506	Empyema and pneumothorax											
+1607	6	diabetic nephropathy	20													
+1520	6	iga nephropathy	19													
+1601	6	bowel / intestinal infarction	19													
+1675	6	giardia / giardiasis	18													
+1521	6	diabetes insipidus	17	253.3	Diabetes insipidus											
+1583	6	ischaemic stroke	17													
+1496	6	alpha-1 antitrypsin deficiency	14	270.34	Alpha-1-antitrypsin deficiency											
+1591	6	aortic aneurysm rupture	13	442.1	Aortic aneurysm											
+1592	6	aortic dissection	13													
+1676	6	yellow fever	11													
+1447	6	pancytopenia	10	284.1	Pancytopenia											
+1621	6	synovitis	10	727.1	Synovitis and tenosynovitis											
+1379	6	microscopic polyarteritis	9													
+1590	6	pericardial effusion	8													
+1658	6	myelofibrosis	7	289.1	Myelofibrosis											
+1678	6	chlamydia	6	90.3	Venereal diseases due to Chlamydia trachomatis											
+1383	6	dermatopolymyositis	5													
+1622	6	epicondylitis	4													
+1674	6	varicella zoster virus	4	79.1	Varicella infection											
+1582	6	hepatitis e	3	70	Viral hepatitis											
+1682	6	benign insulinoma	3													
+1581	6	hepatitis d		70	Viral hepatitis											

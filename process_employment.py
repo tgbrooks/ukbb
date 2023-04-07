@@ -24,7 +24,7 @@ from fields_of_interest import employment_fields
 
 # This file contain the information describing the fields in the UKBB
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-field_data = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
+field_data = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col=2)
 
 num_entries = field_data.loc[employment_fields['year_job_started']].Array
 

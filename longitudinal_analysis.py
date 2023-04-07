@@ -21,7 +21,7 @@ import util
 DPI = 300
 FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
-RESULTS_DIR = pathlib.Path("../results/longitudinal/")
+DEFAULT_RESULTS_DIR = pathlib.Path("../results/longitudinal/")
 
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
@@ -273,7 +273,7 @@ def generate_results_table():
     #TODO: include the case counts
 
     import openpyxl
-    workbook = openpyxl.load_workbook("../longitudinal_study_table_header.xlsx")
+    workbook = openpyxl.load_workbook("metadata/longitudinal_study_table_header.xlsx")
     workbook.save(results_file)
     with pandas.ExcelWriter(results_file, mode="a") as writer:
         ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
@@ -608,12 +608,14 @@ def repeat_measurements():
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description=f"run phewas longidutinal pipeline on actigraphy\nOutputs to {RESULTS_DIR}/cohort#/")
+    parser = argparse.ArgumentParser(description=f"run phewas longidutinal pipeline on actigraphy")
     parser.add_argument("--cohort", help="Cohort number to load data for", type = int)
     parser.add_argument("--force_recompute", help="Whether to force a rerun of the statistical tests, even if already computed", default=False, action="store_const", const=True)
     parser.add_argument("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
     parser.add_argument("--no_plots", help="Disable running plots, useful for just loading the data", default=False, action="store_const", const=True)
     parser.add_argument("--no_display", help="Disable visual output, uses non-graphical backend such as when running on a server", default=False, action="store_const", const=True)
+    parser.add_argument("--input_directory", help="Directory containing all the input data", default="../data", type=str)
+    parser.add_argument("--output_directory", help="Directory to write out results to", default=DEFAULT_RESULTS_DIR, type=str)
 
     args = parser.parse_args()
 
@@ -625,12 +627,15 @@ if __name__ == '__main__':
 
     COHORT = args.cohort
     RECOMPUTE = args.force_recompute
+    RESULTS_DIR = pathlib.Path(args.output_directory)
     RESULTS_DIR.mkdir(exist_ok=True)
     OUTDIR = RESULTS_DIR / f"cohort{COHORT}"
     OUTDIR.mkdir(exist_ok=True)
+    INPUTDIR = pathlib.Path(args.input_directory)
+    assert INPUTDIR.is_dir(), f"Input directory {args.input_directory} must be directory"
 
     #### Load and preprocess the underlying data
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT, INPUTDIR)
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
 
     # Whether subjects have complete data
@@ -639,7 +644,7 @@ if __name__ == '__main__':
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     # Load case status
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date, OUTDIR, RECOMPUTE)
+    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date, INPUTDIR, OUTDIR, RECOMPUTE)
     n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
     last_diagnosis = case_status.first_date.max()

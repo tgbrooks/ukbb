@@ -40,8 +40,8 @@ except KeyError:
 # they are downloaded from:
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Codings_Showcase.csv
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-codings = pandas.read_csv("../Codings_Showcase.csv", index_col=0)
-fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
+codings = pandas.read_csv("metadata/Codings_Showcase.csv", index_col=0)
+fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col=2)
 
 def is_of_interest(field_name):
     # Find only columns that we care about, for the sake of memory

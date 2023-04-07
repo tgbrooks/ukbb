@@ -7,7 +7,7 @@ import pathlib
 # will be excluded from analysis as neither control nor case
 LAG_TIME = 365.25 * pandas.to_timedelta("1D")
 
-def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, RECOMPUTE=False):
+def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, OUTDIR, RECOMPUTE=False):
     '''
     Loads the case/exclude/control status for subjects in with ID in 'selected_ids'
     and whose start of actigraphy measurement date is given in the Series actigraphy_start_date
@@ -26,11 +26,11 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
     # Downloaded from https://phewascatalog.org/phecodes_icd10
     # Has columns:
     # ICD10 | PHECODE | Exl. Phecodes | Excl. Phenotypes
-    phecode_info = pandas.read_csv("../phecode_definitions1.2.csv", dtype=dict(phecode=str)).set_index('phecode')
+    phecode_info = pandas.read_csv("metadata/phecode_definitions1.2.csv", dtype=dict(phecode=str)).set_index('phecode')
     phecode_info.index = phecode_info.index.str.lstrip('0')
     phecode_info['exclude_start'] = [x.split('-')[0].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
     phecode_info['exclude_end'] = [x.split('-')[1].lstrip('0') if x==x else x for x in phecode_info.phecode_exclude_range]
-    phecode_map = pandas.read_csv("../Phecode_map_v1_2_icd10_beta.csv", dtype=dict(PHECODE=str))
+    phecode_map = pandas.read_csv("metadata/Phecode_map_v1_2_icd10_beta.csv", dtype=dict(PHECODE=str))
     phecode_map.set_index(phecode_map.ICD10.str.replace(".","", regex=False), inplace=True) # Remove '.' to match UKBB-style ICD10 codes
 
     #  Determine the set of phecodes to exclude from 'controls' for a given diagnosis
@@ -60,7 +60,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
     phecode_exclusions = pandas.DataFrame(phecode_exclusions)
 
     # v1.2 Downloaded from https://phewascatalog.org/phecodes
-    phecode_map_icd9 = pandas.read_csv("../phecode_icd9_map_unrolled.csv", dtype=dict(phecode=str))
+    phecode_map_icd9 = pandas.read_csv("metadata/phecode_icd9_map_unrolled.csv", dtype=dict(phecode=str))
     phecode_map_icd9.rename(columns={"icd9":"ICD9", "phecode":"PHECODE"}, inplace=True)
     phecode_map_icd9.set_index( phecode_map_icd9['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
     phecode_map_icd9['PHECODE'] = phecode_map_icd9.PHECODE.str.lstrip('0')
@@ -113,29 +113,29 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, OUTDIR, REC
     phecode_map_icd9_extended.set_index( phecode_map_icd9_extended['ICD9'].str.replace(".","", regex=False), inplace=True) # Remove dots to match UKBB-style ICD9s
 
     ##### Load Patient Data
-    icd10_entries_raw = pandas.read_csv("../processed/ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
+    icd10_entries_raw = pandas.read_csv(INPUTDIR/"ukbb_icd10_entries.txt", sep="\t", parse_dates=["first_date"])
     # Select our cohort from all the entries
     icd10_entries_raw = icd10_entries_raw[icd10_entries_raw.ID.isin(selected_ids)].copy()
     icd10_entries_raw.rename(columns={"ICD10_code": "ICD10"}, inplace=True)
     icd10_entries = icd10_entries_raw.join(phecode_map_extended.PHECODE, on="ICD10")
 
     ### and the ICD9 data
-    icd9_entries = pandas.read_csv("../processed/ukbb_icd9_entries.txt", sep="\t")
+    icd9_entries = pandas.read_csv(INPUTDIR/"ukbb_icd9_entries.txt", sep="\t")
     icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
     icd9_entries = icd9_entries.join(phecode_map_icd9_extended.PHECODE, on="ICD9")
     icd9_entries = icd9_entries[icd9_entries.ID.isin(selected_ids)]
 
     # Self-reported conditions from the interview stage of the UK Biobank
-    self_reported = pandas.read_csv("../processed/ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
-    data_fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col="FieldID")
-    codings = pandas.read_csv("../Codings_Showcase.csv", dtype={"Coding": int})
+    self_reported = pandas.read_csv(INPUTDIR/"ukbb_self_reported_conditions.txt", sep="\t", dtype={"condition_code":int})
+    data_fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col="FieldID")
+    codings = pandas.read_csv("metadata/Codings_Showcase.csv", dtype={"Coding": int})
     condition_code_to_meaning = codings[codings.Coding  == data_fields.loc[20002].Coding].drop_duplicates(subset=["Value"], keep=False).set_index("Value")
     self_reported["condition"] = self_reported.condition_code.astype(str).map(condition_code_to_meaning.Meaning)
     self_reported = self_reported[self_reported.ID.isin(selected_ids)]
 
     # Convert self-reported conditions to phecodes
     # Load manaully mapped self-reports to phecodes
-    self_report_phecode_map = pandas.read_csv("../self_report_conditions_meanings.txt", sep="\t", dtype={"PheCODE": str})
+    self_report_phecode_map = pandas.read_csv("metadata/self_report_conditions_meanings.txt", sep="\t", dtype={"PheCODE": str})
     self_report_phecode_map_extended = pandas.concat([
         self_report_phecode_map[['Value', 'PheCODE', 'Meaning']],
         pandas.merge(

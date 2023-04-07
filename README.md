@@ -13,3 +13,19 @@ Phenotypes were associated via the [PheCODE](https://phewascatalog.org/phecodes)
 In-patient hospital records were used to determine diagnoses that occured after the actigraphy recording.
 A Cox proportional hazards model was then used to determine the associations of the temperature amplitude with these diagnoses.
 Individuals with low temperature amplitude were more likely to develop diseases across a wide range of conditions.
+
+## Example Data
+
+The repository contains example data in the `synthetic_data` folder.
+This is a small, randomized dataset appropriate to demonstrate the code and particularly statistical and figure/table generation features without any real patient information.
+To run the example data run after cloning this repository using python 3.10 and R 4.2:
+
+``` shell
+python -m venv venv
+source venv/bin/activate #on Windows use instead: venv\Scripts\activate
+pip install -r requirements.txt
+python longitudinal_analysis.py --cohort 0 --input_directory synthetic_data/ --output_directory synthetic_results/
+```
+
+The output files are then in the `synthetic_results` directory.
+Installation of dependencies may take a few minutes, and the main computation should take a minute or two.

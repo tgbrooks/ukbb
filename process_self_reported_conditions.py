@@ -26,8 +26,8 @@ import pandas
 # they are downloaded from:
 # http://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=6
 # http://biobank.ndph.ox.ac.uk/~bbdatan/Data_Dictionary_Showcase.csv 
-#codings = pandas.read_csv("../self_reported_conditions_coding.txt", index_col=0) # NOTE: not currently used but handy for analysis
-fields = pandas.read_csv("../Data_Dictionary_Showcase.csv", index_col=2)
+#codings = pandas.read_csv("metadata/self_reported_conditions_coding.txt", index_col=0) # NOTE: not currently used but handy for analysis
+fields = pandas.read_csv("metadata/Data_Dictionary_Showcase.csv", index_col=2)
 
 num_entries = fields.loc[SELF_REPORTED_CONDITION_FIELD].Array
 

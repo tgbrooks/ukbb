@@ -6,3 +6,6 @@ venv/
 log
 *ipynb*
 notebooks/*
+synthetic_results/
+misc/
+old/
