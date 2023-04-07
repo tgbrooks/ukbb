@@ -22,7 +22,7 @@ N_CASES = 1000
 # Only one in SEASONAL_RATIO subjects have seasonal repeat data
 SEASONAL_RATIO = 10
 
-OUTDIR = pathlib.Path("../synthetic_data/")
+OUTDIR = pathlib.Path("synthetic_data/")
 OUTDIR.mkdir(exist_ok=True)
 PATIENT_DIR = OUTDIR / "patient_records"
 PATIENT_DIR.mkdir(exist_ok=True)
@@ -67,6 +67,7 @@ activity_columns = [
     'temp_IV',
     'temp_cosinor_rsquared',
     'temp_within_day_SD',
+    'temp_mean_mean',
     'phase',
     'temp_phase',
 ]
