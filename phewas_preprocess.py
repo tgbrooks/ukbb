@@ -367,19 +367,6 @@ def load_data(cohort, input_dir):
 
     return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
     
-def load_diagnoses(data, input_dir):
-    ''' Load phecode information and insert into data '''
-    selected_ids = data.index
-    # Load phecode data
-    phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details = load_phecode(selected_ids, input_dir)
-
-    # Gather phecode diagnosis information for each subject
-    for group in phecode_groups:
-        # Note that those without any ICD10 entries at all should be marked as non-case, hence the fillna()
-        data[group] = data.index.map(phecode_data[group].astype(int)).fillna(0)
-
-    return phecode_data, phecode_groups, phecode_info, phecode_map, icd10_entries, icd10_entries_all, phecode_details
-
 def correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal):
     full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
     good = full_activity.temp_amplitude < MAX_TEMP_AMPLITUDE
