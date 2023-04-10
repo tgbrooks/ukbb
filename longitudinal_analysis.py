@@ -428,13 +428,14 @@ def temperature_calibration_plots():
     full_activity.device_cluster.cat.rename_categories(clust_map.keys(), inplace=True)
     fig, ax = pylab.subplots(figsize=(3,3))
     bins = numpy.linspace(
-        full_activity.temp_amplitude.quantile(0.01),
+        0,
         full_activity.temp_amplitude.quantile(0.99),
         31)
     for cluster, grouping in full_activity.groupby('device_cluster'):
         ax.hist(grouping.temp_amplitude, bins=bins, label="Cluster " + cluster, alpha=0.4, density=True)
     ax.set_xlabel("Temp. amplitude (C)")
     ax.set_ylabel("Density")
+    ax.set_xlim(left=0)
     fig.legend()
     fig.tight_layout()
     fig.savefig(OUTDIR/"FIGS3.temperature_calibration.histogram.png", dpi=300)
