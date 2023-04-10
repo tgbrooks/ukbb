@@ -7,3 +7,4 @@ openpyxl==3.0.9
 matplotlib==3.7.0
 rpy2==3.5.1
 tables==3.7.0
+pingouin==0.5.3
