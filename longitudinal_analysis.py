@@ -627,7 +627,7 @@ if __name__ == '__main__':
     parser.add_argument("--all", help="Whether to run all analyses. Warning: slow.", default=False, action="store_const", const=True)
     parser.add_argument("--no_plots", help="Disable running plots, useful for just loading the data", default=False, action="store_const", const=True)
     parser.add_argument("--no_display", help="Disable visual output, uses non-graphical backend such as when running on a server", default=False, action="store_const", const=True)
-    parser.add_argument("--input_directory", help="Directory containing all the input data", default="../data", type=str)
+    parser.add_argument("--input_directory", help="Directory containing all the input data", default="../processed", type=str)
     parser.add_argument("--output_directory", help="Directory to write out results to", default=DEFAULT_RESULTS_DIR, type=str)
 
     args = parser.parse_args()
