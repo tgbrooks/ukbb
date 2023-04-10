@@ -85,6 +85,16 @@ def load_activity(ukbb, input_dir):
     full_activity.rename(columns={"Unnamed: 0": "run_id"}, inplace=True)
     full_activity['id'] = full_activity.run_id.apply(lambda x: int(x.split('.')[0]))
     full_activity['run'] = full_activity.run_id.apply(lambda x: int(x.split('.')[1]))
+
+    # Compute the QC checks for everyone
+    full_summary = pandas.concat([activity_summary, activity_summary_seasonal])
+    calibrated = full_summary['quality-goodCalibration'].astype(bool)
+    weartime = full_summary['quality-goodWearTime'].astype(bool)
+    no_DST = ~full_summary['quality-daylightSavingsCrossover'].astype(bool)
+    okay = calibrated & weartime & no_DST
+    full_activity['qc_pass'] = full_activity.run_id.astype(float).map(okay)
+
+    # Extract just the first runs
     activity = full_activity[full_activity.run == 0].copy()
     activity.set_index('id', inplace=True)
 
@@ -107,7 +117,9 @@ def load_activity(ukbb, input_dir):
     activity = activity[activity.columns[activity.columns.isin(activity_variables)]]
     print(f"Selected {len(activity.columns)} after discarding those with poor intra-personal variance")
 
-    # drop activity for people who fail basic QC
+    # drop and print activity for people who fail basic QC
+    # Repeated from above for just the first measurements and so that
+    # we can print out each step on its own for the purposes of the flowchart
     calibrated = activity_summary['quality-goodCalibration'].astype(bool)
     weartime = activity_summary['quality-goodWearTime'].astype(bool)
     no_DST = ~activity_summary['quality-daylightSavingsCrossover'].astype(bool)
