@@ -7,6 +7,7 @@ import pandas
 import pylab
 import numpy
 import scipy.stats
+import pingouin
 
 
 import phewas_preprocess
@@ -606,6 +607,17 @@ def repeat_measurements():
     intra_individual = full_activity.groupby("id").twice_corrected_temp_amplitude.std().mean()
     print(f"Intra-individual variability: SD = {intra_individual:0.2f} (C)")
 
+    # ICC
+    selected_act = full_activity.query("run > '0' and qc_pass")
+    num_seasons = selected_act.groupby("id").season.nunique()
+    ICC_table = pingouin.intraclass_corr(
+        data = selected_act[selected_act.id.map(num_seasons) == 4],
+        targets = "id",
+        ratings = "twice_corrected_temp_amplitude",
+        raters = "season",
+        nan_policy = "omit",
+    )
+    print(ICC_table)
 
 if __name__ == '__main__':
     import argparse
