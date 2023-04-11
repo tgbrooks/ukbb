@@ -280,6 +280,20 @@ def load_data(cohort, input_dir):
     data['entry_age'] = (data.actigraphy_start_date - data.birth_year_dt) / YEAR
     data.age_at_death_censored.fillna(data.age_at_death_censored.max(), inplace=True)
 
+    # Bin BMI by the standard thresholds
+    def BMI_type(bmi):
+        if bmi < 18.5:
+            return "underweight"
+        elif bmi < 25:
+            return "healthy weight"
+        elif bmi < 30:
+            return "overweight"
+        elif bmi >= 30:
+            return "obese"
+        else:
+            return float("NaN")
+    data['BMI type'] = data.BMI.map(BMI_type).astype('category').cat.reorder_categories(['underweight', 'healthy weight', 'overweight', 'obese'])
+
     return data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity
     
 def correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal):
