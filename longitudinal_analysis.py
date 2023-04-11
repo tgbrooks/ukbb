@@ -280,7 +280,7 @@ def generate_results_table():
         ptc.sort_values(by="p").to_excel(writer, sheet_name="Overall", index=False)
         predictive_tests_by_sex_cox.sort_values(by="sex_diff_p").to_excel(writer, sheet_name="By Sex", index=False)
         predictive_tests_by_age_cox.to_excel(writer, sheet_name="By Age", index=False)
-        phecode_details.T.to_excel(writer, sheet_name="PheCODEs")
+        phecode_details.to_excel(writer, sheet_name="PheCODEs", index=False)
 
 def temperature_trace_plots(N_IDS=500):
     '''
