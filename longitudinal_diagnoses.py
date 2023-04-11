@@ -241,7 +241,7 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, O
     details_file = pathlib.Path(OUTDIR / "phecode_details.txt")
     if RECOMPUTE or not details_file.exists():
         phecode_groups = list(phecode_info.index)
-        phecode_group_details = {}
+        phecode_group_details = []
         icd10_entries_by_id = icd10_entries_raw.set_index("ID")
         cases_only = case_status.query("case_status == 'case'")
         for group in phecode_groups:
@@ -251,15 +251,16 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, O
             icd10_for_cases = icd10_entries_by_id.loc[case_subjects]
             icd10_counts = icd10_for_cases[icd10_for_cases.ICD10.isin(ICD10_codes_stripped)].ICD10.value_counts()
             case_counts = [icd10_counts.get(icd10,default=0) for icd10 in ICD10_codes_stripped]
-            phecode_group_details[group] = {
+            phecode_group_details.append({
+                "PheCODE": group,
                 "Meaning": phecode_info.phenotype.loc[group],
                 "Category": phecode_info.category.loc[group],
-                "phecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
+                "Subphecodes": ';'.join([group] + list(phecode_parents[phecode_parents.parent == group].phecode)),
                 "ICD10_codes": ';'.join(f'{icd10} ({count})' for icd10, count in zip(ICD10_codes, case_counts)),
                 "ICD9_codes": ';'.join(sorted(phecode_map_icd9_extended.loc[phecode_map_icd9_extended.PHECODE == group].ICD9)),
                 "self_reported_condition_codes": ';'.join(sorted(self_report_phecode_map_extended.loc[self_report_phecode_map_extended.PheCODE == group,'Meaning'])),
                 "controls_excluded_phecode": ";".join(sorted(phecode_exclusions.excluded[phecode_exclusions.phecode == group])),
-            }
+            })
         phecode_details = pandas.DataFrame(phecode_group_details)
         phecode_details.to_csv(details_file, sep="\t", index=False)
     else:
