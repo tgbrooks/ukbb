@@ -14,4 +14,4 @@ MAXDOWNLOADS=9
 
 source venv/bin/activate
 module load java/openjdk-1.8.0
-bsub -P $PROJECT -oo $LOGFILE -eo $ERRFILE snakemake --cluster-config cluster.json --cluster "./tsub.py -M {cluster.memory} '-P $PROJECT -oo {cluster.output} -eo {cluster.error} -J {cluster.name}'" --cluster-status "./status.py" -j $MAXJOBS --resources download=$MAXDOWNLOADS --keep-going
+bsub -P $PROJECT -oo $LOGFILE -eo $ERRFILE snakemake --cluster-config cluster.json --cluster "./tsub.py -M {cluster.memory} '-P $PROJECT -oo {cluster.output} -eo {cluster.error} -J {cluster.name}'" --cluster-status "./status.py" -j $MAXJOBS --resources download=$MAXDOWNLOADS --keep-going "$@"
