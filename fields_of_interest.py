@@ -7,6 +7,8 @@ general_fields = dict(
     assessment_center = 54,
     townsend_deprivation_index = 189,
     alcohol_intake_frequency = 1558,
+    job_involves_shiftwork = 826,
+    job_involves_night_shiftwork = 3426,
 )
 
 general_mental_health_fields = dict(
