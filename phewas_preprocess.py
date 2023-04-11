@@ -288,11 +288,23 @@ def correct_for_seasonality_and_cluster(data, full_activity, activity_summary, a
 
     # Seasonal correction for full (i.e. with seasonal repeated measurements) activity data
     starts = pandas.to_datetime(full_summary['file-startTime'])
-    actigraphy_start_date = full_activity.run_id.astype(float).map(starts)
-    year_start = pandas.to_datetime(actigraphy_start_date.dt.year.astype(str) + "-01-01")
-    year_fraction = (actigraphy_start_date - year_start) / (YEAR)
+    full_activity['start_date'] = full_activity.run_id.astype(float).map(starts)
+    year_start = pandas.to_datetime(full_activity['start_date'].dt.year.astype(str) + "-01-01")
+    year_fraction = (full_activity['start_date'] - year_start) / (YEAR)
     full_activity['cos_year_fraction'] = numpy.cos(year_fraction*2*numpy.pi)
     full_activity['sin_year_fraction'] = numpy.sin(year_fraction*2*numpy.pi)
+
+    # A discrete season variable
+    def season(month):
+         if month in [1, 2, 3]:
+             return 'winter'
+         elif month in [4,5,6]:
+             return 'spring'
+         elif month in [7,8,9]:
+             return 'summer'
+         elif month in [10,11,12]:
+             return 'fall'
+    full_activity['season'] = full_activity['start_date'].dt.month.map(season)
 
     # Compute the cosinor fit of log(temp_amplitude) over the duration of the year
     full_activity['log_temp_amplitude'] = numpy.log(full_activity.temp_amplitude)
