@@ -478,9 +478,12 @@ def demographics_table():
             "White": f'{(d.ethnicity.isin(["British", "Any other white background", "Irish", "White"])).mean():0.1%}',
             "Nonwhite": f'{(~d.ethnicity.isin(["British", "Any other white background", "Irish", "White"])).mean():0.1%}',
 
-            "Birth Year": f'{d.birth_year.mean():0.1f}±{d.birth_year.std():0.1f}',
             "BMI": f'{d.BMI.mean():0.1f}±{d.BMI.std():0.1f}',
+
+            "Birth Year": f'{d.birth_year.mean():0.1f}±{d.birth_year.std():0.1f}',
         }
+        if name == 'Actigraphy':
+            demographics[name]["Age at measurement"] = f'{d.age_at_actigraphy.mean():0.1f}±{d.age_at_actigraphy.std():0.1f}'
     demographics = pandas.DataFrame(demographics)
     demographics.to_csv(OUTDIR/"demographics.txt", sep="\t")
     print(demographics)
