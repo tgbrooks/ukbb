@@ -326,23 +326,23 @@ def temperature_trace_plots(N_IDS=500):
         fig.tight_layout()
         return fig
 
-    fig = export_traces.case_control('250')
+    fig = export_traces.case_control('250', data)
     fig.savefig(temp_trace_dir/"temperature.diabetes.png")
-    fig = export_traces.case_control('401')
+    fig = export_traces.case_control('401', data)
     fig.savefig(temp_trace_dir/"temperature.hypertension.png")
-    fig = export_traces.case_control('496')
+    fig = export_traces.case_control('496', data)
     fig.savefig(temp_trace_dir/"temperature.chronic_airway_obstruction.png")
-    fig = export_traces.case_control('443')
+    fig = export_traces.case_control('443', data)
     fig.savefig(temp_trace_dir/"temperature.peripheral_vascular_disease.png")
-    fig = export_traces.case_control('495')
+    fig = export_traces.case_control('495', data)
     fig.savefig(temp_trace_dir/"temperature.asthma.png")
-    fig = export_traces.case_control('480')
+    fig = export_traces.case_control('480', data)
     fig.savefig(temp_trace_dir/"temperature.pneumonia.png")
-    fig = export_traces.case_control('296')
+    fig = export_traces.case_control('296', data)
     fig.savefig(temp_trace_dir/"temperature.mood_disorders.png")
-    fig = export_traces.case_control('300')
+    fig = export_traces.case_control('300', data)
     fig.savefig(temp_trace_dir/"temperature.anxiety_disorders.png")
-    fig = export_traces.case_control('272')
+    fig = export_traces.case_control('272', data)
     fig.savefig(temp_trace_dir/"temperature.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
@@ -383,7 +383,7 @@ def temperature_trace_plots(N_IDS=500):
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
-        fig= export_traces.case_control('401', data=d)
+        fig= export_traces.case_control('401', data=data)
         fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
 
 
