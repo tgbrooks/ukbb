@@ -8,6 +8,7 @@ import pylab
 import numpy
 import scipy.stats
 import pingouin
+import seaborn as sns
 
 
 import phewas_preprocess
@@ -637,6 +638,35 @@ def repeat_measurements():
     )
     print(ICC_table)
 
+def by_diagnosis_counts():
+    # Stratify the subjects by the number of diagnoses they have total
+    # This analysis does not take into account the date or source of the diagnosis at all
+
+    def to_count_bin(count):
+        if count == 0:
+            return "0"
+        elif count <= 2:
+            return "1-2"
+        elif count <= 5:
+            return "3-5"
+        elif count <= 10:
+            return "6-10"
+        elif count <= 15:
+            return "11-15"
+        elif count <= 25:
+            return "16-25"
+        else:
+            return "25+"
+    all_num_total_icd10 = pandas.Series(data.index.map(num_total_icd10).fillna(0), index = data.index).astype(int)
+    d = data[['temp_amplitude']].copy()
+    d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.reorder_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '25+'])
+    g = sns.catplot(
+        x = "Num. ICD10 Codes",
+        y = "temp_amplitude",
+        data = d,
+        kind = "violin",
+    )
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=f"run phewas longidutinal pipeline on actigraphy")
@@ -675,7 +705,7 @@ if __name__ == '__main__':
     print(f"Of {len(data)} subjects with valid actigraphy, there are {complete_cases.sum()} complete cases identified (no missing data)")
 
     # Load case status
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date, INPUTDIR, OUTDIR, RECOMPUTE)
+    case_status, phecode_info, phecode_details, num_total_icd10 = longitudinal_diagnoses.load_longitudinal_diagnoses(complete_case_ids, actigraphy_start_date, INPUTDIR, OUTDIR, RECOMPUTE)
     n_diagnoses = (case_status[case_status.ID.isin(complete_case_ids)].case_status == 'case').sum()
     print(f"These have a total of {n_diagnoses} diagnoses ({n_diagnoses / len(complete_case_ids):0.2f} per participant)")
     last_diagnosis = case_status.first_date.max()
@@ -767,3 +797,4 @@ if __name__ == '__main__':
     predict_diagnoses_effect_size_tables()
     demographics_table()
     repeat_measurements()
+    by_diagnosis_counts()

@@ -120,9 +120,9 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, O
     icd10_entries = icd10_entries_raw.join(phecode_map_extended.PHECODE, on="ICD10")
 
     ### and the ICD9 data
-    icd9_entries = pandas.read_csv(INPUTDIR/"ukbb_icd9_entries.txt", sep="\t")
-    icd9_entries.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
-    icd9_entries = icd9_entries.join(phecode_map_icd9_extended.PHECODE, on="ICD9")
+    icd9_entries_raw = pandas.read_csv(INPUTDIR/"ukbb_icd9_entries.txt", sep="\t")
+    icd9_entries_raw.rename(columns={"ICD9_code": "ICD9"}, inplace=True)
+    icd9_entries = icd9_entries_raw.join(phecode_map_icd9_extended.PHECODE, on="ICD9")
     icd9_entries = icd9_entries[icd9_entries.ID.isin(selected_ids)]
 
     # Self-reported conditions from the interview stage of the UK Biobank
@@ -237,6 +237,10 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, O
     case_status.loc[case_status.case_status.isin(['prior_case', 'prior_case_exact']), 'first_date'] = float("NaN")
     case_status['first_date'] = pandas.to_datetime(case_status.first_date)
 
+    # Total case counts irrespective of time of diagnosis
+    #TODO: determine what the right conditions are for diagnoses here
+    num_total_icd10 = icd10_entries_raw.groupby("ID").ICD10.nunique()
+
     # summarize the phecode contents
     details_file = pathlib.Path(OUTDIR / "phecode_details.txt")
     if RECOMPUTE or not details_file.exists():
@@ -266,4 +270,4 @@ def load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, INPUTDIR, O
     else:
         phecode_details = pandas.read_csv(details_file, sep="\t")
 
-    return case_status, phecode_info, phecode_details
+    return case_status, phecode_info, phecode_details, num_total_icd10
