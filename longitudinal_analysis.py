@@ -334,47 +334,47 @@ def temperature_trace_plots(N_IDS=500):
         return fig
 
     fig = case_control(250)
-    fig.savefig(temp_trace_dir+"temperature.diabetes.png")
+    fig.savefig(temp_trace_dir/"temperature.diabetes.png")
     fig = case_control(401)
-    fig.savefig(temp_trace_dir+"temperature.hypertension.png")
+    fig.savefig(temp_trace_dir/"temperature.hypertension.png")
     fig = case_control(496)
-    fig.savefig(temp_trace_dir+"temperature.chronic_airway_obstruction.png")
+    fig.savefig(temp_trace_dir/"temperature.chronic_airway_obstruction.png")
     fig = case_control(443)
-    fig.savefig(temp_trace_dir+"temperature.peripheral_vascular_disease.png")
+    fig.savefig(temp_trace_dir/"temperature.peripheral_vascular_disease.png")
     fig = case_control(495)
-    fig.savefig(temp_trace_dir+"temperature.asthma.png")
+    fig.savefig(temp_trace_dir/"temperature.asthma.png")
     fig = case_control(480)
-    fig.savefig(temp_trace_dir+"temperature.pneumonia.png")
+    fig.savefig(temp_trace_dir/"temperature.pneumonia.png")
     fig = case_control(296)
-    fig.savefig(temp_trace_dir+"temperature.mood_disorders.png")
+    fig.savefig(temp_trace_dir/"temperature.mood_disorders.png")
     fig = case_control(300)
-    fig.savefig(temp_trace_dir+"temperature.anxiety_disorders.png")
+    fig.savefig(temp_trace_dir/"temperature.anxiety_disorders.png")
     fig = case_control(272)
-    fig.savefig(temp_trace_dir+"temperature.lipoid_metabolism.png")
+    fig.savefig(temp_trace_dir/"temperature.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
     fig = temp_trace_by_cat(morning_evening, show_variance=False)
     fig.gca().set_title("Chronotype")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir+"temperature.chronotype.png")
+    fig.savefig(temp_trace_dir/"temperature.chronotype.png")
 
     age_cutoffs = numpy.arange(45,75,5) # every 5 years from 40 to 75
     age_categories = pandas.cut(data.age_at_actigraphy, age_cutoffs)
     fig = temp_trace_by_cat(age_categories, show_variance=False)
     fig.gca().set_title("Age")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir+"temperature.age.png")
+    fig.savefig(temp_trace_dir/"temperature.age.png")
 
     fig = temp_trace_by_cat(data.sex, colors=color_by_sex)
     fig.gca().set_title("Sex")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir+"temperature.sex.png")
+    fig.savefig(temp_trace_dir/"temperature.sex.png")
 
     napping = data.nap_during_day.cat.remove_categories(["Prefer not to answer"])
     fig = temp_trace_by_cat(napping, show_variance=False)
     fig.gca().set_title("Nap During Day")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir+"temperature.nap.png")
+    fig.savefig(temp_trace_dir/"temperature.nap.png")
 
     ## Asthma
     obese = data.BMI > 30
@@ -385,13 +385,13 @@ def temperature_trace_plots(N_IDS=500):
     fig = temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=True)
     fig.gca().set_title("Asthma by Weight")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir+"temperature.asthma.by_bmi.png")
+    fig.savefig(temp_trace_dir/"temperature.asthma.by_bmi.png")
 
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
         fig= case_control(401, data=d)
-        fig.savefig(temp_trace_dir+f"temperature.hypertension.{label}.png")
+        fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
 
 
     ## BMI versus Chronotype
@@ -400,7 +400,7 @@ def temperature_trace_plots(N_IDS=500):
         #cats = pandas.qcut(d.BMI, numpy.linspace(0,1,6))
         cats = d['BMI type']
         fig= temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
-        fig.savefig(temp_trace_dir+f"temperature.bmi.{label}.png")
+        fig.savefig(temp_trace_dir/f"temperature.bmi.{label}.png")
 
 def temperature_calibration_plots():
     device = activity_summary.loc[data.index, 'file-deviceID']
@@ -659,7 +659,7 @@ def by_diagnosis_counts():
         else:
             return "26+"
     all_num_total_icd10 = pandas.Series(data.index.map(num_total_icd10).fillna(0), index = data.index).astype(int)
-    d = data[['temp_amplitude']].copy()
+    d = data[['temp_amplitude'] + longitudinal_statistics.COVARIATES].copy()
     d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.reorder_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '26+'])
     g = sns.catplot(
         x = "Num. ICD10 Codes",
@@ -667,6 +667,10 @@ def by_diagnosis_counts():
         data = d,
         kind = "violin",
     )
+
+    import statsmodels.formula.api as smf
+    formula = " + ".join(["temp_amplitude ~ Q('Num. ICD10 Codes')", *longitudinal_statistics.COVARIATES])
+    print(smf.ols(formula, data=d).fit().summary())
 
 if __name__ == '__main__':
     import argparse
