@@ -612,12 +612,26 @@ def repeat_measurements():
     print(f"Intra-individual variability: SD = {intra_individual:0.2f} (C)")
 
     # ICC
-    selected_act = full_activity.query("run > '0' and qc_pass")
+    print("ICC for the seasonally corrected temperature")
+    selected_act = full_activity.query("run > 0 and qc_pass")
     num_seasons = selected_act.groupby("id").season.nunique()
     ICC_table = pingouin.intraclass_corr(
         data = selected_act[selected_act.id.map(num_seasons) == 4],
         targets = "id",
         ratings = "twice_corrected_temp_amplitude",
+        raters = "season",
+        nan_policy = "omit",
+    )
+    print(ICC_table)
+
+    # ICC
+    print("ICC for the uncorrected temperature")
+    selected_act.query(f"temp_amplitude < {phewas_preprocess.MAX_TEMP_AMPLITUDE}")
+    num_seasons = selected_act.groupby("id").season.nunique()
+    ICC_table = pingouin.intraclass_corr(
+        data = selected_act[selected_act.id.map(num_seasons) == 4],
+        targets = "id",
+        ratings = "temp_amplitude",
         raters = "season",
         nan_policy = "omit",
     )
