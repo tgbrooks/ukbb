@@ -656,10 +656,10 @@ def by_diagnosis_counts():
         elif count <= 25:
             return "16-25"
         else:
-            return "25+"
+            return "26+"
     all_num_total_icd10 = pandas.Series(data.index.map(num_total_icd10).fillna(0), index = data.index).astype(int)
     d = data[['temp_amplitude']].copy()
-    d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.reorder_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '25+'])
+    d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.reorder_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '26+'])
     g = sns.catplot(
         x = "Num. ICD10 Codes",
         y = "temp_amplitude",
