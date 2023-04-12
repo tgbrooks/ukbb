@@ -3,23 +3,10 @@ Script to generate average temperature+acceleration plots for all phenotypes of 
 """
 
 import pathlib
-import os 
-import sys
 import json
 
 import pandas
 import pylab
-
-COHORT = 0
-
-
-data_dir = pathlib.Path("../longitudinal/cohort0/").resolve()
-fig_dir = (data_dir/ "figures/").resolve()
-fig_dir.mkdir(exist_ok=True)
-temp_out_dir = (fig_dir/ "temp/").resolve()
-temp_out_dir.mkdir(exist_ok=True)
-acc_out_dir = (fig_dir/ "acc/").resolve()
-acc_out_dir.mkdir(exist_ok=True)
 
 # NOTE: run this from the /scripts/ directory
 # so that we can import these
@@ -27,25 +14,10 @@ import phewas_preprocess
 import day_plots
 import longitudinal_diagnoses
 
-#### Load and preprocess the underlying data
-data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
-selected_ids = data.index
-actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
-
-case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
-
-#### Run (or load from disk if they already exist) 
-#### the statistical tests
-results = pandas.read_csv(data_dir /"predictive_tests.cox.txt", sep="\t", dtype={"phecode": str})
-phenotypes = results.meaning
-phecodes = results.phecode
-
-print("Loaded data")
-
 # Plot actigraphy and tempreature by  case/control status
 # after matching cases and controls
 match_counts = {}
-def case_control(phecode, phenotype, data=data, N=10):
+def case_control(phecode, phenotype, data, N=10):
     colors = {"Case": "orange", "Control": "teal"}
 
 
@@ -106,18 +78,41 @@ def case_control(phecode, phenotype, data=data, N=10):
 
     return temp_fig, acc_fig
 
-# Generate for each phenotype these plots
-available_ids = day_plots.get_ids_of_traces_available()
-available_data = data[data.index.isin(available_ids)]
-for phecode, phenotype in list(zip(phecodes, phenotypes)):
-    safe_phenotype = phenotype.replace("/", ",")
-    temp_fig, acc_fig = case_control(phecode, phenotype, data=available_data, N = 5000)
-    temp_fig.savefig(temp_out_dir / f"{safe_phenotype}.png", dpi=300)
-    acc_fig.savefig(acc_out_dir / f"{safe_phenotype}.png", dpi=300)
-    pylab.close(temp_fig)
-    pylab.close(acc_fig)
-with open(fig_dir / "trace_match_counts.json", "w") as output:
-    json.dump(match_counts, output)
-#pandas.Series(match_counts).to_csv(fig_dir / "trace_match_counts.txt", sep="\t")
+if __name__ == '__main__':
+    COHORT = 0
 
+    data_dir = pathlib.Path("../longitudinal/cohort0/").resolve()
+    fig_dir = (data_dir/ "figures/").resolve()
+    fig_dir.mkdir(exist_ok=True)
+    temp_out_dir = (fig_dir/ "temp/").resolve()
+    temp_out_dir.mkdir(exist_ok=True)
+    acc_out_dir = (fig_dir/ "acc/").resolve()
+    acc_out_dir.mkdir(exist_ok=True)
 
+    #### Load and preprocess the underlying data
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
+    selected_ids = data.index
+    actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
+
+    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
+
+    #### Run (or load from disk if they already exist)
+    #### the statistical tests
+    results = pandas.read_csv(data_dir /"predictive_tests.cox.txt", sep="\t", dtype={"phecode": str})
+    phenotypes = results.meaning
+    phecodes = results.phecode
+
+    print("Loaded data")
+
+    # Generate for each phenotype these plots
+    available_ids = day_plots.get_ids_of_traces_available()
+    available_data = data[data.index.isin(available_ids)]
+    for phecode, phenotype in list(zip(phecodes, phenotypes)):
+        safe_phenotype = phenotype.replace("/", ",")
+        temp_fig, acc_fig = case_control(phecode, phenotype, data=available_data, N = 5000)
+        temp_fig.savefig(temp_out_dir / f"{safe_phenotype}.png", dpi=300)
+        acc_fig.savefig(acc_out_dir / f"{safe_phenotype}.png", dpi=300)
+        pylab.close(temp_fig)
+        pylab.close(acc_fig)
+    with open(fig_dir / "trace_match_counts.json", "w") as output:
+        json.dump(match_counts, output)

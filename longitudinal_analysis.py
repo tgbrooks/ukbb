@@ -16,6 +16,7 @@ import longitudinal_statistics
 import longitudinal_diagnoses
 import longitudinal_diagnostics
 import day_plots
+import export_traces
 import baseline_statistics
 
 import util
@@ -88,7 +89,7 @@ def fancy_case_control_plot(data, case_status, code, title, var="acceleration_RA
         control_density = gaussian_kde(data[var][control], bw_method=bandwidth)(eval_x) * control_scaling
         incidence = case_density / (control_density  + case_density)
         return case_density, control_density, incidence
-    
+
     case_density, control_density, incidence = densities_and_incidence(data)
 
     if confidence_interval:
@@ -125,7 +126,7 @@ def fancy_case_control_plot(data, case_status, code, title, var="acceleration_RA
     # Label plot
     ax1.set_ylabel(f"Controls\nN={(control).sum()}")
     ax2.set_ylabel(f"Incidence\n(overall={total_incidence:0.1%})")
-    ax3.set_ylabel(f"Cases\nN={case.sum()}") 
+    ax3.set_ylabel(f"Cases\nN={case.sum()}")
     ax2.set_xlabel(label)
 
     ax1.spines['left'].set_visible(False)
@@ -325,31 +326,23 @@ def temperature_trace_plots(N_IDS=500):
         fig.tight_layout()
         return fig
 
-    def case_control(phecode, data=data):
-        cats = data[phecode].astype("category").cat.rename_categories({0:"Control", 1:"Case"})
-        fig = temp_trace_by_cat(cats,
-                                 colors = {"Case": "orange", "Control": "teal"}, data=data)
-        fig.gca().set_title(phecode_info.loc[phecode].phenotype)
-        fig.tight_layout()
-        return fig
-
-    fig = case_control(250)
+    fig = export_traces.case_control('250')
     fig.savefig(temp_trace_dir/"temperature.diabetes.png")
-    fig = case_control(401)
+    fig = export_traces.case_control('401')
     fig.savefig(temp_trace_dir/"temperature.hypertension.png")
-    fig = case_control(496)
+    fig = export_traces.case_control('496')
     fig.savefig(temp_trace_dir/"temperature.chronic_airway_obstruction.png")
-    fig = case_control(443)
+    fig = export_traces.case_control('443')
     fig.savefig(temp_trace_dir/"temperature.peripheral_vascular_disease.png")
-    fig = case_control(495)
+    fig = export_traces.case_control('495')
     fig.savefig(temp_trace_dir/"temperature.asthma.png")
-    fig = case_control(480)
+    fig = export_traces.case_control('480')
     fig.savefig(temp_trace_dir/"temperature.pneumonia.png")
-    fig = case_control(296)
+    fig = export_traces.case_control('296')
     fig.savefig(temp_trace_dir/"temperature.mood_disorders.png")
-    fig = case_control(300)
+    fig = export_traces.case_control('300')
     fig.savefig(temp_trace_dir/"temperature.anxiety_disorders.png")
-    fig = case_control(272)
+    fig = export_traces.case_control('272')
     fig.savefig(temp_trace_dir/"temperature.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
@@ -390,7 +383,7 @@ def temperature_trace_plots(N_IDS=500):
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
-        fig= case_control(401, data=d)
+        fig= export_traces.case_control('401', data=d)
         fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
 
 
@@ -725,7 +718,7 @@ if __name__ == '__main__':
     # Correct the temp_amplitude variable based off known factors contributing to it (seasonlity and device cluster)
     phewas_preprocess.correct_for_seasonality_and_cluster(data, full_activity, activity_summary, activity_summary_seasonal)
 
-    #### Run (or load from disk if they already exist) 
+    #### Run (or load from disk if they already exist)
     #### the statistical tests
     predictive_tests_cox = longitudinal_statistics.predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
     predictive_tests_by_sex_cox = longitudinal_statistics.predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE)
