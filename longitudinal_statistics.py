@@ -19,6 +19,7 @@ import rpy2.robjects as robjects
 import rpy2.robjects.packages
 from rpy2.robjects import pandas2ri
 robjects.r("memory.limit(10000)")
+pandas2ri.activate()
 
 utils = robjects.packages.importr("utils")
 packnames = ['survival', 'timereg']
