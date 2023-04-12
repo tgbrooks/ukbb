@@ -35,7 +35,7 @@ def get_tracedata(tracefile):
 def plot_average_trace(ids, var="acceleration", directory="../processed/acc_analysis/", transform = lambda x: x,
             normalize_mean=False, set_mean=None, ax=None, color="k", label=None, show_variance=True,
             show_confidence_intervals=False,
-            center="mean"):
+            center="median"):
     average_traces = []
     for id in ids:
         tracefile = directory+str(id)+"_90001_0_0-timeSeries.csv.gz"
