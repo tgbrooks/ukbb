@@ -17,7 +17,7 @@ import longitudinal_diagnoses
 # Plot actigraphy and tempreature by  case/control status
 # after matching cases and controls
 match_counts = {}
-def case_control(phecode, phenotype, data, N=10):
+def case_control(phecode, phenotype, data, case_status, N=10):
     colors = {"Case": "orange", "Control": "teal"}
 
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     available_data = data[data.index.isin(available_ids)]
     for phecode, phenotype in list(zip(phecodes, phenotypes)):
         safe_phenotype = phenotype.replace("/", ",")
-        temp_fig, acc_fig = case_control(phecode, phenotype, data=available_data, N = 5000)
+        temp_fig, acc_fig = case_control(phecode, phenotype, data=available_data, case_status=case_status, N = 5000)
         temp_fig.savefig(temp_out_dir / f"{safe_phenotype}.png", dpi=300)
         acc_fig.savefig(acc_out_dir / f"{safe_phenotype}.png", dpi=300)
         pylab.close(temp_fig)
