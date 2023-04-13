@@ -284,7 +284,7 @@ def generate_results_table():
         predictive_tests_by_age_cox.to_excel(writer, sheet_name="By Age", index=False)
         phecode_details.to_excel(writer, sheet_name="PheCODEs", index=False)
 
-def temperature_trace_plots(N_IDS=500):
+def temperature_trace_plots(N_IDS=5000):
     '''
     Temperature trace plots show average temperature curves over the course of 24 hours
     and broken down by diagnosis or category
