@@ -382,17 +382,6 @@ def temperature_trace_plots(N_IDS=5000):
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.nap.png")
 
-    ## Asthma
-    obese = data.BMI > 30
-    normal = (data.BMI < 25) & (data.BMI > 18.5)
-    cats = data[495].map({1: "Asthma", 0: "Control"}) + obese.map({True: " Obese", False: " Normal"})
-    cats[(~normal) & (~obese)] = float("NaN") # Remove 'overweight-but-not-obese' middle category
-    cats = cats.astype("category")
-    fig = temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=True)
-    fig.gca().set_title("Asthma by Weight")
-    fig.tight_layout()
-    fig.savefig(temp_trace_dir/"temperature.asthma.by_bmi.png")
-
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
