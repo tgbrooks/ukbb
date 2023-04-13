@@ -18,6 +18,7 @@ import longitudinal_diagnostics
 import day_plots
 import export_traces
 import baseline_statistics
+import diagnostics_report
 
 import util
 
@@ -796,6 +797,7 @@ if __name__ == '__main__':
     # e.g. checking cox.zph, time-varying models
     if args.all:
         longitudinal_diagnostics.diagnostics(data, case_status, top_phenotypes, OUTDIR)
+        diagnostics_report.generate_report(top_phenotypes, phecode_info, OUTDIR)
 
     predict_diagnoses_effect_size_tables()
     demographics_table()
