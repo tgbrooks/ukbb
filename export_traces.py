@@ -73,7 +73,7 @@ def case_control(phecode, phenotype, data, case_status, N=10):
                     )
     ax.set_ylabel("Acceleration (millig)")
     acc_fig.legend()
-    acc_fig.gca().set_title(phecode_info.loc[phecode].phenotype)
+    acc_fig.gca().set_title(phenotype)
     acc_fig.tight_layout()
 
     return temp_fig, acc_fig
