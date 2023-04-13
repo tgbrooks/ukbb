@@ -328,7 +328,7 @@ def temperature_trace_plots(N_IDS=5000):
 
     def case_control(phecode, data=data):
         phenotype = phecode_info.phenotype.loc[phecode]
-        return export_traces.case_control(phecode, phenotype, data, case_status)
+        return export_traces.case_control(phecode, phenotype, data, case_status, N=N_IDS)
 
     fig, acc_fig = case_control('250')
     fig.savefig(temp_trace_dir/"temperature.diabetes.png")
