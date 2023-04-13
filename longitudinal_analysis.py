@@ -790,6 +790,8 @@ if __name__ == '__main__':
         generate_results_table()
         summary()
 
+        by_diagnosis_counts()
+
     # For running the more compute-intensive diagnositcs processes
     # e.g. checking cox.zph, time-varying models
     if args.all:
@@ -798,4 +800,3 @@ if __name__ == '__main__':
     predict_diagnoses_effect_size_tables()
     demographics_table()
     repeat_measurements()
-    by_diagnosis_counts()
