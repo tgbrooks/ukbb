@@ -326,28 +326,37 @@ def temperature_trace_plots(N_IDS=500):
         fig.tight_layout()
         return fig
 
-    def case_control(phecode):
+    def case_control(phecode, data=data):
         phenotype = phecode_info.phenotype.loc[phecode]
         return export_traces.case_control(phecode, phenotype, data, case_status)
 
-    fig = case_control('250')
+    fig, acc_fig = case_control('250')
     fig.savefig(temp_trace_dir/"temperature.diabetes.png")
-    fig = case_control('401')
+    acc_fig.savefig(temp_trace_dir/"acceleration.diabetes.png")
+    fig, acc_fig = case_control('401')
     fig.savefig(temp_trace_dir/"temperature.hypertension.png")
-    fig = case_control('496')
+    acc_fig.savefig(temp_trace_dir/"acceleration.hypertension.png")
+    fig, acc_fig = case_control('496')
     fig.savefig(temp_trace_dir/"temperature.chronic_airway_obstruction.png")
-    fig = case_control('443')
+    acc_fig.savefig(temp_trace_dir/"acceleration.chronic_airway_obstruction.png")
+    fig, acc_fig = case_control('443')
     fig.savefig(temp_trace_dir/"temperature.peripheral_vascular_disease.png")
-    fig = case_control('495')
+    acc_fig.savefig(temp_trace_dir/"acceleration.peripheral_vascular_disease.png")
+    fig, acc_fig = case_control('495')
     fig.savefig(temp_trace_dir/"temperature.asthma.png")
-    fig = case_control('480')
+    acc_fig.savefig(temp_trace_dir/"acceleration.asthma.png")
+    fig, acc_fig = case_control('480')
     fig.savefig(temp_trace_dir/"temperature.pneumonia.png")
-    fig = case_control('296')
+    acc_fig.savefig(temp_trace_dir/"acceleration.pneumonia.png")
+    fig, acc_fig = case_control('296')
     fig.savefig(temp_trace_dir/"temperature.mood_disorders.png")
-    fig = case_control('300')
+    acc_fig.savefig(temp_trace_dir/"acceleration.mood_disorders.png")
+    fig, acc_fig = case_control('300')
     fig.savefig(temp_trace_dir/"temperature.anxiety_disorders.png")
-    fig = case_control('272')
+    acc_fig.savefig(temp_trace_dir/"acceleration.anxiety_disorders.png")
+    fig, acc_fig = case_control('272')
     fig.savefig(temp_trace_dir/"temperature.lipoid_metabolism.png")
+    acc_fig.savefig(temp_trace_dir/"acceleration.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
     fig = temp_trace_by_cat(morning_evening, show_variance=False)
@@ -387,8 +396,9 @@ def temperature_trace_plots(N_IDS=500):
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
-        fig= case_control('401')
+        fig, acc_fig = case_control('401', data=d)
         fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
+        acc_fig.savefig(temp_trace_dir/f"acceleration.hypertension.{label}.png")
 
 
     ## BMI versus Chronotype
