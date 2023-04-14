@@ -11,7 +11,7 @@ ZSCORE_OUTLIER_CUTOFF = 7
 
 # Force these activity variables to be included in the analysis even though they do meet the
 # requirements for repeateability from the seasonal data
-EXTRA_ACTIVITY_VARIABLES = ["temp_L1_time", "temp_phase"]
+EXTRA_ACTIVITY_VARIABLES = ["temp_L1_time", "temp_phase", "weekend_temp_amplitude", "weekday_temp_amplitude"]
 
 # Bins to group by age (at the time of actigraphy) in years
 AGE_BINS  = [ 40, 55, 60, 65, 70, 80 ]
