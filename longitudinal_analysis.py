@@ -390,6 +390,25 @@ def temperature_trace_plots(N_IDS=5000):
         fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
         acc_fig.savefig(temp_trace_dir/f"acceleration.hypertension.{label}.png")
 
+    # Hypertension with chronotype in one plot
+    hypertension_cases = case_status.query("PHECODE == '401' and case_status == 'case'").ID
+    hypertension_exclusion = case_status.query("PHECODE == '401' and case_status != 'case'").ID
+    d = data.copy()
+    d['hypertension'] = 'Control'
+    d.loc[d.index.isin(hypertension_cases), 'hypertension'] = 'Case'
+    d.loc[d.index.isin(hypertension_exclusion), 'hypertension'] = float('NaN')
+    def hypertension_chronotype(data):
+        if not (data.hypertension == data.hypertension):
+            return float("NaN")
+        if data.morning_evening_person == "Definitely a 'morning' person":
+            return f"Morning - {data.hypertension}"
+        elif data.morning_evening_person == "Definitely an 'evening' person":
+            return f"Evening - {data.hypertension}"
+        else:
+            return float("NaN")
+    cats = d.apply(hypertension_chronotype, axis=1).astype('category').cat.reorder_categories(['Morning - Control', 'Morning - Case', 'Evening - Control', 'Evening - Case'])
+    fig = temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+    fig.savefig(temp_trace_dir/"temperature.hypertension.by_chronotype.png")
 
     ## BMI versus Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
