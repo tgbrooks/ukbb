@@ -408,12 +408,19 @@ def temp_features(temp):
 
     cosinor_values = cosinor(temp, log=False)
 
+    # Just weekend/weekday cosinor fits
+    is_weekend = temp.index.dayofweek.isin([5,6]) # Saturday or Sunday
+    weekend_cosinor_values = cosinor(temp[is_weekend], log=False)
+    weekday_cosinor_values = cosinor(temp[~is_weekend], log=False)
+
     return {
         "temp_L1_time": L1_midpoint / pandas.to_timedelta("1H"),
         "temp_l1_value": L1_value,
         "temp_L1_median_time": L1_median_midpoint / pandas.to_timedelta("1H"),
         "temp_l1_value": L1_median_value,
         **{"temp_"+k:v for k,v in cosinor_values.items()},
+        **{"weekend_temp_"+k:v for k,v in weekend_cosinor_values.items()},
+        **{"weekday_temp_"+k:v for k,v in weekday_cosinor_values.items()},
     }
 
 def activity_features(data):
