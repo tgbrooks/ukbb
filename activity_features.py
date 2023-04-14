@@ -410,8 +410,16 @@ def temp_features(temp):
 
     # Just weekend/weekday cosinor fits
     is_weekend = temp.index.dayofweek.isin([5,6]) # Saturday or Sunday
-    weekend_cosinor_values = cosinor(temp[is_weekend], log=False)
-    weekday_cosinor_values = cosinor(temp[~is_weekend], log=False)
+    temp_weekend = temp[is_weekend]
+    if len(temp_weekend) > 100:
+        weekend_cosinor_values = cosinor(temp[is_weekend], log=False)
+    else:
+        weekend_cosinor_values = {}
+    temp_weekday = temp[~is_weekend]
+    if len(temp_weekday) > 100:
+        weekday_cosinor_values = cosinor(temp[~is_weekend], log=False)
+    else:
+        weekday_cosinor_values = {}
 
     return {
         "temp_L1_time": L1_midpoint / pandas.to_timedelta("1H"),
