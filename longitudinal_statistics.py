@@ -39,7 +39,7 @@ def bh_fdr_with_nans(ps):
 
 def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=False, variable="temp_amplitude"):
     # Predict diagnoses after actigraphy
-    if not RECOMPUTE:
+    if not RECOMPUTE and OUTDIR is not None:
         try:
             predictive_tests_cox = pandas.read_csv(OUTDIR/f"predictive_tests.cox.txt", sep="\t", dtype={"phecode": str})
             return predictive_tests_cox
@@ -118,7 +118,8 @@ def predictive_tests_cox(data, phecode_info, case_status, OUTDIR, RECOMPUTE=Fals
         predictive_tests_cox_list.append(header)
     predictive_tests_cox = pandas.DataFrame(predictive_tests_cox_list)
     predictive_tests_cox['q'] = bh_fdr_with_nans(predictive_tests_cox.p.fillna(1))
-    predictive_tests_cox.sort_values(by="p").to_csv(OUTDIR / "predictive_tests.cox.txt", sep="\t", index=False)
+    if OUTDIR is not None:
+        predictive_tests_cox.sort_values(by="p").to_csv(OUTDIR / "predictive_tests.cox.txt", sep="\t", index=False)
 
     return predictive_tests_cox
 
