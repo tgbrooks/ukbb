@@ -298,6 +298,30 @@ def temperature_trace_plots(N_IDS=5000):
         # Temperature is already in C at this point
         return temp
 
+    ## By categories
+    def trace_by_cat(cats, var="temp", colors=None, show_variance=True, show_confidence_intervals=False, data=data):
+        fig, ax = pylab.subplots()
+        for cat in cats.cat.categories:
+            selected_ids = data[(cats == cat) & (data.index.isin(ids))].index
+            selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
+            day_plots.plot_average_trace(selected_ids,
+                        var=var,
+                        transform = temp_to_C,
+                        normalize_mean = True if var == 'temp' else False,
+                        set_mean = 0,
+                        ax=ax,
+                        color=colors[cat] if colors is not None else None,
+                        label=cat,
+                        show_variance=show_variance,
+                        show_confidence_intervals=show_confidence_intervals)
+        if var == 'temp':
+            ax.set_ylabel("Temperature (C)")
+        else:
+            ax.set_ylabel("Acceleration (millig)")
+        fig.legend()
+        fig.tight_layout()
+        return fig
+
     ## Overall temperature cycle
     _, _, ax = day_plots.plot_average_trace(numpy.random.choice(ids, size=N_IDS, replace=False),
                     var="temp",
@@ -305,27 +329,6 @@ def temperature_trace_plots(N_IDS=5000):
                     normalize_mean = True)
     ax.set_ylabel("Temperature (C)")
 
-    ## By categories
-    def temp_trace_by_cat(cats, colors=None, show_variance=True, show_confidence_intervals=False, data=data):
-        temp_mean = temp_to_C(full_activity.temp_mean_mean.mean())
-        fig, ax = pylab.subplots()
-        for cat in cats.cat.categories:
-            selected_ids = data[(cats == cat) & (data.index.isin(ids))].index
-            selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
-            day_plots.plot_average_trace(selected_ids,
-                        var="temp",
-                        transform = temp_to_C,
-                        normalize_mean = True,
-                        set_mean = 0,
-                        ax=ax,
-                        color=colors[cat] if colors is not None else None,
-                        label=cat,
-                        show_variance=show_variance,
-                        show_confidence_intervals=show_confidence_intervals)
-        ax.set_ylabel("Temperature (C)")
-        fig.legend()
-        fig.tight_layout()
-        return fig
 
     def case_control(phecode, data=data):
         phenotype = phecode_info.phenotype.loc[phecode]
@@ -360,34 +363,50 @@ def temperature_trace_plots(N_IDS=5000):
     acc_fig.savefig(temp_trace_dir/"acceleration.lipoid_metabolism.png")
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
-    fig = temp_trace_by_cat(morning_evening, show_variance=False)
+    fig = trace_by_cat(morning_evening, show_variance=False)
     fig.gca().set_title("Chronotype")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.chronotype.png")
+    acc_fig = trace_by_cat(morning_evening, show_variance=False, var="acceleration")
+    acc_fig.gca().set_title("Chronotype")
+    acc_fig.tight_layout()
+    acc_fig.savefig(temp_trace_dir/"acceleration.chronotype.png")
 
     age_cutoffs = numpy.arange(45,75,5) # every 5 years from 40 to 75
     age_categories = pandas.cut(data.age_at_actigraphy, age_cutoffs)
-    fig = temp_trace_by_cat(age_categories, show_variance=False)
+    fig = trace_by_cat(age_categories, show_variance=False)
     fig.gca().set_title("Age")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.age.png")
+    acc_fig = trace_by_cat(age_categories, show_variance=False, var="acceleration")
+    acc_fig.gca().set_title("Age")
+    acc_fig.tight_layout()
+    acc_fig.savefig(temp_trace_dir/"acceleration.age.png")
 
     # Age again but with confidence intervals for comparison
-    fig = temp_trace_by_cat(age_categories, show_variance=False, show_confidence_intervals=True)
+    fig = trace_by_cat(age_categories, show_variance=False, show_confidence_intervals=True)
     fig.gca().set_title("Age")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.age.with_confidence_intervals.png")
 
-    fig = temp_trace_by_cat(data.sex, colors=color_by_sex)
+    fig = trace_by_cat(data.sex, colors=color_by_sex)
     fig.gca().set_title("Sex")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.sex.png")
+    acc_fig = trace_by_cat(data.sex, colors=color_by_sex, var="acceleration")
+    acc_fig.gca().set_title("Sex")
+    acc_fig.tight_layout()
+    acc_fig.savefig(temp_trace_dir/"acceleration.sex.png")
 
     napping = data.nap_during_day.cat.remove_categories(["Prefer not to answer"])
-    fig = temp_trace_by_cat(napping, show_variance=False)
+    fig = trace_by_cat(napping, show_variance=False)
     fig.gca().set_title("Nap During Day")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.nap.png")
+    acc_fig = trace_by_cat(napping, show_variance=False, var="acceleration")
+    acc_fig.gca().set_title("Nap During Day")
+    acc_fig.tight_layout()
+    acc_fig.savefig(temp_trace_dir/"acceleration.nap.png")
 
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
@@ -413,16 +432,20 @@ def temperature_trace_plots(N_IDS=5000):
         else:
             return float("NaN")
     cats = d.apply(hypertension_chronotype, axis=1).astype('category').cat.reorder_categories(['Morning - Control', 'Morning - Case', 'Evening - Control', 'Evening - Case'])
-    fig = temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+    fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
     fig.savefig(temp_trace_dir/"temperature.hypertension.by_chronotype.png")
+    acc_fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d, var="acceleration")
+    acc_fig.savefig(temp_trace_dir/"acceleartion.hypertension.by_chronotype.png")
 
     ## BMI versus Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
         #cats = pandas.qcut(d.BMI, numpy.linspace(0,1,6))
         cats = d['BMI type']
-        fig= temp_trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+        fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
         fig.savefig(temp_trace_dir/f"temperature.bmi.{label}.png")
+        acc_fig= trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+        acc_fig.savefig(temp_trace_dir/f"aceleration.bmi.{label}.png")
 
 def temperature_calibration_plots():
     device = activity_summary.loc[data.index, 'file-deviceID']
