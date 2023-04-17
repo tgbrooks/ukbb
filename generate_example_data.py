@@ -70,6 +70,8 @@ activity_columns = [
     'temp_mean_mean',
     'phase',
     'temp_phase',
+    'weekend_temp_amplitude',
+    'weekday_temp_amplitude',
 ]
 
 activity_summary_columns = [
