@@ -372,6 +372,12 @@ def temperature_trace_plots(N_IDS=5000):
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.age.png")
 
+    # Age again but with confidence intervals for comparison
+    fig = temp_trace_by_cat(age_categories, show_variance=False, show_confidence_intervals=True)
+    fig.gca().set_title("Age")
+    fig.tight_layout()
+    fig.savefig(temp_trace_dir/"temperature.age.with_confidence_intervals.png")
+
     fig = temp_trace_by_cat(data.sex, colors=color_by_sex)
     fig.gca().set_title("Sex")
     fig.tight_layout()
