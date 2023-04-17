@@ -493,7 +493,7 @@ def demographics_table():
     # Create a table of demographics of the population studied, compared to the overall UK Biobank
     demographics = {}
     ukbb_without_actigraphy = ukbb[ukbb.actigraphy_file.isna()]
-    for name, d in zip(["Actigraphy", "Without Actigraphy"], [data, ukbb_without_actigraphy]):
+    for name, d in zip(["Actigraphy", "Without Actigraphy"], [data[complete_cases], ukbb_without_actigraphy]):
         demographics[name] = {
             "N": len(d),
             "Male": f'{(d.sex == "Male").mean():0.1%}',
