@@ -199,6 +199,7 @@ def fancy_case_control_plot(data, case_status, code, title, var="acceleration_RA
 
 
 def summary():
+    plotted_data = []
 
     # Manhattan plot by phecode
     tests = predictive_tests_cox.copy()
@@ -215,6 +216,8 @@ def summary():
         group_by=tests.category,
         color_by=color_by)
     fig.savefig(OUTDIR/"FIG2.manhattan_plot.png", dpi=300)
+    plotted_data = tests[['phecode', 'category', 'p']]
+    plotted_data.to_csv(plot_data_dir / "FIG2.manhattan_plot.txt", sep="\t", index=False)
 
     ### TIMELINE
     # Make a timeline of the study design timing so that readers can easily see when data was collected
@@ -242,22 +245,33 @@ def summary():
         counts, edges = numpy.histogram(values, bins)
         # Fudge factor fills in odd gaps between boxes
         ax.bar(edges[:-1], counts, width=(edges[1:]-edges[:-1])*1.05, **kwargs)
+        return counts
     assessment_time = pandas.to_datetime(data.blood_sample_time_collected_V0)
     actigraphy_time = pandas.to_datetime(activity_summary.loc[data.index, 'file-startTime'])
     actigraphy_seasonal_time = pandas.to_datetime(activity_summary_seasonal.loc[activity_summary_seasonal.ID.isin(data.index), 'file-startTime'], cache=False)
     death_time = pandas.to_datetime(data[~data.date_of_death.isna()].date_of_death)
     diagnosis_time = pandas.to_datetime(case_status[case_status.ID.isin(data.index)].first_date)
-    date_hist(ax1, assessment_time, color=ASSESSMENT_COLOR, label="assessment", bins=bins)
-    date_hist(ax1, actigraphy_time, color=ACTIGRAPHY_COLOR, label="actigraphy", bins=bins)
-    date_hist(ax1, actigraphy_seasonal_time, color=REPEAT_COLOR, label="repeat actigraphy", bins=bins)
-    date_hist(ax2, diagnosis_time, color=DIAGNOSIS_COLOR, label="Diagnoses", bins=bins)
-    date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
+    counts_assessment = date_hist(ax1, assessment_time, color=ASSESSMENT_COLOR, label="assessment", bins=bins)
+    counts_actigraphy = date_hist(ax1, actigraphy_time, color=ACTIGRAPHY_COLOR, label="actigraphy", bins=bins)
+    counts_repreat_actigraphy = date_hist(ax1, actigraphy_seasonal_time, color=REPEAT_COLOR, label="repeat actigraphy", bins=bins)
+    counts_diag = date_hist(ax2, diagnosis_time, color=DIAGNOSIS_COLOR, label="Diagnoses", bins=bins)
+    counts_deaths = date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
     ax1.annotate("Assessment", (assessment_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
     ax1.annotate("Actigraphy", (actigraphy_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
     ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
     ax2.annotate("Novel In-Patient\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,20), textcoords="offset points", ha="center")
     ax3.annotate("Deaths", (death_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
     fig.savefig(OUTDIR/"FIG1a.summary_timeline.png")
+    plotted_data = pandas.DataFrame({
+        "bin_start": bins[:-1],
+        "bin_end": bins[1:],
+        "assessment": counts_assessment,
+        "actigraphy": counts_actigraphy,
+        "repeat_actiraphy": counts_repreat_actigraphy,
+        "diagnosis": counts_diag,
+        "death": counts_deaths,
+    })
+    plotted_data.to_csv(plot_data_dir / "FIG1a.summary_timeline.txt", sep="\t", index=False)
 
     time_difference = (actigraphy_time - assessment_time).mean()
     print(f"Mean difference between actigraphy time and initial assessment time: {time_difference/pandas.to_timedelta('1Y')} years")
@@ -289,7 +303,10 @@ def temperature_trace_plots(N_IDS=5000):
     '''
     Temperature trace plots show average temperature curves over the course of 24 hours
     and broken down by diagnosis or category
+
+    See also: export_traces.py - generates case/control temperature/acceleration traces for all phecodes
     '''
+    plotted_data = []
     ids = day_plots.get_ids_of_traces_available()
     temp_trace_dir = OUTDIR / "temperate_traces"
     temp_trace_dir.mkdir(exist_ok=True)
@@ -300,11 +317,12 @@ def temperature_trace_plots(N_IDS=5000):
 
     ## By categories
     def trace_by_cat(cats, var="temp", colors=None, show_variance=True, show_confidence_intervals=False, data=data):
+        plotted_data_list = []
         fig, ax = pylab.subplots()
         for cat in cats.cat.categories:
             selected_ids = data[(cats == cat) & (data.index.isin(ids))].index
             selected_ids = numpy.random.choice(selected_ids, size=min(len(selected_ids), N_IDS), replace=False)
-            day_plots.plot_average_trace(selected_ids,
+            ax, plotted_data = day_plots.plot_average_trace(selected_ids,
                         var=var,
                         transform = temp_to_C,
                         normalize_mean = True if var == 'temp' else False,
@@ -314,114 +332,115 @@ def temperature_trace_plots(N_IDS=5000):
                         label=cat,
                         show_variance=show_variance,
                         show_confidence_intervals=show_confidence_intervals)
+            plotted_data['group'] = cat
+            plotted_data_list.append(plotted_data)
         if var == 'temp':
             ax.set_ylabel("Temperature (C)")
         else:
             ax.set_ylabel("Acceleration (millig)")
         fig.legend()
         fig.tight_layout()
-        return fig
-
-    ## Overall temperature cycle
-    _, _, ax = day_plots.plot_average_trace(numpy.random.choice(ids, size=N_IDS, replace=False),
-                    var="temp",
-                    transform = temp_to_C,
-                    normalize_mean = True)
-    ax.set_ylabel("Temperature (C)")
-
+        return fig, pandas.concat(plotted_data_list)
 
     def case_control(phecode, data=data):
         phenotype = phecode_info.phenotype.loc[phecode]
         return export_traces.case_control(phecode, phenotype, data, case_status, N=N_IDS)
 
-    fig, acc_fig = case_control('250')
-    fig.savefig(temp_trace_dir/"temperature.diabetes.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.diabetes.png")
-    fig, acc_fig = case_control('401')
-    fig.savefig(temp_trace_dir/"temperature.hypertension.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.hypertension.png")
-    fig, acc_fig = case_control('496')
-    fig.savefig(temp_trace_dir/"temperature.chronic_airway_obstruction.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.chronic_airway_obstruction.png")
-    fig, acc_fig = case_control('443')
-    fig.savefig(temp_trace_dir/"temperature.peripheral_vascular_disease.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.peripheral_vascular_disease.png")
-    fig, acc_fig = case_control('495')
-    fig.savefig(temp_trace_dir/"temperature.asthma.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.asthma.png")
-    fig, acc_fig = case_control('480')
-    fig.savefig(temp_trace_dir/"temperature.pneumonia.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.pneumonia.png")
-    fig, acc_fig = case_control('296')
-    fig.savefig(temp_trace_dir/"temperature.mood_disorders.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.mood_disorders.png")
-    fig, acc_fig = case_control('300')
-    fig.savefig(temp_trace_dir/"temperature.anxiety_disorders.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.anxiety_disorders.png")
-    fig, acc_fig = case_control('272')
-    fig.savefig(temp_trace_dir/"temperature.lipoid_metabolism.png")
-    acc_fig.savefig(temp_trace_dir/"acceleration.lipoid_metabolism.png")
+    codes_to_plot = {
+        "250": "diabetes",
+        "401": "hypertension",
+        "496": "chronic_airway_obstruction",
+        "443": "peripheral_vascular_disease",
+        "495": "asthma",
+        "480": "pneumonia",
+        "296": "mood_disorders",
+        "300": "anxiety_disorders",
+    }
+    for phecode, name in codes_to_plot.items():
+        fig, acc_fig, d = case_control(phecode)
+        fig.savefig(temp_trace_dir/f"temperature.{name}.png")
+        acc_fig.savefig(temp_trace_dir/f"acceleration.{name}.png")
+        d['fig'] = name
+        plotted_data.append(d)
 
     morning_evening = data.morning_evening_person.cat.remove_categories(["Prefer not to answer", "Do not know"])
-    fig = trace_by_cat(morning_evening, show_variance=False)
+    fig, d = trace_by_cat(morning_evening, show_variance=False)
     fig.gca().set_title("Chronotype")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.chronotype.png")
-    acc_fig = trace_by_cat(morning_evening, show_variance=False, var="acceleration")
+    d['var'] = 'temperature'
+    d['fig'] = "chronotype"
+    plotted_data.append(d)
+    acc_fig, d = trace_by_cat(morning_evening, show_variance=False, var="acceleration")
     acc_fig.gca().set_title("Chronotype")
     acc_fig.tight_layout()
     acc_fig.savefig(temp_trace_dir/"acceleration.chronotype.png")
+    d['var'] = 'acceleration'
+    d['fig'] = "chronotype"
+    plotted_data.append(d)
 
-    age_cutoffs = numpy.arange(45,75,5) # every 5 years from 40 to 75
+    age_cutoffs = numpy.arange(45,80,5) # every 5 years from 45 to 75
     age_categories = pandas.cut(data.age_at_actigraphy, age_cutoffs)
-    fig = trace_by_cat(age_categories, show_variance=False)
+    fig, d = trace_by_cat(age_categories, show_variance=False)
+    d['var'] = 'temperature'
+    d['fig'] = 'age'
+    plotted_data.append(d)
     fig.gca().set_title("Age")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.age.png")
-    acc_fig = trace_by_cat(age_categories, show_variance=False, var="acceleration")
+    acc_fig, d = trace_by_cat(age_categories, show_variance=False, var="acceleration")
     acc_fig.gca().set_title("Age")
     acc_fig.tight_layout()
     acc_fig.savefig(temp_trace_dir/"acceleration.age.png")
+    d['var'] = 'acceleration'
+    d['fig'] = 'age'
+    plotted_data.append(d)
 
-    # Age again but with confidence intervals for comparison
-    fig = trace_by_cat(age_categories, show_variance=False, show_confidence_intervals=True)
-    fig.gca().set_title("Age")
-    fig.tight_layout()
-    fig.savefig(temp_trace_dir/"temperature.age.with_confidence_intervals.png")
-
-    fig = trace_by_cat(data.sex, colors=color_by_sex)
+    fig, d = trace_by_cat(data.sex, colors=color_by_sex)
     fig.gca().set_title("Sex")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.sex.png")
-    acc_fig = trace_by_cat(data.sex, colors=color_by_sex, var="acceleration")
+    d['var'] = 'temperature'
+    d['fig'] = 'sex'
+    plotted_data.append(d)
+    acc_fig, d = trace_by_cat(data.sex, colors=color_by_sex, var="acceleration")
     acc_fig.gca().set_title("Sex")
     acc_fig.tight_layout()
     acc_fig.savefig(temp_trace_dir/"acceleration.sex.png")
+    d['var'] = 'acceleration'
+    d['fig'] = 'sex'
+    plotted_data.append(d)
 
     napping = data.nap_during_day.cat.remove_categories(["Prefer not to answer"])
-    fig = trace_by_cat(napping, show_variance=False)
+    fig, d = trace_by_cat(napping, show_variance=False)
     fig.gca().set_title("Nap During Day")
     fig.tight_layout()
     fig.savefig(temp_trace_dir/"temperature.nap.png")
-    acc_fig = trace_by_cat(napping, show_variance=False, var="acceleration")
+    d['var'] = 'temperature'
+    d['fig'] = 'napping'
+    plotted_data.append(d)
+    acc_fig, d = trace_by_cat(napping, show_variance=False, var="acceleration")
     acc_fig.gca().set_title("Nap During Day")
     acc_fig.tight_layout()
     acc_fig.savefig(temp_trace_dir/"acceleration.nap.png")
+    d['var'] = 'acceleration'
+    d['fig'] = 'napping'
+    plotted_data.append(d)
 
     ## Hypertension interaction with Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
         d = data[data.morning_evening_person == chronotype]
-        fig, acc_fig = case_control('401', data=d)
+        fig, acc_fig, d = case_control('401', data=d)
         fig.savefig(temp_trace_dir/f"temperature.hypertension.{label}.png")
         acc_fig.savefig(temp_trace_dir/f"acceleration.hypertension.{label}.png")
 
     # Hypertension with chronotype in one plot
     hypertension_cases = case_status.query("PHECODE == '401' and case_status == 'case'").ID
     hypertension_exclusion = case_status.query("PHECODE == '401' and case_status != 'case'").ID
-    d = data.copy()
-    d['hypertension'] = 'Control'
-    d.loc[d.index.isin(hypertension_cases), 'hypertension'] = 'Case'
-    d.loc[d.index.isin(hypertension_exclusion), 'hypertension'] = float('NaN')
+    D = data.copy()
+    D['hypertension'] = 'Control'
+    D.loc[D.index.isin(hypertension_cases), 'hypertension'] = 'Case'
+    D.loc[D.index.isin(hypertension_exclusion), 'hypertension'] = float('NaN')
     def hypertension_chronotype(data):
         if not (data.hypertension == data.hypertension):
             return float("NaN")
@@ -431,21 +450,37 @@ def temperature_trace_plots(N_IDS=5000):
             return f"Evening - {data.hypertension}"
         else:
             return float("NaN")
-    cats = d.apply(hypertension_chronotype, axis=1).astype('category').cat.reorder_categories(['Morning - Control', 'Morning - Case', 'Evening - Control', 'Evening - Case'])
-    fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+    cats = D.apply(hypertension_chronotype, axis=1).astype('category').cat.reorder_categories(['Morning - Control', 'Morning - Case', 'Evening - Control', 'Evening - Case'])
+    fig, d = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D)
     fig.savefig(temp_trace_dir/"temperature.hypertension.by_chronotype.png")
-    acc_fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d, var="acceleration")
-    acc_fig.savefig(temp_trace_dir/"acceleartion.hypertension.by_chronotype.png")
+    fig.savefig(temp_trace_dir/"temperature.hypertension.by_chronotype.svg")
+    d['var'] = 'temperature'
+    d['fig'] = 'hypertension_and_chronotype'
+    plotted_data.append(d)
+    acc_fig, d = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D, var="acceleration")
+    acc_fig.savefig(temp_trace_dir/"acceleration.hypertension.by_chronotype.png")
+    acc_fig.savefig(temp_trace_dir/"acceleration.hypertension.by_chronotype.svg")
+    d['var'] = 'acceleration'
+    d['fig'] = 'hypertension_and_chronotype'
+    plotted_data.append(d)
 
     ## BMI versus Chronotype
     for label, chronotype in {"morning_person": "Definitely a 'morning' person", "evening_person": "Definitely an 'evening' person"}.items():
-        d = data[data.morning_evening_person == chronotype]
+        D = data[data.morning_evening_person == chronotype]
         #cats = pandas.qcut(d.BMI, numpy.linspace(0,1,6))
-        cats = d['BMI type']
-        fig = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+        cats = D['BMI type']
+        fig, d = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D)
         fig.savefig(temp_trace_dir/f"temperature.bmi.{label}.png")
-        acc_fig= trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=d)
+        d['var'] = 'temperature'
+        d['fig'] = 'BMI_and_chronotype'
+        plotted_data.append(d)
+        acc_fig, d= trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D)
         acc_fig.savefig(temp_trace_dir/f"aceleration.bmi.{label}.png")
+        d['var'] = 'acceleration'
+        d['fig'] = 'BMI_and_chronotype'
+        plotted_data.append(d)
+
+    return pandas.concat(plotted_data).reset_index()
 
 def temperature_calibration_plots():
     device = activity_summary.loc[data.index, 'file-deviceID']
@@ -745,6 +780,9 @@ if __name__ == '__main__':
     INPUTDIR = pathlib.Path(args.input_directory)
     assert INPUTDIR.is_dir(), f"Input directory {args.input_directory} must be directory"
 
+    plot_data_dir = OUTDIR / "plot_data"
+    plot_data_dir.mkdir(exist_ok=True)
+
     #### Load and preprocess the underlying data
     data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT, INPUTDIR)
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
@@ -833,7 +871,8 @@ if __name__ == '__main__':
         predict_diagnoses_plots()
         if args.all:
             # Note: slow to run
-            temperature_trace_plots()
+            plotted_data = temperature_trace_plots()
+            plotted_data.to_csv(plot_data_dir / "Fig2.temperature_traces.txt", sep="\t", index=False)
 
         ## Summarize everything
         generate_results_table()
