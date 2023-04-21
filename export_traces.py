@@ -88,7 +88,7 @@ def case_control(phecode, phenotype, data, case_status, N=10):
 if __name__ == '__main__':
     COHORT = 0
 
-    data_dir = pathlib.Path("../longitudinal/cohort0/").resolve()
+    data_dir = pathlib.Path("../results/longitudinal/cohort0/").resolve()
     input_dir = pathlib.Path("../processed/").resolve()
     fig_dir = (data_dir/ "figures/").resolve()
     fig_dir.mkdir(exist_ok=True)
