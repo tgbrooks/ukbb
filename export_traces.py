@@ -89,6 +89,7 @@ if __name__ == '__main__':
     COHORT = 0
 
     data_dir = pathlib.Path("../longitudinal/cohort0/").resolve()
+    input_dir = pathlib.Path("../processed/").resolve()
     fig_dir = (data_dir/ "figures/").resolve()
     fig_dir.mkdir(exist_ok=True)
     temp_out_dir = (fig_dir/ "temp/").resolve()
@@ -99,7 +100,7 @@ if __name__ == '__main__':
     plot_data_dir.mkdir(exist_ok=True)
 
     #### Load and preprocess the underlying data
-    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT)
+    data, ukbb, activity, activity_summary, activity_summary_seasonal, activity_variables, activity_variance, full_activity = phewas_preprocess.load_data(COHORT, input_dir)
     selected_ids = data.index
     actigraphy_start_date = pandas.Series(data.index.map(pandas.to_datetime(activity_summary['file-startTime'])), index=data.index)
 
@@ -107,7 +108,7 @@ if __name__ == '__main__':
     complete_cases = (~data[longitudinal_statistics.COVARIATES + ['age_at_actigraphy', 'temp_amplitude']].isna().any(axis=1))
     data = data[complete_cases]
 
-    case_status, phecode_info, phecode_details = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date)
+    case_status, phecode_info, phecode_details, num_total_icd10 = longitudinal_diagnoses.load_longitudinal_diagnoses(selected_ids, actigraphy_start_date, input_dir, data_dir, RECOMPUTE=False)
 
     #### Run (or load from disk if they already exist)
     #### the statistical tests
