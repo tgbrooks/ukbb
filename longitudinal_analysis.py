@@ -472,12 +472,12 @@ def temperature_trace_plots(N_IDS=5000):
         fig, d = trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D)
         fig.savefig(temp_trace_dir/f"temperature.bmi.{label}.png")
         d['var'] = 'temperature'
-        d['fig'] = 'BMI_and_chronotype'
+        d['fig'] = f'BMI_{label}'
         plotted_data.append(d)
-        acc_fig, d= trace_by_cat(cats, show_variance=False, show_confidence_intervals=False, data=D)
-        acc_fig.savefig(temp_trace_dir/f"aceleration.bmi.{label}.png")
+        acc_fig, d= trace_by_cat(cats, var="acceleration", show_variance=False, show_confidence_intervals=False, data=D)
+        acc_fig.savefig(temp_trace_dir/f"acceleration.bmi.{label}.png")
         d['var'] = 'acceleration'
-        d['fig'] = 'BMI_and_chronotype'
+        d['fig'] = f'BMI_{label}'
         plotted_data.append(d)
 
     return pandas.concat(plotted_data).reset_index()
@@ -577,6 +577,11 @@ def predict_diagnoses_plots():
     tests_by_sex = predictive_tests_by_sex_cox.set_index("meaning").reindex(tests.meaning).reset_index()
     tests_by_age = predictive_tests_by_age_cox.set_index("meaning").reindex(tests.meaning).reset_index()
 
+    def rename_phenotypes(phenotype):
+        if phenotype == "Disorders of lipoid metabolism":
+            return "Disorders of lipid metabolism"
+        return phenotype
+
     HR_limits = (0.75, 1.7)
 
     fig, axes = pylab.subplots(figsize=(8,7), ncols=4, sharey=True)
@@ -587,7 +592,7 @@ def predict_diagnoses_plots():
         height = 0.5,
         color='k')
     axes[0].set_yticks(numpy.arange(len(tests)))
-    axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(x, 30)))
+    axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(rename_phenotypes(x), 30)))
     axes[0].set_ylim(-0.5, len(tests)-0.5)
     p_cutoff_for_q05 = predictive_tests_cox[predictive_tests_cox.q > 0.05].p.min()
     axes[0].axvline(-numpy.log10(p_cutoff_for_q05)) # BH FDR cutoff 0.05
