@@ -210,13 +210,13 @@ def predictive_tests_by_sex_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
             'female_p': summary.loc['temp_amplitude', 'Pr(>|z|)'],
             'male_p': wt[2][0], # Results from the contrast
             'female_logHR': summary.loc['temp_amplitude', 'coef'],
-            'male_logHR': wt[4][0],
+            'male_logHR': wt[4][0][0],
             'female_logHR_se': summary.loc['temp_amplitude', 'robust se'],
-            'male_logHR_se': wt[4][1],
+            'male_logHR_se': wt[4][0][1],
             'std_female_logHR': summary.loc['temp_amplitude', 'coef'] * variable_SD,
-            'std_male_logHR': wt[4][0] * variable_SD,
+            'std_male_logHR': wt[4][0][0] * variable_SD,
             'std_female_logHR_se': summary.loc['temp_amplitude', 'robust se'] * variable_SD,
-            'std_male_logHR_se': wt[4][1] * variable_SD,
+            'std_male_logHR_se': wt[4][0][1] * variable_SD,
         })
         predictive_tests_by_sex_cox_list.append(header)
 
@@ -314,9 +314,9 @@ def predictive_tests_by_age_cox(data, phecode_info, case_status, OUTDIR, RECOMPU
                 wt = robjects.r("wt <- wald.test(coef=coef(res), vcov=vcov(res), contrast=contrast)")
                 #TODO: why are these p-values N/As?
                 header.update({
-                    f"age{age_cat}_logHR": wt[4][0],
+                    f"age{age_cat}_logHR": wt[4][0][0],
+                    f"age{age_cat}_logHR_se": wt[4][0][1],
                     f"age{age_cat}_p": wt[2][0],
-                    f"age{age_cat}_logHR_se": wt[4][1],
                 })
             else:
                 # This age category is the reference category
