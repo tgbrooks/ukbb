@@ -745,7 +745,7 @@ def by_diagnosis_counts():
             return "26+"
     all_num_total_icd10 = pandas.Series(data.index.map(num_total_icd10).fillna(0), index = data.index).astype(int)
     d = data[['temp_amplitude'] + longitudinal_statistics.COVARIATES].copy()
-    d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.reorder_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '26+'])
+    d['Num. ICD10 Codes'] = all_num_total_icd10.map(to_count_bin).astype('category').cat.set_categories(['0', '1-2', '3-5', '6-10', '11-15', '16-25', '26+'], ordered=True)
     g = sns.catplot(
         x = "Num. ICD10 Codes",
         y = "temp_amplitude",
