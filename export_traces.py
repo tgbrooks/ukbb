@@ -23,21 +23,21 @@ def case_control(phecode, phenotype, data, case_status, N=10):
     plotted_data = []
 
     # Attempt to match case-control
-    diagnoses = case_status[case_status.PHECODE == phecode].set_index('ID').case_status.cat.set_categories(['case', 'control', 'exclude'])
+    diagnoses = case_status[case_status.PHECODE == phecode].set_index('ID').case_status.cat.add_categories(['control'])
     status = data.index.map(diagnoses).fillna('control')
     cases = data.index[status == 'case']
     controls = data.index[status == 'control']
     matched_case = []
     matched_control = []
-    remaining_controls = controls
+    remaining_controls = set(controls)
     for case in cases:
         target_age = data.loc[case].age_at_actigraphy
         target_sex = data.loc[case].sex
         matches = data.index[((data.age_at_actigraphy - target_age).abs() < 1) & (data.sex == target_sex)]
-        good_matches = remaining_controls[remaining_controls.isin(matches)]
+        good_matches = list(remaining_controls.intersection(matches))
         if len(good_matches) > 0:
             chosen_match = good_matches[0]
-            remaining_controls = remaining_controls[remaining_controls != chosen_match]
+            remaining_controls.remove(chosen_match)
             matched_case.append(case)
             matched_control.append(chosen_match)
         if len(matched_case) >= N:
