@@ -27,9 +27,12 @@ FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
 DEFAULT_RESULTS_DIR = pathlib.Path("../results/longitudinal/")
 
+matplotlib.rc('font', **{'family':'sans-serif', 'sans-serif':'Arial', 'size': 6})
+matplotlib.rcParams['svg.fonttype'] = 'none'
+
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
-    fig, ax = pylab.subplots(nrows=1, figsize=(10,6), sharex=True)
+    fig, ax = pylab.subplots(nrows=1, figsize=(3.84,3.84*6/10), sharex=True)
     x = 0
     x_ticks = []
     x_minorticks = [-0.5]
@@ -37,7 +40,7 @@ def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=N
     for key, pt in tests_df.sample(frac=1).groupby(group_by):
         x_ticks.append(x+pt[minor_group_by].nunique()/2-0.5)
         x_ticklabels.append(util.capitalize(key))
-        ax.scatter(x+numpy.arange(len(pt)), -numpy.log10(pt.p), color=color_by[key])
+        ax.scatter(x+numpy.arange(len(pt)), -numpy.log10(pt.p), color=color_by[key], s=1.)
         x += len(pt)
         x_minorticks.append(x-0.5)
     bonferroni_cutoff = BONFERRONI_CUTOFF / len(tests_df)
@@ -216,6 +219,7 @@ def summary():
         group_by=tests.category,
         color_by=color_by)
     fig.savefig(OUTDIR/"FIG2.manhattan_plot.png", dpi=300)
+    fig.savefig(OUTDIR/"FIG2.manhattan_plot.svg")
     plotted_data = tests[['phecode', 'category', 'p']]
     plotted_data.to_csv(plot_data_dir / "FIG2.manhattan_plot.txt", sep="\t", index=False)
 
@@ -226,7 +230,7 @@ def summary():
     DIAGNOSIS_COLOR = "#f46036"
     ASSESSMENT_COLOR = "#aaaaaa"
     DEATH_COLOR = "#333333"
-    fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(8,6), nrows=3)
+    fig, (ax1, ax2, ax3) = pylab.subplots(figsize=(3.23,3.23*6/8), nrows=3)
     #ax2.yaxis.set_inverted(True)
     ax1.yaxis.set_label_text("Participants / month")
     ax2.yaxis.set_label_text("Diagnoses / month")
@@ -256,12 +260,13 @@ def summary():
     counts_repreat_actigraphy = date_hist(ax1, actigraphy_seasonal_time, color=REPEAT_COLOR, label="repeat actigraphy", bins=bins)
     counts_diag = date_hist(ax2, diagnosis_time, color=DIAGNOSIS_COLOR, label="Diagnoses", bins=bins)
     counts_deaths = date_hist(ax3, death_time, color=DEATH_COLOR, label="Diagnoses", bins=bins)
-    ax1.annotate("Assessment", (assessment_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
-    ax1.annotate("Actigraphy", (actigraphy_time.mean(), 0), xytext=(0,75), textcoords="offset points", ha="center")
-    ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
-    ax2.annotate("Novel In-Patient\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,20), textcoords="offset points", ha="center")
+    ax1.annotate("Assessment", (assessment_time.mean(), 0), xytext=(0,30), textcoords="offset points", ha="center")
+    ax1.annotate("Actigraphy", (actigraphy_time.mean(), 0), xytext=(0,30), textcoords="offset points", ha="center")
+    ax1.annotate("Repeat\nActigraphy", (actigraphy_seasonal_time.mean(), 0), xytext=(0,30), textcoords="offset points", ha="center")
+    ax2.annotate("Novel In-Patient\nDiagnoses", (diagnosis_time.mean(), 0), xytext=(0,8), textcoords="offset points", ha="center")
     ax3.annotate("Deaths", (death_time.mean(), 0), xytext=(0,70), textcoords="offset points", ha="center")
     fig.savefig(OUTDIR/"FIG1a.summary_timeline.png")
+    fig.savefig(OUTDIR/"FIG1a.summary_timeline.svg")
     plotted_data = pandas.DataFrame({
         "bin_start": bins[:-1],
         "bin_end": bins[1:],
@@ -346,15 +351,13 @@ def temperature_trace_plots(N_IDS=5000):
         phenotype = phecode_info.phenotype.loc[phecode]
         return export_traces.case_control(phecode, phenotype, data, case_status, N=N_IDS)
 
+
     codes_to_plot = {
-        "250": "diabetes",
-        "401": "hypertension",
-        "496": "chronic_airway_obstruction",
-        "443": "peripheral_vascular_disease",
-        "495": "asthma",
+        "250.2": "diabetes",
+        "571.5": "NAFLD",
+        "401.1": "hypertension",
         "480": "pneumonia",
-        "296": "mood_disorders",
-        "300": "anxiety_disorders",
+        "332": "parkinsons",
     }
     for phecode, name in codes_to_plot.items():
         fig, acc_fig, d = case_control(phecode)
@@ -367,14 +370,15 @@ def temperature_trace_plots(N_IDS=5000):
     fig, d = trace_by_cat(morning_evening, show_variance=False)
     fig.gca().set_title("Chronotype")
     fig.tight_layout()
-    fig.savefig(temp_trace_dir/"temperature.chronotype.png")
+    fig.savefig(temp_trace_dir/"temperature.chronotype.png", dpi=300)
     d['var'] = 'temperature'
     d['fig'] = "chronotype"
     plotted_data.append(d)
     acc_fig, d = trace_by_cat(morning_evening, show_variance=False, var="acceleration")
     acc_fig.gca().set_title("Chronotype")
     acc_fig.tight_layout()
-    acc_fig.savefig(temp_trace_dir/"acceleration.chronotype.png")
+    acc_fig.savefig(temp_trace_dir/"acceleration.chronotype.png", dpi=300)
+    acc_fig.savefig(temp_trace_dir/"acceleration.chronotype.svg")
     d['var'] = 'acceleration'
     d['fig'] = "chronotype"
     plotted_data.append(d)
@@ -584,7 +588,7 @@ def predict_diagnoses_plots():
 
     HR_limits = (0.75, 1.7)
 
-    fig, axes = pylab.subplots(figsize=(8,7), ncols=4, sharey=True)
+    fig, axes = pylab.subplots(figsize=(3.15,3.15*7/9), ncols=4, layout="constrained", gridspec_kw={"wspace":0.1, "left":0.30, "right":0.75})
     ys = numpy.arange(len(tests))
     axes[0].barh(
         ys,
@@ -595,21 +599,23 @@ def predict_diagnoses_plots():
     axes[0].set_yticklabels(tests.meaning.apply(lambda x: util.wrap(rename_phenotypes(x), 30)))
     axes[0].set_ylim(-0.5, len(tests)-0.5)
     p_cutoff_for_q05 = predictive_tests_cox[predictive_tests_cox.q > 0.05].p.min()
-    axes[0].axvline(-numpy.log10(p_cutoff_for_q05)) # BH FDR cutoff 0.05
+    axes[0].axvline(-numpy.log10(p_cutoff_for_q05), linewidth=0.25) # BH FDR cutoff 0.05
     axes[0].set_xlabel("-log10 p-value")
 
     axes[1].scatter(
         numpy.exp(-tests.logHR),
         ys,
         color='k',
+        s=1.5,
     )
     for i, (idx, row) in enumerate(tests.iterrows()):
         axes[1].plot(
             numpy.exp([-row.logHR- row.logHR_se*1.96, -row.logHR+ row.logHR_se*1.96]),
             [ys[i], ys[i]],
             color='k',
+            linewidth=0.5,
         )
-    axes[1].axvline(1, color="k")
+    axes[1].axvline(1, color="k", linewidth=0.5)
     axes[1].set_xlabel("HR per °C")
 
     # By sex
@@ -617,25 +623,29 @@ def predict_diagnoses_plots():
         numpy.exp(-tests_by_sex.male_logHR),
         ys + 0.1,
         color=color_by_sex['Male'],
+        s=1.5,
     )
     axes[2].scatter(
         numpy.exp(-tests_by_sex.female_logHR),
         ys-0.1,
         color=color_by_sex['Female'],
+        s=1.5,
     )
     for i, (idx, row) in enumerate(tests_by_sex.iterrows()):
         axes[2].plot(
             numpy.exp([-row.male_logHR - row.male_logHR_se*1.96, -row.male_logHR+ row.male_logHR_se*1.96]),
             [ys[i] + 0.1, ys[i] + 0.1],
             color=color_by_sex["Male"],
+            linewidth=0.5,
         )
         axes[2].plot(
             numpy.exp([-row.female_logHR- row.female_logHR_se*1.96, -row.female_logHR + row.female_logHR_se*1.96]),
             [ys[i] - 0.1, ys[i] - 0.1],
             color=color_by_sex["Female"],
+            linewidth=0.5,
         )
     axes[2].set_xlabel("HR per °C\nby sex")
-    axes[2].axvline(1, color="k")
+    axes[2].axvline(1, color="k", linewidth=0.5)
 
     #By age
     age_categories = sorted(data.age_at_actigraphy_cat.unique())
@@ -647,24 +657,36 @@ def predict_diagnoses_plots():
             numpy.exp(-HR),
             ys + y_offset,
             color=color_by_age[age_cat],
+            s=1.5,
         )
         for i, (idx, row) in enumerate(tests_by_age.iterrows()):
             axes[3].plot(
                 numpy.exp([-HR[i] - SE[i]*1.96, -HR[i] + SE[i]*1.96]),
                 [ys[i] + y_offset, ys[i] + y_offset],
                 color=color_by_age[age_cat],
+                linewidth=0.5,
             )
         axes[3].set_xlabel("HR per °C\nby age")
-        axes[3].axvline(1, color="k")
+        axes[3].axvline(1, color="k", linewidth=0.5)
         fig.tight_layout(rect=(0,0,0.85,1))
+
+    for ax in axes[1:]:
+        ax.set_yticks([])
+    axes[1].set_yticklabels([])
+    axes[2].set_yticklabels([])
+    axes[3].set_yticks(ys)
+    axes[3].set_yticklabels("n="+tests.N_cases.astype(str))
+    axes[3].yaxis.tick_right()
 
     for ax in axes[1:4]:
         ax.set_xlim(HR_limits)
+        ax.set_ylim(*axes[0].get_ylim())
 
-    util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.6))
-    util.legend_from_colormap(fig, color_by_age, loc=(0.85, 0.4))
+    util.legend_from_colormap(fig, color_by_sex, loc=(0.85, 0.7), pointsize=2.)
+    util.legend_from_colormap(fig, color_by_age, loc=(0.85, 0.35), pointsize=2.)
 
     fig.savefig(OUTDIR / "FIG2.summary_results.png", dpi=300)
+    fig.savefig(OUTDIR / "FIG2.summary_results.svg")
 
 def predict_diagnoses_effect_size_tables():
     # Generate a table of the effect sizes for predcitive tests (prop hazard models)
