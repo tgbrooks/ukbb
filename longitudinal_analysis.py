@@ -27,9 +27,6 @@ FDR_CUTOFF = 0.05
 BONFERRONI_CUTOFF = 0.05
 DEFAULT_RESULTS_DIR = pathlib.Path("../results/longitudinal/")
 
-matplotlib.rc('font', **{'family':'sans-serif', 'sans-serif':'Arial', 'size': 6})
-matplotlib.rcParams['svg.fonttype'] = 'none'
-
 def manhattan_plot(tests_df, minor_group_by="phecode", group_by=None, color_by=None):
     # "Manhattan" plot of the PheWAS
     fig, ax = pylab.subplots(nrows=1, figsize=(3.84,3.84*6/10), sharex=True)
@@ -797,6 +794,9 @@ if __name__ == '__main__':
         # Use the non-graphical backend Agg
         matplotlib.use("Agg")
     import pylab
+    matplotlib.rc('font', **{'family':'sans-serif', 'sans-serif':'Arial', 'size': 6})
+    matplotlib.rcParams['svg.fonttype'] = 'none'
+
 
     COHORT = args.cohort
     RECOMPUTE = args.force_recompute
